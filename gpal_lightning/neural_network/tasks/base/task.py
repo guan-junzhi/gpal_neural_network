@@ -144,7 +144,7 @@ class BaseTask:
 
     def build_logger(self):
         """
-        use logger to replace zeekrnet log in the furture
+        use logger to replace Gpalnet log in the furture
         """
         self.logger = builder.build(
             self.global_config, self.task_config, builder.LOGGERS, self.name)
@@ -187,7 +187,7 @@ class BaseTask:
         return json_dict
 
     def vectors_to_json(self, metadata, data, dataloader_idx, vectors, is_gt):
-        """This function is used to produce json files in validation_step and predict_step of zeekrnet.py.
+        """This function is used to produce json files in validation_step and predict_step of Gpalnet.py.
 
         Args:
             metadata (dict)
