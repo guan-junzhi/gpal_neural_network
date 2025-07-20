@@ -15,6 +15,7 @@ from gpal_nn.models.transformers.bevformer.encoder import SingleBEVFormerEncoder
 from gpal_nn.models.transformers.bevformer.embeddings import PositionEmbeddingLearned
 from gpal_nn.models.transformers.bevformer.attention import HorizonSpatialCrossAttention, HorizonMultiScaleDeformableAttention3D, HorizonMultiScaleDeformableAttention
 
+from gpal_lightning.neural_network.network_modules.base_module import BaseModule
 
 # from hat.models.task_modules.bevformer.utils import (
 #     gen_coords,
@@ -29,7 +30,7 @@ __all__ = ["BevFormerViewTransformer", "SingleBevFormerViewTransformer"]
 
 
 # @OBJECT_REGISTRY.register
-class BevFormerViewTransformer(nn.Module):
+class BevFormerViewTransformer(BaseModule):
     """The basic structure of BevFormerViewTransformer.
 
     Args:
@@ -74,7 +75,7 @@ class BevFormerViewTransformer(nn.Module):
         #     single_bev: bool = False,
         #     use_lidar2img: bool = False,
         # ):
-        super(BevFormerViewTransformer, self).__init__()
+        super(BevFormerViewTransformer, self).__init__(global_config)
 
         pc_range = transformer_config['pc_range']
         num_points_in_pillar = transformer_config['num_points_in_pillar']
