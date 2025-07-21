@@ -98,7 +98,6 @@ class MapInstanceDetectorHead(nn.Module):
     # ):
     def __init__(self, global_config: GlobalConfig, task_config: BaseConfigParser, layers_config):
 
-
         super(MapInstanceDetectorHead, self).__init__()
         self.compatible_with_MVLane_loss = layers_config['compatible_with_MVLane_loss']
         self.in_channels = layers_config['in_channels']
@@ -115,7 +114,8 @@ class MapInstanceDetectorHead(nn.Module):
         self.num_points = layers_config['fixed_ptsnum_per_pred_line']
         self.num_pts_per_gt_vec = layers_config['fixed_ptsnum_per_gt_line']
         self.transform_method = layers_config.get("transform_method", "minmax")
-        self.gt_shift_pts_pattern = layers_config.get("gt_shift_pts_pattern", "v2")
+        self.gt_shift_pts_pattern = layers_config.get(
+            "gt_shift_pts_pattern", "v2")
         self.code_size = layers_config.get("code_size", 2)
         self.cls_out_channels = layers_config['num_cls']
         self.post_process = None
@@ -156,7 +156,7 @@ class MapInstanceDetectorHead(nn.Module):
                 "feat_down_sample": 32,
             }
 
-        self.decoder=MapInstanceDecoder(
+        self.decoder = MapInstanceDecoder(
             num_layers=layers_config['decoder_num_layers'],
             return_intermediate=True,
             decoder_layer=DetrTransformerDecoderLayer(
@@ -174,9 +174,8 @@ class MapInstanceDetectorHead(nn.Module):
                 embed_dims=self.embed_dims,
                 dropout=0.1,
                 num_heads=layers_config['decoder_num_heads'],
-                )
             )
-
+        )
 
         # self.aux_seg = aux_seg
 
@@ -380,23 +379,23 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_class = outputs_classes[lvl].float()
 
             outputs_classes_one2one.append(
-                outputs_class[:, 0 : self.num_vec_one2one]
+                outputs_class[:, 0: self.num_vec_one2one]
             )
             outputs_coords_one2one.append(
-                outputs_coord[:, 0 : self.num_vec_one2one]
+                outputs_coord[:, 0: self.num_vec_one2one]
             )
             outputs_pts_coords_one2one.append(
-                outputs_pts_coord[:, 0 : self.num_vec_one2one]
+                outputs_pts_coord[:, 0: self.num_vec_one2one]
             )
 
             outputs_classes_one2many.append(
-                outputs_class[:, self.num_vec_one2one :]
+                outputs_class[:, self.num_vec_one2one:]
             )
             outputs_coords_one2many.append(
-                outputs_coord[:, self.num_vec_one2one :]
+                outputs_coord[:, self.num_vec_one2one:]
             )
             outputs_pts_coords_one2many.append(
-                outputs_pts_coord[:, self.num_vec_one2one :]
+                outputs_pts_coord[:, self.num_vec_one2one:]
             )
 
         outputs_classes_one2one = torch.stack(outputs_classes_one2one)
@@ -451,8 +450,13 @@ class MapInstanceDetectorHead(nn.Module):
         else:
             num_vec = self.num_vec
         pts_reshape = pts.view(pts.shape[0], num_vec, self.num_points, 2)
-        pts_y = pts_reshape[:, :, :, 0] if y_first else pts_reshape[:, :, :, 1]
-        pts_x = pts_reshape[:, :, :, 1] if y_first else pts_reshape[:, :, :, 0]
+
+        pts_reshape = torch.stack(
+            [1-pts_reshape[:, :, :, 1], 1-pts_reshape[:, :, :, 0]], dim=-1)
+
+        pts_x = pts_reshape[..., 0]
+        pts_y = pts_reshape[..., 1]
+
         if self.transform_method == "minmax":
             # import pdb;pdb.set_trace()
 
@@ -461,10 +465,10 @@ class MapInstanceDetectorHead(nn.Module):
             ymin = pts_y.min(dim=2, keepdim=True)[0]
             ymax = pts_y.max(dim=2, keepdim=True)[0]
             bbox = torch.cat([xmin, ymin, xmax, ymax], dim=2)
-            bbox = box_corner_to_center(bbox)
+            bbox_xyhw = box_corner_to_center(bbox)
         else:
             raise NotImplementedError
-        return bbox, pts_reshape
+        return bbox_xyhw, pts_reshape
 
     # @fx_wrap()
     def get_num_vec(self):
@@ -503,12 +507,12 @@ class MapInstanceDetectorHead(nn.Module):
             .to(bev_features.device)
         )
         self_attn_mask[
-            self.num_vec_one2one :,
-            0 : self.num_vec_one2one,
+            self.num_vec_one2one:,
+            0: self.num_vec_one2one,
         ] = True
         self_attn_mask[
-            0 : self.num_vec_one2one,
-            self.num_vec_one2one :,
+            0: self.num_vec_one2one,
+            self.num_vec_one2one:,
         ] = True
 
         pos_embed = None
@@ -617,7 +621,6 @@ class MapInstanceDetectorHead(nn.Module):
         if self.compatible_with_MVLane_loss:
             # outputs['bev_embed'] = bev_embed
             return outputs
-        
         return self._post_process(data, outputs)
 
     def set_qconfig(self):

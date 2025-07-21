@@ -42,7 +42,7 @@ def cxcywh_to_xyxy(box):
     new_box[..., 0] = cx - bw / 2.
     new_box[..., 1] = cy - bh / 2.
     new_box[..., 2] = cx + bw / 2.
-    new_box[..., 3] = cy + bw / 2.
+    new_box[..., 3] = cy + bh / 2.
     return new_box
 
 

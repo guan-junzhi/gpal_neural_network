@@ -53,9 +53,7 @@ class Finetune(BaseFinetuning):
 
             freeze_module_names = pl_module.get_freeze_module_names(
                 module_name)
-            
-            print("on_train_epoch_start", module_name, freeze_module_names)
-            
+
             if freeze_module_names:
                 if freeze_module_names == "all" or freeze_module_names == "bn":
                     self.eval(module)

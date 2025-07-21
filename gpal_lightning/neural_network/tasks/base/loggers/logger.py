@@ -31,8 +31,7 @@ class BaseLogger:
             for key, val in loss_info.items():
                 log_writer.add_scalar(name + key, val, iteration)
 
-    def image_log(self, iteration, phase, log_writer, idx, vis_pred, vis_true):
+    def image_log(self, iteration, phase, log_writer, idx, vis_pred):
         """This method takes in a pair of pred/true images."""
         name = "/".join([self.task_config.name, phase])
-        log_writer.add_image(f"{name}/pred_{idx}", vis_pred, iteration)
-        log_writer.add_image(f"{name}/gt_{idx}", vis_true, iteration)
+        log_writer.add_image(f"{name}/vis_{idx}", vis_pred, iteration)

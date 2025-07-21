@@ -38,12 +38,18 @@ class BaseMapLossCost(nn.Module):
         if bbox_gt.shape[0] == 0 or points_gt.shape[0] == 0:
             cls_gt = nn.functional.one_hot(
                 torch.zeros((score_pred.shape[0]), dtype=torch.long, device=score_pred.device), self.num_label).float()
-            score_loss = self.cls_loss(score_pred, cls_gt).sum() * self.cls_loss_weight
-            box_l1_loss = self.bbox_loss(bbox_pred, bbox_pred).sum() * self.l1_loss_weight
-            denormalized_bbox_pred = denormalize_2d_bbox(bbox_pred, self.pc_range)
-            box_iou_loss = self.iou_loss(denormalized_bbox_pred, denormalized_bbox_pred).sum() * self.giou_loss_weight
-            denormalized_points_pred = denormalize_2d_pts(points_pred, self.pc_range)
-            points_l1_loss = self.pts_l1_loss(points_pred, points_pred).sum() * self.pts_l1_loss_weight
+            score_loss = self.cls_loss(
+                score_pred, cls_gt).sum() * self.cls_loss_weight
+            box_l1_loss = self.bbox_loss(
+                bbox_pred, bbox_pred).sum() * self.l1_loss_weight
+            denormalized_bbox_pred = denormalize_2d_bbox(
+                bbox_pred, self.pc_range)
+            box_iou_loss = self.iou_loss(
+                denormalized_bbox_pred, denormalized_bbox_pred).sum() * self.giou_loss_weight
+            denormalized_points_pred = denormalize_2d_pts(
+                points_pred, self.pc_range)
+            points_l1_loss = self.pts_l1_loss(
+                points_pred, points_pred).sum() * self.pts_l1_loss_weight
             points_dir_loss = self.pts_dir_loss(denormalized_points_pred,
                                                 denormalized_points_pred).sum() * self.pts_dir_loss_weight
 
@@ -61,13 +67,14 @@ class BaseMapLossCost(nn.Module):
                 "loss_points_dir": points_dir_loss,
             }
 
-        cls_gt = nn.functional.one_hot(torch.ones(bbox_gt.shape[0]).long(), self.num_label).float()
+        cls_gt = nn.functional.one_hot(torch.ones(
+            bbox_gt.shape[0]).long(), self.num_label).float()
         bbox_gt, points_gt, cls_gt = \
-            bbox_gt.to(bbox_pred.device), points_gt.to(points_pred.device), cls_gt.to(score_pred.device),
+            bbox_gt.to(bbox_pred.device), points_gt.to(
+                points_pred.device), cls_gt.to(score_pred.device),
 
         pred_to_gt_index, pred_to_gt_label, order_index = self.assigner.assign(bbox_pred, score_pred, points_pred,
                                                                                bbox_gt, cls_gt, points_gt)
-
         pred_mask = pred_to_gt_index > 0
 
         gt_order = pred_to_gt_index[pred_mask]
@@ -88,22 +95,24 @@ class BaseMapLossCost(nn.Module):
         return self.loss_single(score_pred, _bbox_pred, _points_pred, pred_to_gt_label, _bbox_gt, _points_gt)
 
     def loss_single(self, score_pred, bbox_pred, points_pred, cls_gt, bbox_gt, points_gt):
-        score_loss = self.cls_loss(score_pred, cls_gt).sum() * self.cls_loss_weight
+        score_loss = self.cls_loss(
+            score_pred, cls_gt).sum() * self.cls_loss_weight
 
         normalized_bbox_gt = normalize_2d_bbox(bbox_gt, self.pc_range)
         denormalized_bbox_pred = denormalize_2d_bbox(bbox_pred, self.pc_range)
-        box_l1_loss = self.bbox_loss(bbox_pred, normalized_bbox_gt).sum() * self.l1_loss_weight
-        box_iou_loss = self.iou_loss(denormalized_bbox_pred, bbox_gt).sum() * self.giou_loss_weight
+        box_l1_loss = self.bbox_loss(
+            bbox_pred, normalized_bbox_gt).sum() * self.l1_loss_weight
+        box_iou_loss = self.iou_loss(
+            denormalized_bbox_pred, bbox_gt).sum() * self.giou_loss_weight
 
-        
         normalized_points_gt = normalize_2d_pts(points_gt, self.pc_range)
-        denormalized_points_pred = denormalize_2d_pts(points_pred, self.pc_range)
+        denormalized_points_pred = denormalize_2d_pts(
+            points_pred, self.pc_range)
         points_l1_loss = self.pts_l1_loss(points_pred,
                                           normalized_points_gt).sum() * self.pts_l1_loss_weight
         # import torch.nn.functional as F
 
         # loss_matrix = F.mse_loss(points_pred, normalized_points_gt, reduction='none')
-
 
         # print(f"points_pred = {points_pred[0]}")
         # print(f"normalized_points_gt = {normalized_points_gt[0]}")
@@ -114,7 +123,8 @@ class BaseMapLossCost(nn.Module):
 
         # points_l1_loss = self.pts_l1_loss(
         #     denormalized_points_pred, points_gt).sum() * self.pts_l1_loss_weight
-        points_dir_loss = self.pts_dir_loss(denormalized_points_pred, points_gt).sum() * self.pts_dir_loss_weight
+        points_dir_loss = self.pts_dir_loss(
+            denormalized_points_pred, points_gt).sum() * self.pts_dir_loss_weight
 
         # score_loss = torch.nan_to_num(score_loss)
         # box_l1_loss = torch.nan_to_num(box_l1_loss)

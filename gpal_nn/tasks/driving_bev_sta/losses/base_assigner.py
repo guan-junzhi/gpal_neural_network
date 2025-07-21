@@ -9,7 +9,6 @@ from gpal_nn.tasks.driving_bev_sta.losses.BBox import BBoxL1LossWithCost, GIoULo
 from gpal_nn.tasks.driving_bev_sta.losses.Points import PointsL1LossWithCost
 
 
-
 def normalize_2d_bbox(bboxes, pc_range):
     patch_h = pc_range[4] - pc_range[1]
     patch_w = pc_range[3] - pc_range[0]
@@ -35,8 +34,10 @@ def normalize_2d_pts(pts, pc_range):
 
 def denormalize_2d_bbox(bboxes, pc_range):
     bboxes = cxcywh_to_xyxy(bboxes)
-    bboxes[..., 0::2] = (bboxes[..., 0::2] * (pc_range[3] - pc_range[0]) + pc_range[0])
-    bboxes[..., 1::2] = (bboxes[..., 1::2] * (pc_range[4] - pc_range[1]) + pc_range[1])
+    bboxes[..., 0::2] = (bboxes[..., 0::2] *
+                         (pc_range[3] - pc_range[0]) + pc_range[0])
+    bboxes[..., 1::2] = (bboxes[..., 1::2] *
+                         (pc_range[4] - pc_range[1]) + pc_range[1])
 
     return bboxes
 
@@ -50,7 +51,6 @@ def denormalize_2d_pts(pts, pc_range):
     new_pts[..., 1:2] = pts[..., 1:2] * patch_h + pc_range[1]
 
     return new_pts
-
 
 
 class MapAssigner(nn.Module):
@@ -79,7 +79,8 @@ class MapAssigner(nn.Module):
 
         num_gts, num_preds = gt_bboxes.shape[0], bbox_pred.shape[0]
 
-        assigned_gt_inds = bbox_pred.new_full((num_preds,), -1, dtype=torch.long)
+        assigned_gt_inds = bbox_pred.new_full(
+            (num_preds,), -1, dtype=torch.long)
         assigned_labels = bbox_pred.new_full((num_preds,), 0, dtype=torch.long)
         assigned_index = bbox_pred.new_full((num_preds,), -1, dtype=torch.long)
 
@@ -93,15 +94,19 @@ class MapAssigner(nn.Module):
         cls_cost = self.cls_cost.cost(cls_pred, gt_label) * self.cls_weight
 
         normalized_gt_bboxes = normalize_2d_bbox(gt_bboxes, self.pc_range)
-        reg_cost = self.reg_cost.cost(bbox_pred[:, :4], normalized_gt_bboxes[:, :4]) * self.reg_weight
+        reg_cost = self.reg_cost.cost(
+            bbox_pred[:, :4], normalized_gt_bboxes[:, :4]) * self.reg_weight
 
         # TODO: add points order next version
-        _, num_orders, num_pts_per_gtline, num_coords = gt_pts.shape  # [num_query, num_order, num_pts_per_vec, 2] the order num default is 1
+        # [num_query, num_order, num_pts_per_vec, 2] the order num default is 1
+        _, num_orders, num_pts_per_gtline, num_coords = gt_pts.shape
         normalized_gt_pts = normalize_2d_pts(gt_pts, self.pc_range)
         denormalize_pts = denormalize_2d_pts(pts_pred, self.pc_range)
-        pts_cost_ordered = self.pts_cost.cost(pts_pred, normalized_gt_pts) * self.pts_weight
+        pts_cost_ordered = self.pts_cost.cost(
+            pts_pred, normalized_gt_pts) * self.pts_weight
         # pts_cost_ordered = self.pts_cost.cost(denormalize_pts, gt_pts) * self.pts_weight
-        pts_cost_ordered = pts_cost_ordered.view(num_preds, num_gts, num_orders)
+        pts_cost_ordered = pts_cost_ordered.view(
+            num_preds, num_gts, num_orders)
         pts_cost, order_index = torch.min(pts_cost_ordered, 2)
 
         bboxes = denormalize_2d_bbox(bbox_pred, self.pc_range)
@@ -124,15 +129,19 @@ class MapAssigner(nn.Module):
             raise ImportError('Please run "pip install scipy" '
                               'to install scipy first.')
         matched_row_inds, matched_col_inds = linear_sum_assignment(cost)
-        matched_row_inds = torch.from_numpy(matched_row_inds).to(bbox_pred.device)
-        matched_col_inds = torch.from_numpy(matched_col_inds).to(bbox_pred.device)
+        matched_row_inds = torch.from_numpy(
+            matched_row_inds).to(bbox_pred.device)
+        matched_col_inds = torch.from_numpy(
+            matched_col_inds).to(bbox_pred.device)
         order_index = order_index.to(bbox_pred.device)
         # assign all indices to backgrounds first
         assigned_gt_inds[:] = 0
         # assign foregrounds based on matching results
         assigned_gt_inds[matched_row_inds] = matched_col_inds + 1
-        assigned_labels[matched_row_inds] = gt_label[matched_col_inds].argmax(-1)
-        assigned_index[matched_row_inds] = order_index[matched_row_inds, matched_col_inds]
+        assigned_labels[matched_row_inds] = gt_label[matched_col_inds].argmax(
+            -1)
+        assigned_index[matched_row_inds] = order_index[matched_row_inds,
+                                                       matched_col_inds]
         return assigned_gt_inds, assigned_labels, assigned_index
 
 
