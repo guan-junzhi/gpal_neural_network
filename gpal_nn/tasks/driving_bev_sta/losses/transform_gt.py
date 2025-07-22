@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 
-def transform_gt_box(pts, start_x, start_y, num_pts_per_vec=20, y_first=False):
+def transform_gt_box(pts, start_x, start_y, num_pts_per_vec=20, y_first=False, device="cpu"):
     """
     Converting the points set into bounding box.
 
@@ -16,10 +16,10 @@ def transform_gt_box(pts, start_x, start_y, num_pts_per_vec=20, y_first=False):
         The bbox [cx, cy, w, h] transformed from points.
     """
     if isinstance(pts, np.ndarray):
-        pts = torch.from_numpy(pts)
+        pts = torch.from_numpy(pts).to(device)
     if isinstance(pts, list):  # 无真值
         # if len(pts) == 0:
-        return torch.zeros((0, 4)), torch.zeros((0, num_pts_per_vec, 2))
+        return torch.zeros((0, 4), device=device), torch.zeros((0, num_pts_per_vec, 2), device=device)
     if pts.dim() == 2:
         pts = pts.unsqueeze(0)
 

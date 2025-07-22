@@ -40,21 +40,7 @@ def lane_loss_computation(preds, data, loss_func):
             start_y = 16
             # gt ploylines to gt bboxes  [n, 4], [n, 20, 2]
             bboxes_gt, points_gt = transform_gt_box(annos, start_x, start_y,
-                                                    num_pts_per_vec=pts_per_vector)
-
-            # from tools_scripts.vis_2d import Vis2D
-            # import cv2
-            # vis1 = Vis2D([-30, 100], [-40, 40], 0.1)
-            # for l in annos:
-            #     vis1.DrawPolyline(l, [0,255,0])
-            # vis_draw1 = vis1.Draw()
-
-            # vis2 = Vis2D([-30, 100], [-80, 80], 0.1)
-            # for l in points_gt:
-            #     vis2.DrawPolyline(l, [0,255,0])
-            # vis_draw2 = vis2.Draw()
-
-            # cv2.imwrite(f"loss.jpg", np.concatenate([vis_draw1, vis_draw2], axis = 1))
+                                                    num_pts_per_vec=pts_per_vector, y_first=False, device=pts_pred.device)
 
             # [n,20, 2]->[n, 2, 20, 2]  矢量线翻转建模
             points_gt = shift_polyline_points(points_gt, pts_per_vector)
