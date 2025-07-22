@@ -15,10 +15,13 @@ class DRIVING_BEV_STATask(BaseTask):
 
         from tools_scripts.vis_2d import Vis2D
         vis1 = Vis2D([-30, 100], [-20, 20], 0.1)
-        for l in gts[idx]['edges']['points']:
-            vis1.DrawPolyline(l, [0, 255, 255], 2)
-        for l in gts[idx]['polylines']['points']:
-            vis1.DrawPolyline(l, [0, 255, 0], 2)
+        try:
+            for l in gts[idx]['edges']['points']:
+                vis1.DrawPolyline(l, [0, 255, 255], 2)
+            for l in gts[idx]['polylines']['points']:
+                vis1.DrawPolyline(l, [0, 255, 0], 2)
+        except:
+            pass
         vis_draw1 = vis1.Draw()
 
         pre_pts = preds['all_pts_preds']

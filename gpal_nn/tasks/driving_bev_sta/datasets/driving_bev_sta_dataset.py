@@ -15,7 +15,7 @@ from gpal_nn.tasks.driving_bev_sta.datasets.letter_box import letterbox_image, r
 from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
 from gpal_lightning.utils.profiling import TimeProf
-
+import random
 
 polyline_class2id = {name: i for i, name in enumerate(map_classes_line)}
 polyline_shape2id = {name: i for i, name in enumerate(shape_type)}
@@ -381,14 +381,13 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
     @TimeProf
     def __getitem__(self, idx):
-        idx = 0
+        # idx = 0
 
         while True:
             data = self.prepare_data(idx)
-
             if data is None:
                 print("_rand_another")
-                idx = self._rand_another(idx)
+                idx = random.randint(0, len(self))
                 continue
 
             if self.transforms is not None:
