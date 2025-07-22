@@ -9,6 +9,7 @@ from gpal_lightning import const
 from gpal_lightning.neural_network.global_config import GlobalConfig
 from gpal_lightning.neural_network.tasks.base.datasets.base_dataset import BaseDataset
 
+
 class ImageBaseDataset(BaseDataset):
     """ BaseDataset is a iterable-style dataset. (https://pytorch.org/docs/stable/data.html)
 
@@ -30,7 +31,8 @@ class ImageBaseDataset(BaseDataset):
                  sql_filter: str = "",
                  pseudo_labels_path: Union[str, list] = None,
                  worker: int = 0,
-                 ratio: float = 0.0):
+                 ratio: float = 0.0,
+                 fast_buffer_path: str = ""):
         """
         Args:
             global_config: object from CONSTANT class
@@ -52,19 +54,20 @@ class ImageBaseDataset(BaseDataset):
         self.augmentations = None
 
         super().__init__(global_config=global_config,
-                     task_config=task_config,
-                     preprocess=preprocess,
-                     dataset_name=dataset_name,
-                     phase=phase,
-                     camera_name=camera_name,
-                     root_dir=root_dir,
-                     shuffle=shuffle,
-                     shuffle_seed=shuffle_seed,
-                     sql_filter=sql_filter,
-                     ratio=ratio,
-                     worker=worker,
-                     pseudo_labels_path=pseudo_labels_path,
-                     )
+                         task_config=task_config,
+                         preprocess=preprocess,
+                         dataset_name=dataset_name,
+                         phase=phase,
+                         camera_name=camera_name,
+                         root_dir=root_dir,
+                         shuffle=shuffle,
+                         shuffle_seed=shuffle_seed,
+                         sql_filter=sql_filter,
+                         ratio=ratio,
+                         worker=worker,
+                         pseudo_labels_path=pseudo_labels_path,
+                         fast_buffer_path=fast_buffer_path
+                         )
 
     def __len__(self):
         return len(self.dataset)
@@ -97,4 +100,3 @@ def _covert2ndarry_fp32(data):
             return data.astype(np.float32)
     else:
         return np.array(data, dtype=np.float32)
-    

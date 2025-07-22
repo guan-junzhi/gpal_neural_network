@@ -1,8 +1,8 @@
-image_per_gpu: 10
+image_per_gpu: 32
 workers_per_gpu: 12
 skip_sanity_check: true
-max_iterations: 30000
-save_every_n_iterations: 50
+max_iterations: 60000
+save_every_n_iterations: 200
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
 dump_calibset: false
@@ -97,15 +97,16 @@ Tasks:
     datasets:
       training:
       - { dataset_name: 'gpal', 
-          root_dir:  "../lane_data",
+          # root_dir:  "../lane_data",
+          root_dir:  "/data/dp_group/process-prod-bucket/data_collect",
           pkl_infos: "gpal_songbiao_no_stop_20250604",
-          pkl_root: "../",
-          pkl_infos: "gpal_songbiao_no_stop_20250604_calib",
+          pkl_root: "/data/ai_group/datasets/multiview_lane_det/lane_pkl/",
           in_shape: [360, 640],
           camera_name: ['img_front_30', 'img_front_120', 'img_left_front'],
           gt_range: [96, 16, 0, 0.0024000000000086175, -16.0, 0],
-          pc_range: [0, 0, 0, 32.0, 95.99759999999999, 0],
-          is_random_scale_and_translate: true
+          is_random_scale_and_translate: true,
+          fast_buffer_path: "/data/ai_group/workdirs/multitask_lanenet_group/sikong/train_buf/"
+
         }
       validation:
       - {dataset_name: dummy, camera_name: camera_front_wide, root_dir: "root"}

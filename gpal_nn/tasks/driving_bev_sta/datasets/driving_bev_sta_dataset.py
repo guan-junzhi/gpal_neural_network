@@ -16,6 +16,8 @@ from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
 from gpal_lightning.utils.profiling import TimeProf
 import random
+from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
+import time
 
 polyline_class2id = {name: i for i, name in enumerate(map_classes_line)}
 polyline_shape2id = {name: i for i, name in enumerate(shape_type)}
@@ -52,9 +54,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                  gt_range=None,
                  inverse_int=True,
                  pts_per_vector=20,
-                 using_loss_fn=False,
-                 pc_range=None,
-                 is_random_scale_and_translate=False):
+                 is_random_scale_and_translate=False,
+                 fast_buffer_path=""
+                 ):
         '''
         :param root_dict:
         :param pkl_root:
@@ -95,6 +97,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                          ratio=ratio,
                          worker=worker,
                          pseudo_labels_path=pseudo_labels_path,
+                         fast_buffer_path=fast_buffer_path
                          )
         cut_start_h = 168
         mean = (0., 0., 0.)
@@ -124,15 +127,24 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['meta'] = {}
         data_dict['label'] = {}
 
-        data_info = self.dataset[idx]
-        ret = self.read_frame(data_info, data_dict)
+        time_dp = DetailProf()
+        time_dp.Tic("begin")
 
+        data_info = self.dataset[idx]
+        ret, sub_prof = self.read_frame(data_info, data_dict)
+        time_dp.AddSubProf("read_frame_sub", sub_prof)
+
+        time_dp.Duration("read_frame", "begin")
         if ret is None:
             return None
 
         self.parse_annotations(data_info, data_dict['label'])
+        time_dp.Duration("parse_annotations", "read_frame")
 
-        return data_dict
+        time_dp.Duration("prepare_data_all", "begin")
+        # if idx % 10 == 0:
+        #     time_dp.Print()
+        return data_dict, time_dp
 
     def Ego2Img(self, extrin, intrin):
         return intrin @ extrin
@@ -145,9 +157,13 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         ists_norm = []
         dists = []
         ori_shape = []
+        time_dp = DetailProf()
+        time_dp.Tic("begin")
         for camera_name in self.camera_names:
-            img_src, img, K, norm_K, ext, dist, ori_img_h, ori_img_w, img_path = self.read_single_camera(
+            img_src, img, K, norm_K, ext, dist, ori_img_h, ori_img_w, img_path, time_dp_sub = self.read_single_camera(
                 data_info['sensor'], camera_name)
+            time_dp.AddSubProf(
+                f"{camera_name}_read_single_camera", time_dp_sub)
             if img is None:
                 return None
             imgs[camera_name] = img
@@ -165,7 +181,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['meta']['ori_shape'] = np.stack(ori_shape)
         data_dict['meta']['last_img_path'] = img_path
 
-        return data_dict
+        return data_dict, time_dp
 
     def read_single_camera(self, sensor, camera_name):
         '''
@@ -186,13 +202,26 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         img_path = os.path.join(root_path, img_name)
 
         try:
-            image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+            time_dp = DetailProf()
+            time_dp.Tic("begin")
+
+            image, hw_origin = self._image_buffer_access(
+                img_path)
+            if image is None:
+                image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+                self._image_cache(
+                    img_path, image, pre_resize=(960, 540), quality=100)
+            else:
+                K[0, :] *= image.shape[1]/hw_origin[1]
+                K[1, :] *= image.shape[0]/hw_origin[0]
+
+            time_dp.Duration("imread", "begin")
             ori_img_h, ori_img_w, _ = image.shape
             resize_image, K = letterbox_image(image, self.in_shape, K=K)
             if self.is_random_scale_and_translate:
                 resize_image, K = random_scale_and_translate(resize_image, self.in_shape, K=K, scale=0.1,
                                                              offset=0.1)
-
+            time_dp.Duration("random_scale_and_translate", "imread")
         except Exception as e:
             print(e)
             print('Got None from : ', img_path)
@@ -212,7 +241,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         ext[:3, :3] = rot
         ext[:3, 3:] = T.reshape(3, 1)
 
-        return image, resize_image, K, norm_K, ext[:3, :], dist, ori_img_h, ori_img_w, img_name
+        return image, resize_image, K, norm_K, ext[:3, :], dist, ori_img_h, ori_img_w, img_name, time_dp
 
     def parse_annotations(self, data_info, data_dict):
         annot = data_info['annotation']
@@ -384,7 +413,15 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         # idx = 0
 
         while True:
-            data = self.prepare_data(idx)
+            t1 = time.time()
+            time_dp = DetailProf()
+            time_dp.Tic("begin")
+
+            data, sub_prof = self.prepare_data(idx)
+
+            time_dp.AddSubProf("prepare_data_sub", sub_prof)
+            time_dp.Duration("prepare_data", "begin")
+
             if data is None:
                 print("_rand_another")
                 idx = random.randint(0, len(self))
@@ -393,15 +430,23 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             if self.transforms is not None:
                 for transform in self.transforms:
                     data = transform(data)
+
+            time_dp.Duration("transform", "prepare_data")
+
             data['image'] = {k: data['image'][k].transpose(
                 2, 0, 1) for k in data['image']}
-
             data['calib']["ego2imgs"] = np.stack(
                 [i@e for e, i in zip(data['calib']['exts'], data['calib']['ists'])], axis=0)
             data['calib']["ego2imgs"] = np.stack([np.concatenate([ele, np.array(
                 [[0, 0, 0, 1]])], axis=0) for ele in data['calib']["ego2imgs"]], axis=0)
             data['calib']["img_shapes"] = np.stack(
                 [np.array(list(img.shape)) for img in data["image"].values()], axis=0)
+
+            time_dp.Duration("tail", "transform")
+            time_dp.Duration("dataset_all", "begin")
+            t2 = time.time()
+            # if t2-t1 > 1.0:
+            #     time_dp.Print()
 
             return data
 
