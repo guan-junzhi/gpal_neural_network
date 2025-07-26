@@ -17,18 +17,17 @@ class CutImageUpper(object):
         - images (np.uint8)/(np.float32)
     """
 
-    def __init__(self, start_h=168):
+    def __init__(self, start_h=112):
         self.start_h = start_h
 
     def __call__(self, data):
         assert 'image' in data, '`image` is not found in results'
 
-        
-        data['image'] = {k: data['image'][k][self.start_h:, :, :] for k in data['image']}
-        data['calib']['ists'][:,1,2] -= self.start_h
+        data['image'] = {k: data['image'][k][self.start_h:, :, :]
+                         for k in data['image']}
+        data['calib']['ists'][:, 1, 2] -= self.start_h
         data['meta']['cut_h'] = True
         data['meta']['cut_h_value'] = self.start_h
-    
         # if 'seg' in data['annot']:
         #     data['annot']['seg'] = data['annot']['seg'][self.start_h:, :]
 
@@ -57,7 +56,8 @@ class Normalize(object):
 
         assert 'image' in data, '`image` is not found in results'
         # data['image'] = (data['image'] - self.mean) / self.std
-        data['image'] = {k: (data['image'][k] - self.mean) / self.std for k in data['image']}
+        data['image'] = {k: (data['image'][k] - self.mean) /
+                         self.std for k in data['image']}
 
         return data
 
@@ -73,7 +73,8 @@ class ToTensor(object):
                 if isinstance(data[key], np.ndarray):
                     data[key] = torch.from_numpy(data[key].astype(np.float32))
                 elif isinstance(data[key], list):
-                    data[key] = torch.from_numpy(np.array(data[key]).astype(np.float32))
+                    data[key] = torch.from_numpy(
+                        np.array(data[key]).astype(np.float32))
                 else:
                     raise TypeError
 
@@ -81,7 +82,8 @@ class ToTensor(object):
                     if len(data[key].shape) == 3:
                         data[key] = data[key].permute((2, 0, 1)).contiguous()
                     elif len(data[key].shape) == 4:
-                        data[key] = data[key].permute((0, 3, 1, 2)).contiguous()
+                        data[key] = data[key].permute(
+                            (0, 3, 1, 2)).contiguous()
         return data
 
 
@@ -152,18 +154,17 @@ class MultiViewPhotoMetricDistortion(object):
         assert 'image' in data, '`images` is not found in results'
         imgs = data['image']
         # assert len(imgs.shape) == 4
-        
+
         (mode, brightness_flag, contrast_flag, saturation_flag, hue_flag,
-             delta_value, alpha_value, saturation_value, hue_value) = self._random_flags()
-        
+         delta_value, alpha_value, saturation_value, hue_value) = self._random_flags()
+
         for cam_name in imgs:
-        
+
             img = imgs[cam_name]
             img = img.astype(np.float32)
             # random brightness
             if brightness_flag:
                 img += delta_value
-                
 
             # mode == 0 --> do random contrast first
             # mode == 1 --> do random contrast last
@@ -197,7 +198,7 @@ class MultiViewPhotoMetricDistortion(object):
                 if contrast_flag:
                     img *= alpha_value
             img = np.clip(img, 0, 255)
-            
+
             data['image'][cam_name] = img
 
         return data
@@ -243,7 +244,7 @@ class MultiViewRandomCutOut(object):
     ):
         assert 0 <= prob and prob <= 1
         assert (cutout_shape is None) ^ (
-                cutout_ratio is None
+            cutout_ratio is None
         ), "Either cutout_shape or cutout_ratio should be specified."
         assert isinstance(cutout_shape, (list, tuple)) or isinstance(
             cutout_ratio, (list, tuple)
@@ -254,9 +255,9 @@ class MultiViewRandomCutOut(object):
             n_holes = (n_holes, n_holes)
         if seg_fill_in is not None:
             assert (
-                    isinstance(seg_fill_in, int)
-                    and 0 <= seg_fill_in
-                    and seg_fill_in <= 255
+                isinstance(seg_fill_in, int)
+                and 0 <= seg_fill_in
+                and seg_fill_in <= 255
             )
         self.prob = prob
         self.n_holes = n_holes

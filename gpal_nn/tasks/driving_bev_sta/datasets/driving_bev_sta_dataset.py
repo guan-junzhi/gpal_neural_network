@@ -1,4 +1,6 @@
 
+import copy
+from multiprocessing import Pool
 import random
 import os
 import cv2
@@ -18,6 +20,9 @@ from gpal_lightning.utils.profiling import TimeProf
 import random
 from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
 import time
+import multiprocessing
+from shapely.geometry import LineString
+
 
 polyline_class2id = {name: i for i, name in enumerate(map_classes_line)}
 polyline_shape2id = {name: i for i, name in enumerate(shape_type)}
@@ -73,6 +78,32 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         :param is_random_scale_and_translate:
         '''
 
+        # import pickle as pkl
+        # inputs = [global_config,
+        #           task_config,
+        #           phase,
+        #           preprocess,
+        #           root_dir,
+        #           pkl_root,
+        #           pkl_infos,
+        #           in_shape,
+        #           dataset_name,
+        #           pseudo_labels_path,
+        #           worker,
+        #           shuffle,
+        #           shuffle_seed,
+        #           sql_filter,
+        #           ratio,
+        #           camera_name,
+        #           transforms,
+        #           test_mode,
+        #           gt_range,
+        #           inverse_int,
+        #           pts_per_vector,
+        #           is_random_scale_and_translate,
+        #           fast_buffer_path]
+        # pkl.dump(inputs, open("inputs.pkl", 'wb'))
+        # exit(1)
         self.root_dir = root_dir
         self.in_shape = in_shape
         self.camera_names = camera_name
@@ -97,9 +128,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                          ratio=ratio,
                          worker=worker,
                          pseudo_labels_path=pseudo_labels_path,
-                         fast_buffer_path=fast_buffer_path
+                         fast_buffer_path="" if fast_buffer_path == "" else f"{fast_buffer_path}/{task_config.name}_buf"
                          )
-        cut_start_h = 168
+        cut_start_h = 112
         mean = (0., 0., 0.)
         std = (255., 255., 255.)
         self.transforms = [
@@ -200,18 +231,18 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         # read img
         root_path = self.root_dir
         img_path = os.path.join(root_path, img_name)
-
+        time_dp = DetailProf()
+        time_dp.Tic("begin")
         try:
-            time_dp = DetailProf()
-            time_dp.Tic("begin")
-
             image, hw_origin = self._image_buffer_access(
                 img_path)
             if image is None:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
                 self._image_cache(
                     img_path, image, pre_resize=(960, 540), quality=100)
+                # print("cache")
             else:
+                print("fast load")
                 K[0, :] *= image.shape[1]/hw_origin[1]
                 K[1, :] *= image.shape[0]/hw_origin[0]
 
@@ -225,7 +256,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         except Exception as e:
             print(e)
             print('Got None from : ', img_path)
-            return None, None, None, None, None, None, None, None, ''
+            time_dp.Duration("Exception", "begin")
+            return None, None, None, None, None, None, None, None, '', time_dp
 
         resize_img_h, resize_img_w, _ = resize_image.shape
         norm_K = np.array([
@@ -265,13 +297,18 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         for idx, lane in enumerate(polylines['points']):
             # print(idx)
             # TODO: move range filter to pipeline
-            lane = _fix_pts_interpolate(lane, self.pts_per_vector)
+            lane = _fix_pts_interpolate(
+                lane, max(int(LineString(lane).length / 0.2), self.pts_per_vector))
             # print(lane)
-            mask = lane[..., 0] <= self.gt_range[0]
-            mask *= lane[..., 0] >= self.gt_range[3]
-            mask *= lane[..., 1] <= self.gt_range[1]
-            mask *= lane[..., 1] >= self.gt_range[4]
-            lane = lane[mask]
+            try:
+                mask = lane[..., 0] <= self.gt_range[0]
+                mask *= lane[..., 0] >= self.gt_range[3]
+                mask *= lane[..., 1] <= self.gt_range[1]
+                mask *= lane[..., 1] >= self.gt_range[4]
+                lane = lane[mask]
+            except:
+                exit(1)
+
             if len(lane) <= 1:
 
                 # print("continue", self.gt_range)
@@ -323,7 +360,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         edge_mask = np.zeros(len(edges['points']), dtype=bool)
         for idx, edge in enumerate(edges['points']):
             # TODO: move range filter to pipeline
-            edge = _fix_pts_interpolate(edge, self.pts_per_vector)
+            edge = _fix_pts_interpolate(
+                edge, max(int(LineString(edge).length / 0.2), self.pts_per_vector))
             mask = edge[..., 0] <= self.gt_range[0]
             mask *= edge[..., 0] >= self.gt_range[3]
             mask *= edge[..., 1] <= self.gt_range[1]
@@ -439,6 +477,14 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 [i@e for e, i in zip(data['calib']['exts'], data['calib']['ists'])], axis=0)
             data['calib']["ego2imgs"] = np.stack([np.concatenate([ele, np.array(
                 [[0, 0, 0, 1]])], axis=0) for ele in data['calib']["ego2imgs"]], axis=0)
+
+            ists_wt = copy.deepcopy(data['calib']['ists'])
+            ists_wt[:, 1, 2] += 112
+            data['calib']["ego2imgs_wt"] = np.stack(
+                [i@e for e, i in zip(data['calib']['exts'], ists_wt)], axis=0)
+            data['calib']["ego2imgs_wt"] = np.stack([np.concatenate([ele, np.array(
+                [[0, 0, 0, 1]])], axis=0) for ele in data['calib']["ego2imgs_wt"]], axis=0)
+
             data['calib']["img_shapes"] = np.stack(
                 [np.array(list(img.shape)) for img in data["image"].values()], axis=0)
 
@@ -449,6 +495,11 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             #     time_dp.Print()
 
             return data
+
+
+def Get(dataset_temp, i, j):
+    for k in range(i, j):
+        print(k, dataset_temp[k]["dataloader_time"])
 
 
 if __name__ == "__main__":
@@ -466,29 +517,45 @@ if __name__ == "__main__":
     print(len(train_dataset))
 
     d = train_dataset[0]
-    print(d.keys())
+    # print(d.keys())
+
+    # print(d)
+    # exit(1)
 
     from tools_scripts.data_format_cvt import ShowDataStruct
     from tools_scripts.vis_2d import Vis2D
 
     print(ShowDataStruct("d", d))
 
+    # pool = Pool(processes=4)
+
+    # for i in range(0, len(train_dataset), 5000):
+    #     print(i)
+    #     pool.apply_async(Get, (copy.deepcopy(train_dataset), i, i + 5000))
+    #     # Get(train_dataset, i)
+    # pool.close()
+    # pool.join()
+
+    # exit(1)
+
     for di, d in enumerate(train_dataset):
         # try:
         vis = Vis2D([-30, 100], [-40, 40], 0.02)
-        for l in d["annot"]["polylines"]["points"]:
+        for l in d["label"]["polylines"]["points"]:
             vis.DrawPolyline(l[:, :2], (255, 255, 255), 2)
-        for l in d["annot"]["edges"]["points"]:
+        for l in d["label"]["edges"]["points"]:
             vis.DrawPolyline(l[:, :2], (0, 255, 255), 2)
-        lanes = d["annot"]["polylines"]["points"]
+        lanes = d["label"]["polylines"]["points"]
         lanes = np.concatenate([lanes, np.ones_like(lanes[:, :, :1])], axis=-1)
-        curb = d["annot"]["edges"]["points"]
+        curb = d["label"]["edges"]["points"]
         curb = np.concatenate([curb, np.ones_like(curb[:, :, :1])], axis=-1)
         imgs = []
         for img, extrin, intrin, intrin_norm, disr in zip(d["image"].values(), d["calib"]["exts"], d["calib"]["ists"], d["calib"]["ists_norm"], d["calib"]["dists"]):
             #  = calib["exts"], calib["ists"], calib["ists_norm"], calib["dists"]
-            img = (img * 255).astype(np.uint8)
+            img = (img * 255).astype(np.uint8).transpose(1, 2, 0)
             extrin = np.concatenate([extrin, np.array([[0, 0, 0, 1]])], axis=0)
+
+            print(img.shape, intrin.shape, disr.shape, None, intrin.shape)
             img = cv2.undistort(img, intrin, disr, None, intrin)
             for l in np.concatenate([lanes, curb]):
                 l_cam = extrin.dot(l.transpose()).transpose()
@@ -513,4 +580,5 @@ if __name__ == "__main__":
         cv2.imwrite(preview_img_f, img_bev)
 
         preview_img_f = f"temp/img_lane_debug_viz_{di}.jpg"
+        print(preview_img_f)
         cv2.imwrite(preview_img_f, imgs)

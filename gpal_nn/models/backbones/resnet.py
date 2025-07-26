@@ -1,4 +1,4 @@
-import torchvision as tv
+import torchvision.models as models
 import torch
 import torch.nn as nn
 from gpal_lightning.neural_network.network_modules.backbones.builder import BACKBONES
@@ -11,56 +11,53 @@ class ResNet(BaseModule):
         # super(Resnet, self).__init__()
         super(ResNet, self).__init__(global_config)
 
-        d = num_layers
-        if d == 18:
-            '''
-            b, 3, h, w --> b, 512, h / 32, w / 32
-            '''
-            self.m = nn.Sequential(
-                *list(tv.models.resnet18(pretrained=True).children())[:-2],
-                nn.Conv2d(512, 256, 1),
-                nn.BatchNorm2d(256),
-                nn.Conv2d(256, 256, 3, padding=1)
-            )
-
-        elif d == 34:
-            '''
-            b, 3, h, w --> b, 512, h / 32, w / 32
-            '''
-            self.m = nn.Sequential(
-                *list(tv.models.resnet34(pretrained=True).children())[:-2],
-                nn.Conv2d(512, 256, 1),
-                nn.BatchNorm2d(256),
-                nn.Conv2d(256, 256, 3, padding=1)
-            )
-        elif d == 50:
-            '''
-            b, 3, h, w --> b, 2048, h / 32, w / 32
-            '''
-            self.m = nn.Sequential(
-                *list(tv.models.resnet50(pretrained=True).children())[:-2],
-                nn.Conv2d(2048, 1024, 1),
-                nn.BatchNorm2d(1024),
-                nn.Conv2d(1024, 1024, 3, padding=1)
-            )
-        elif d == 101:
-            '''
-            b, 3, h, w --> b, 2048, h / 32, w / 32
-            '''
-            self.m = nn.Sequential(
-                *list(tv.models.resnet101(pretrained=True).children())[:-2],
-                nn.Conv2d(2048, 1024, 1),
-                nn.BatchNorm2d(1024),
-                nn.Conv2d(1024, 1024, 3, padding=1)
-            )
+        if num_layers == 18:
+            self.model = models.resnet18(pretrained=False)
+        elif num_layers == 34:
+            self.model = models.resnet34(pretrained=False)
+        elif num_layers == 50:
+            self.model = models.resnet50(pretrained=False)
+        elif num_layers == 101:
+            self.model = models.resnet101(pretrained=False)
         else:
-            raise NotImplementedError
+            raise ValueError(
+                "Unsupported ResNet version. Choose from 18, 32, 50, or 101.")
 
-        # print(list(self.m))
-        # exit(1)
+        self.need_neck = need_neck
+        self.layer1 = self.model.layer1
+        self.layer2 = self.model.layer2
+        self.layer3 = self.model.layer3
+        self.layer4 = self.model.layer4
+        self.avgpool = self.model.avgpool
+        self.fc = self.model.fc
+        self.m = nn.Sequential(
+            nn.Conv2d(512, 256, 1),
+            nn.BatchNorm2d(256),
+            nn.Conv2d(256, 256, 3, padding=1)
+        )
 
     def forward(self, x):
-        return [self.m(x)]
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
+
+        c1 = self.layer1(x)
+        c2 = self.layer2(c1)
+        c3 = self.layer3(c2)
+        c4 = self.layer4(c3)
+        if self.need_neck:
+            return c2, c3, c4
+        else:
+            return [self.m(c4)]
+
+    def _get_export_layers_channel(self):
+        if self.need_neck:
+            self.export_layers_channel = [128, 256, 512]
+
+        else:
+            self.export_layers_channel = [256]
+        return self.export_layers_channel
 
 
 if __name__ == "__main__":

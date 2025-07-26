@@ -1,4 +1,4 @@
-image_per_gpu: 32
+image_per_gpu: 24
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 60000
@@ -20,16 +20,17 @@ Backbones:
     type: ResNet
     # ampfp16: true
     load: all
-    # freeze: bn
-    input_source: ['img_front_30', 'img_front_120', 'img_left_front']
+    # freeze: all
+    input_source: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front']
     num_layers: 18
-    need_neck: False
+    need_neck: True
   
 Groups:
   group0: {load: all, freeze: all, type: DummyBackbone, input_source: backbone0}
 
 Necks:
-  neck0: {load: all, freeze: all, type: DummyNeck, input_source: group0}
+  neck0: {load: all, type: PAFPN_Up, input_source: group0, backbone_out_channels: [128, 256, 512], fpn_out_channels: 256}
+  # neck0: {load: all, freeze: all, type: PAFPN_Up, input_source: group0, backbone_out_channels: 256, fpn_out_channels: 256}
 
 Transformer:
   type: SingleBevFormerViewTransformer
@@ -37,24 +38,19 @@ Transformer:
   # freeze: all
   transformer_config:
     task_name: DRIVING_BEV_STA
-    pc_range: [0, -16, -2.0, 96.0, 16.0, 2.0]
+    pc_range: [0, -16, -10.0, 120, 16.0, 10.0]
     num_points_in_pillar: 4
-    bev_y: 30
-    bev_x: 75
+    bev_y: 50
+    bev_x: 100
     embed_dims: 256
     queue_length: 1
     max_camoverlap_num: 2
-    numcam: 3
+    numcam: 2
     single_bev: true
     use_lidar2img: false
 
-    grid_length: [1.3333, 1.0]  # [bev_x, bev_y]
-    start_x: 96
+    start_x: 120
     start_y: 16
-    crop_w_size: 0
-    crop_h_size: 168
-    image_w_size: 360
-    image_h_size: 640
     
 Tasks:
   DRIVING_BEV_STA:
@@ -62,8 +58,10 @@ Tasks:
     # num_worker_limit: 2
     use_concat_dataset: true
     load: all
+    # freeze: all
     amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
-    cam_used: ['img_front_30', 'img_front_120', 'img_left_front']
+    # cam_used: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front']
+    cam_used: ['img_front_30', 'img_front_120']
     transformer: transformer
     frequency: 1.0
     grad_bounds: 3.0
@@ -80,9 +78,9 @@ Tasks:
         layers_config:
           compatible_with_MVLane_loss: True
           in_channels: 256
-          num_cam: 3
-          bev_w: 75  # bev_x
-          bev_h: 30  # bev_y
+          num_cam: 2
+          bev_w: 100  # bev_x
+          bev_h: 50  # bev_y
           head_embed_dims: 512
           num_vec_one2one: 50
           num_vec_one2many: 0  # 300
@@ -99,14 +97,15 @@ Tasks:
       - { dataset_name: 'gpal', 
           # root_dir:  "../lane_data",
           root_dir:  "/data/dp_group/process-prod-bucket/data_collect",
-          pkl_infos: "gpal_songbiao_no_stop_20250604",
+          # pkl_infos: "gpal_songbiao_no_stop_20250604",
+          pkl_infos: "gpal_songbiao_no_stop_20250604_calib",
           pkl_root: "/data/ai_group/datasets/multiview_lane_det/lane_pkl/",
-          in_shape: [360, 640],
-          camera_name: ['img_front_30', 'img_front_120', 'img_left_front'],
-          gt_range: [96, 16, 0, 0.0024000000000086175, -16.0, 0],
-          is_random_scale_and_translate: true,
-          fast_buffer_path: "/data/ai_group/workdirs/multitask_lanenet_group/sikong/train_buf/"
-
+          in_shape: [432, 768],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: false,
+          fast_buffer_path: ""
         }
       validation:
       - {dataset_name: dummy, camera_name: camera_front_wide, root_dir: "root"}

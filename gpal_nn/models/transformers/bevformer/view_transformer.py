@@ -151,8 +151,8 @@ class BevFormerViewTransformer(BaseModule):
                         num_heads=8,
                         num_points=8,
                         num_levels=1,
-                        grid_align_num=18,
-                        feats_size=[[20, 6]],
+                        grid_align_num=20,
+                        feats_size=[[48, 20]],
                     )
                 ),
             )
@@ -982,8 +982,8 @@ class SingleBevFormerViewTransformer(BevFormerViewTransformer):
         if not self.is_compile:
             # img_meta = data["seq_meta"][0]
             # im_shape = data["img"].shape[2:]
-            im_shape = [int(data['img_shapes'][0, 0, 2]),
-                        int(data['img_shapes'][0, 0, 1])]
+            im_shape = [int(data['img_shapes'][0, 0, 1]),
+                        int(data['img_shapes'][0, 0, 2])]
 
             bs = feats[0].shape[0]
             device = feats[0].device

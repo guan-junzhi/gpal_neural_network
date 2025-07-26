@@ -231,7 +231,7 @@ class BaseDataset(Dataset, ABC):
         raise DataloaderException
 
     def _image_cache(self, key, img, pre_resize, quality):
-        if (self.buffer is not None):
+        if (self.buffer is None):
             return False
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
         h = int(img.shape[0]).to_bytes(4, byteorder='little', signed=False)
@@ -244,7 +244,7 @@ class BaseDataset(Dataset, ABC):
             return False
 
     def _image_buffer_access(self, key):
-        if (self.buffer is not None):
+        if (self.buffer is None):
             return None, None
         try:
             x = self.buffer[key]
