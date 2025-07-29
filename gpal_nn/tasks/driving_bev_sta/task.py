@@ -14,7 +14,7 @@ class DRIVING_BEV_STATask(BaseTask):
     def GetVis(self, preds, gts, idx):
 
         from tools_scripts.vis_2d import Vis2D
-        vis1 = Vis2D([-30, 100], [-20, 20], 0.1)
+        vis1 = Vis2D([-30, 130], [-20, 20], 0.1)
         try:
             for l in gts[idx]['edges']['points']:
                 vis1.DrawPolyline(l, [0, 255, 255], 2)
@@ -28,7 +28,7 @@ class DRIVING_BEV_STATask(BaseTask):
         pre_pts_denorm = torch.stack(
             [(1-pre_pts[..., 1]) * 120, ((1-pre_pts[..., 0])-0.5) * 32], dim=-1)
 
-        vis2 = Vis2D([-30, 100], [-20, 20], 0.1)
+        vis2 = Vis2D([-30, 130], [-20, 20], 0.1)
         for l, ln, s in zip(pre_pts_denorm[-1, idx], pre_pts[-1, idx], preds['all_cls_scores'][-1, idx]):
             if s[1:].sigmoid().max() > 0.1:
                 # print(f"ln \n{s.sigmoid().max()}")

@@ -167,7 +167,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
         time_dp.Duration("read_frame", "begin")
         if ret is None:
-            return None
+            return None, sub_prof
 
         self.parse_annotations(data_info, data_dict['label'])
         time_dp.Duration("parse_annotations", "read_frame")
@@ -196,7 +196,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             time_dp.AddSubProf(
                 f"{camera_name}_read_single_camera", time_dp_sub)
             if img is None:
-                return None
+                return None, time_dp
             imgs[camera_name] = img
             ego2cam.append(ext)
             cam2ego.append(np.linalg.inv(np.concatenate(
@@ -242,7 +242,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                     img_path, image, pre_resize=(960, 540), quality=100)
                 # print("cache")
             else:
-                print("fast load")
+                # print("fast load")
                 K[0, :] *= image.shape[1]/hw_origin[1]
                 K[1, :] *= image.shape[0]/hw_origin[0]
 

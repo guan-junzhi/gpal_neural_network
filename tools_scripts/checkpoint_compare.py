@@ -1,11 +1,11 @@
 import torch
 
-ckpt1 = "/data/ai_group/workdirs/multitask_lanenet_group/sikong/lane_wangtong_checkpoints/ep021.pth"
+ckpt1 = "/data/ai_group/workdirs/multitask_lanenet_group/wujianlong/multitask_lanenet/work_dir/hat_ori_rpy_bev_aug_1deg_0726/model/ep022.pth"
 checkpoint1 = torch.load(ckpt1, map_location="cpu")
 checkpoint1_keys = list(checkpoint1.keys())
 # print(checkpoint1_keys)
 
-ckpt2 = "workspace/20250723_07_24_12/checkpoint/epoch=1-step=56_checkpoint.pth"
+ckpt2 = "workspace/20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint.pth"
 checkpoint2 = torch.load(ckpt2, map_location="cpu")
 # print(checkpoint2['state_dict'].keys())
 checkpoint2_keys = list(checkpoint2['state_dict'].keys())

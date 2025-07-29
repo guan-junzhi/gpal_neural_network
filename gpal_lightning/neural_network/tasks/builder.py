@@ -55,10 +55,10 @@ def build(
     sub_name = kwargs.pop("sub_name", "")
 
     obj_name = task_name.upper() + sub_name + cls_name
-    print(f"obj_name = {obj_name} {task_config}")
+    # print(f"obj_name = {obj_name} {task_config}")
     cls_obj = registry.get(obj_name)
-    print(args)
-    print(kwargs)
+    # print(args)
+    # print(kwargs)
 
     return cls_obj(global_config, task_config, *args, **kwargs)
 

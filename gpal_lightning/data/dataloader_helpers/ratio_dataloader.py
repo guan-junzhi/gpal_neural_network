@@ -56,7 +56,7 @@ class RatioDataloader:
                     num_worker += dataset.worker
                     dataset_name_list.append(dataset.dataset_name)
 
-                default_num_worker_limit = 4
+                default_num_worker_limit = 8
                 num_worker_limit = getattr(
                     task.task_config, 'num_worker_limit', default_num_worker_limit)
                 prefetch_factor = getattr(
