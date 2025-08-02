@@ -53,9 +53,9 @@ class ArgumentParserHelper:
     def _argument_check(args):
         if "load_from" in args:
             if "config" not in args:
-                args.config = f"{args.load_from}/config.yaml"
+                args.config = f"{os.path.dirname(os.path.dirname(args.load_from))}/config.yaml"
             if "save" not in args:
-                args.save = args.load_from
+                args.save = os.path.dirname(os.path.dirname(args.load_from))
 
         if "config" in args:
             assert args.save, "Save path is requred for model training."
@@ -65,9 +65,9 @@ class ArgumentParserHelper:
 
         if "resume_from" in args:
             if "config" not in args:
-                args.config = f"{args.resume_from}/config.yaml"
+                args.config = f"{os.path.dirname(os.path.dirname(args.load_from))}/config.yaml"
             if "save" not in args:
-                args.save = args.resume_from
+                args.save = os.path.dirname(os.path.dirname(args.load_from))
 
     @classmethod
     def parse(cls):

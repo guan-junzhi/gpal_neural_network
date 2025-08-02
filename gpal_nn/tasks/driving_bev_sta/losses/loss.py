@@ -8,6 +8,7 @@ from gpal_nn.tasks.driving_bev_sta.losses.map_loss import BaseMapLossCost
 from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
 import time
 from tools_scripts.data_format_cvt import ShowDataStruct
+import pickle as pkl
 
 
 def pack_polyline_gt_points(data):
@@ -23,12 +24,22 @@ def pack_polyline_gt_points(data):
 
 
 def lane_loss_computation(preds, data, loss_func):
+
+    # print(data[0])
+
+    # print(ShowDataStruct("preds", preds))
+    # print(ShowDataStruct("data", data))
+    # preds1, data1 = pkl.load(open("../wangtong_loss.pkl", 'rb'))
+    # print(ShowDataStruct("preds", preds))
+    # print(ShowDataStruct("data", data))
     # bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred = \
     #     preds['bev_embed'], preds['all_cls_scores'], preds['all_bbox_pred'], preds['all_pts_pred']
     bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred = \
         None, preds['all_cls_scores'], preds['all_bbox_preds'], preds['all_pts_preds']
     # num_iter_layer, bs, num_query, score shape
     num_iter, bs, _, pts_per_vector, _ = all_pts_pred.shape
+
+    # print(data['annot'][0])
 
     loss_list = list()
     for k in range(num_iter):
@@ -41,7 +52,9 @@ def lane_loss_computation(preds, data, loss_func):
             score_pred, bbox_pred, pts_pred = all_cls_scores[k,
                                                              j], all_bbox_pred[k, j], all_pts_pred[k, j]
             #  [n, 2], [n, 4], [n, 20, 2]
-            annos = pack_polyline_gt_points(data[j])
+            subdata = data[j]
+            # subdata = data['annot'][j]
+            annos = pack_polyline_gt_points(subdata)
             time_dp.Duration("lane_loss_computation_all_1", "begin")
 
             start_x = 120
@@ -168,8 +181,8 @@ def loss_computation(preds, data, loss_func):
     time_dp.Duration("lane_loss_computation1", "begin")
     # lane_total_dict2 = lane_loss_computation2(preds, data, loss_func)
     time_dp.Duration("lane_loss_computation2", "lane_loss_computation1")
-    time_dp.Print()
-    print(preds['all_cls_scores'].device)
+    # time_dp.Print()
+    # print(preds['all_cls_scores'].device)
 
     total_dict.update(lane_total_dict1)
 

@@ -25,3 +25,4 @@ logs/*
 local_vis/*
 workspace/*
 
+lightning_logs/*

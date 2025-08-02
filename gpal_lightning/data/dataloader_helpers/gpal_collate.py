@@ -9,7 +9,7 @@ def gpal_collate(batch):
     batch_format = {}
 
     for k in batch[0]:
-        if k in ['label']:
+        if k in ['label', "meta"]:
             batch_format[k] = [ele[k] for ele in batch]
         else:
             batch_format[k] = dataloader.default_collate(

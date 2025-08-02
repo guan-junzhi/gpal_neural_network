@@ -2,16 +2,16 @@ image_per_gpu: 24
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 60000
-save_every_n_iterations: 200
+save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  log_every: 1
-  visualize_every: 10
+  log_every: 10
+  visualize_every: 200
   max_visu_img_num: 10
-  optimizer: {type: AdamW, lr: 5.0e-07, weight_decay: 1.0e-06}
+  optimizer: {type: AdamW, lr: 1.0e-05, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
     after_scheduler: CosineAnnealingLR, T_max: 30000}
 
@@ -98,14 +98,27 @@ Tasks:
           # root_dir:  "../lane_data",
           root_dir:  "/data/dp_group/process-prod-bucket/data_collect",
           # pkl_infos: "gpal_songbiao_no_stop_20250604",
+          pkl_infos: "gpal_songbiao_no_stop_20250604_calib_sel1_repeat100",
+          pkl_root: "/data/ai_group/datasets/multiview_lane_det/lane_pkl/",
+          in_shape: [432, 768],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: False,
+          fast_buffer_path: "../"
+        }
+      validation:
+      - { dataset_name: 'gpal', 
+          # root_dir:  "../lane_data",
+          root_dir:  "/data/dp_group/process-prod-bucket/data_collect",
+          # pkl_infos: "gpal_songbiao_no_stop_20250604",
           pkl_infos: "gpal_songbiao_no_stop_20250604_calib",
           pkl_root: "/data/ai_group/datasets/multiview_lane_det/lane_pkl/",
           in_shape: [432, 768],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
           camera_name: ['img_front_30', 'img_front_120'],
           gt_range: [120, 16, 0, 0.0, -16.0, 0],
-          is_random_scale_and_translate: false,
+          is_random_scale_and_translate: False,
+          shuffle = False,
           fast_buffer_path: ""
         }
-      validation:
-      - {dataset_name: dummy, camera_name: camera_front_wide, root_dir: "root"}
