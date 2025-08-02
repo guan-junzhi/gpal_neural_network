@@ -139,8 +139,17 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             MultiViewPhotoMetricDistortion(),
             Normalize(mean=mean, std=std),
         ]
+        self.task = task_config.name
 
     def _build_world_data_list(self):
+        try:
+            rank_curr = distributed.get_rank()
+            self.global_rank = rank_curr
+            self.rank_local = distributed.get_rank() % 8
+        except (RuntimeError, AssertionError):
+            rank_curr = 0
+            self.rank_local = 0
+
         self.world_data_list = self.load_data_infos(
             self.pkl_root, self.pkl_infos)
 
@@ -161,7 +170,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         time_dp = DetailProf()
         time_dp.Tic("begin")
 
-        data_info = self.dataset[idx]
+        data_info = copy.deepcopy(self.dataset[idx])
         ret, sub_prof = self.read_frame(data_info, data_dict)
         time_dp.AddSubProf("read_frame_sub", sub_prof)
 
@@ -211,6 +220,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             cam2ego), 'ists': np.stack(ists), 'ists_norm': np.stack(ists_norm), 'dists': np.stack(dists)}
         data_dict['meta']['ori_shape'] = np.stack(ori_shape)
         data_dict['meta']['last_img_path'] = img_path
+        data_dict['meta']['camera_name'] = self.camera_names
+        data_dict['meta']['task_name'] = self.task
+        data_dict['meta']['clip_id'] = '_'.join(img_path.split('/')[:2])
 
         return data_dict, time_dp
 
@@ -490,6 +502,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
             time_dp.Duration("tail", "transform")
             time_dp.Duration("dataset_all", "begin")
+
+            data['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
+
             t2 = time.time()
             # if t2-t1 > 1.0:
             #     time_dp.Print()
