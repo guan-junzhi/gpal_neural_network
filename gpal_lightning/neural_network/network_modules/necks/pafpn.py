@@ -32,7 +32,7 @@ class FPN(nn.Module):
             laterals[i - 1] += F.interpolate(
                 laterals[i],
                 scale_factor=2,
-                mode='nearest'
+                mode='bilinear'
             )
             # upsampled = self.upsample_convs[i - 1](laterals[i])
             # laterals[i - 1] += upsampled

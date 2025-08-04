@@ -4,7 +4,7 @@ import numpy as np
 
 def ShowDataStruct(head_str, d, indent=0, depth=-1):
     if isinstance(d, (torch.Tensor, np.ndarray)):
-        return f"{'    ' * indent}{head_str}{type(d)} : {d.shape}\n"
+        return f"{'    ' * indent}{head_str}{type(d)} : {d.shape} {d.dtype}\n"
     elif isinstance(d, (list, set, tuple)):
         str = f"{'    ' * indent}{head_str}{type(d)} len = {len(d)}\n"
         if (depth == -1) or (indent < depth):

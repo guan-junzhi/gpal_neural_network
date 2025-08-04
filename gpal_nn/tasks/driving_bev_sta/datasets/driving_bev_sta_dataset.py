@@ -9,6 +9,7 @@ from typing import List, Union
 from torch import distributed
 import numpy as np
 
+from gpal_lightning import const
 from gpal_lightning.neural_network.tasks.builder import DATASETS
 from gpal_lightning.neural_network.tasks.base.datasets.slice_base_dataset import SliceBaseDataset
 from gpal_lightning.neural_network.global_config import GlobalConfig
@@ -133,12 +134,18 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         cut_start_h = 112
         mean = (0., 0., 0.)
         std = (255., 255., 255.)
-        self.transforms = [
-            CutImageUpper(cut_start_h),
-            MultiViewRandomCutOut(0.65, 6, [[40, 40]]),
-            MultiViewPhotoMetricDistortion(),
-            Normalize(mean=mean, std=std),
-        ]
+        if phase == const.PHASE_TRAINING:
+            self.transforms = [
+                CutImageUpper(cut_start_h),
+                MultiViewRandomCutOut(0.65, 6, [[40, 40]]),
+                MultiViewPhotoMetricDistortion(),
+                Normalize(mean=mean, std=std),
+            ]
+        else:
+            self.transforms = [
+                CutImageUpper(cut_start_h),
+                Normalize(mean=mean, std=std),
+            ]
         self.task = task_config.name
 
     def _build_world_data_list(self):
@@ -250,6 +257,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 img_path)
             if image is None:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+                image = cv2.undistort(image, K, dist)
                 self._image_cache(
                     img_path, image, pre_resize=(960, 540), quality=100)
                 # print("cache")

@@ -233,8 +233,8 @@ class BevFormerViewTransformer(BaseModule):
         self,
         H: int,
         W: int,
-        Z: int = 4,
-        # num_points_in_pillar: int = 4,
+        Z: int = 8,
+        num_points_in_pillar: int = 4,
         dim: str = "3d",
         bs: int = 1,
         device: torch.device = None,
@@ -248,24 +248,24 @@ class BevFormerViewTransformer(BaseModule):
                 torch.linspace(
                     0.5,
                     Z - 0.5,
-                    Z,
+                    num_points_in_pillar,
                     dtype=dtype,
                     device=device,
                 )
                 .view(-1, 1, 1)
-                .expand(Z, H, W)
+                .expand(num_points_in_pillar, H, W)
                 / Z
             )
             xs = (
                 torch.linspace(0.5, W - 0.5, W, dtype=dtype, device=device)
                 .view(1, 1, W)
-                .expand(Z, H, W)
+                .expand(num_points_in_pillar, H, W)
                 / W
             )
             ys = (
                 torch.linspace(0.5, H - 0.5, H, dtype=dtype, device=device)
                 .view(1, H, 1)
-                .expand(Z, H, W)
+                .expand(num_points_in_pillar, H, W)
                 / H
             )
             ref_3d = torch.stack((xs, ys, zs), -1)
@@ -540,7 +540,7 @@ class BevFormerViewTransformer(BaseModule):
         ref_3d = self.gen_reference_points(
             self.bev_h,
             self.bev_w,
-            # self.pc_range[5] - self.pc_range[2],
+            self.pc_range[5] - self.pc_range[2],
             self.num_points_in_pillar,
             dim="3d",
             bs=bs,
