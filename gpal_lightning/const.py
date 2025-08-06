@@ -50,6 +50,20 @@ CURRENT_TIME = datetime.now().strftime("%Y%m%d%H%M%S")
 # JOB_EVALUATION_PATH = os.path.join(JOB_DUMP_PATH, EVALUATION, CURRENT_TIME)
 
 # ---------------------- HELPER FUNCTIONS AND CLASSES --------------------
+node_numbers = int(os.environ.get("WORLD_SIZE", 1))
+NUM_NODES = int(os.environ.get("num_nodes", node_numbers))
+os.environ['num_nodes'] = str(NUM_NODES)
+# current node number
+RANK = int(os.environ.get("RANK", 0))
+os.environ['NODE_RANK'] = str(RANK)
+
+try:
+    GPU_PER_NODE = str(subprocess.check_output(
+        ["nvidia-smi", "-L"])).count("UUID")
+except Exception as error:
+    # For cpu machine usage
+    logging.warning(f"Cannot find available GPU due to error: {error}")
+    GPU_PER_NODE = 0
 
 
 def is_rank_zero():

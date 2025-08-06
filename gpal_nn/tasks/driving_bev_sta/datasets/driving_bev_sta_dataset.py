@@ -105,6 +105,16 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         #           fast_buffer_path]
         # pkl.dump(inputs, open("inputs.pkl", 'wb'))
         # exit(1)
+
+        DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT")
+        DATA_COLLECT_ROOT = os.getenv(
+            "ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT")
+        LOCAL_DATASETS_ROOT = os.getenv(
+            "ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT")
+
+        root_dir = os.path.join(DATA_COLLECT_ROOT, root_dir)
+        pkl_root = os.path.join(DATASETS_ROOT, pkl_root)
+
         self.root_dir = root_dir
         self.in_shape = in_shape
         self.camera_names = camera_name
@@ -129,7 +139,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                          ratio=ratio,
                          worker=worker,
                          pseudo_labels_path=pseudo_labels_path,
-                         fast_buffer_path="" if fast_buffer_path == "" else f"{fast_buffer_path}/{task_config.name}_buf"
+                         fast_buffer_path="" if fast_buffer_path == "" else os.path.join(
+                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf")
                          )
         cut_start_h = 112
         mean = (0., 0., 0.)

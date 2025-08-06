@@ -1,6 +1,7 @@
 import logging
 import os
 from argparse import SUPPRESS, ArgumentParser
+from gpal_lightning import const
 
 
 class ArgumentParserHelper:
@@ -68,6 +69,8 @@ class ArgumentParserHelper:
                 args.config = f"{os.path.dirname(os.path.dirname(args.load_from))}/config.yaml"
             if "save" not in args:
                 args.save = os.path.dirname(os.path.dirname(args.load_from))
+
+        args.num_nodes = const.NUM_NODES
 
     @classmethod
     def parse(cls):
