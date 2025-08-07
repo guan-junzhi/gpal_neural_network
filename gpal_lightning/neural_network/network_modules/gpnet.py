@@ -470,6 +470,8 @@ class GpNet(LightningModule):
 
         time_dp.Duration("sync_dt", "save_grads")
 
+        print(self.global_rank, curr_iteration, self.global_config.log_every, is_logging(
+            self.global_rank, curr_iteration, self.global_config.log_every))
         if is_logging(self.global_rank, curr_iteration, self.global_config.log_every):
             with torch.no_grad():
                 self.log_scalar(
@@ -482,6 +484,7 @@ class GpNet(LightningModule):
                 self.log_scalar("lr", actual_lr, curr_iteration)
 
                 meminfo = GetMemInfo()
+
                 for t, v in meminfo.items():
                     self.log_scalar(
                         "memory/" + t.replace('/', "_"), v, curr_iteration)
