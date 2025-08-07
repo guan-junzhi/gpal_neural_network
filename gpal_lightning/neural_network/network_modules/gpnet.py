@@ -547,7 +547,7 @@ class GpNet(LightningModule):
         self.log("lr", actual_lr, prog_bar=True, logger=False)
         time_dp.Duration("log", "sync_dt")
         time_dp.Duration(f"{self.local_rank} {self.global_rank} all", "begin")
-        time_dp.Print()
+        # time_dp.Print()
 
         return {"loss": total_loss, "epoch_percentage": epoch_percentage}
 
