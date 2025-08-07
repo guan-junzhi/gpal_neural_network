@@ -57,6 +57,9 @@
     pip install shapely
     pip install lmdb
 
+    部署兼容的环境配置
+    conda create -n torch23_deploy python==3.10 pytorch==2.3.0 torchvision==0.18.0 torchaudio==2.3.0 pytorch-cuda=11.8 -c pytorch -c 
+
 ## 5. Refrence
 
 [pytorch lightning](https://lightning.ai/docs/pytorch/latest/versioning.html#pytorch-support)
