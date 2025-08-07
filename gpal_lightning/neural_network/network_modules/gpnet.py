@@ -540,6 +540,8 @@ class GpNet(LightningModule):
                 f"grad: {round(norm, 3)}"
             )
         self.log("total_loss", total_loss, prog_bar=True, logger=False)
+        self.log("local_rank", self.local_rank, prog_bar=True, logger=False)
+        self.log("global_rank", self.global_rank, prog_bar=True, logger=False)
         for loss_name, loss_value in losses.items():
             if "loss" not in loss_name:
                 continue
