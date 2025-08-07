@@ -2,6 +2,7 @@ current_time=$(date +%Y%m%d_%H_%M_%S)
 echo $current_time
 
 echo "[INSTALL ENVS]:"
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install pandas
 
 echo "[READ GLOBAL ENV VAR]:"
