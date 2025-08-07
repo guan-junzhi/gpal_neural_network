@@ -65,7 +65,6 @@ class DetailProf:
 
 def GetMemInfo():
     a = os.popen("free -m").readlines()
-    print(a)
     titles = [ele for ele in a[0].replace('\n', '').split(' ') if ele != '']
     values = [ele for ele in a[1].replace(
         '\n', '').split(' ') if ele != ''][1:]
