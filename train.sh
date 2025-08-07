@@ -2,6 +2,8 @@ current_time=$(date +%Y%m%d_%H_%M_%S)
 echo $current_time
 
 echo "[INSTALL ENVS]:"
+sudo apt-get update
+sudo apt-get install procps
 pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install pandas
 
