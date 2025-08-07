@@ -7,6 +7,10 @@ sudo apt-get -y install procps
 pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install pandas
 
+echo "[NODE INFO]:"
+nvidia-smi 
+free -m
+
 echo "[READ GLOBAL ENV VAR]:"
 airflow_key="gpal_neural_network_one_node_traning_job_on_airflow"
 echo "AIRFLOW_CTX_DAG_ID=$AIRFLOW_CTX_DAG_ID"
