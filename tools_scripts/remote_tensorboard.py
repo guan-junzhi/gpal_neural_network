@@ -28,10 +28,10 @@ cmd = f"ls -l {local_buf}"
 os.system(cmd)
 
 
-# # --bind_all 使用localhost
-# cmd = "tensorboard --logdir {local_buf} --bind_all"
-# os.system(cmd)
+# no --bind_all 使用localhost
+cmd = f"tensorboard --logdir {local_buf}"
+os.system(cmd)
 
 # --bind_all 使用服务器端口
-cmd = "tensorboard --logdir {local_buf} --bind_all"
-os.system(cmd)
+# cmd = f"tensorboard --logdir {local_buf} --bind_all"
+# os.system(cmd)
