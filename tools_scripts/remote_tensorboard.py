@@ -12,13 +12,13 @@ cmd = f"rm -rf {local_buf}/*"
 os.system(cmd)
 
 for k in dirs:
-    # 复制本地盘, 实际访问网盘，网慢的时候用这个，重启更新
+    # 复制到本地盘, 实际访问本地盘，网慢的时候用这个，重启更新
     # cmd = f"mkdir -p {os.path.join(local_buf, dirs[k])}"
     # os.system(cmd)
     # cmd = f"cp -r {os.path.join(root_dir, dirs[k], 'log')} {os.path.join(local_buf, dirs[k])}"
     # os.system(cmd)
 
-    # 软链到本地盘, 实际访问网盘，随动更新
+    # 软链到本地盘, 实际访问网盘，实时更新
     cmd = f"mkdir -p {os.path.join(local_buf)}"
     os.system(cmd)
     cmd = f"ln -s {os.path.join(root_dir, dirs[k], 'log')} {os.path.join(local_buf, k)}"
