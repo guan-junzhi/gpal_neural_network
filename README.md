@@ -24,23 +24,31 @@
 ##### progress
 -  [multitask_lanenet](http://172.16.2.227:7990/users/jianlongwu/repos/multitask_lanenet/browse)
    -  [x] train
-   -  [ ] test
+   -  [x] test
    -  [ ] deploy
--  [OD]()
+-  [slotdetect_pointline](http://172.16.2.227:7990/projects/SLOT/repos/slotdetect_pointline/browse)
    -  [ ] train
    -  [ ] test
    -  [ ] deploy
--  [OD]()
+-  [od]()
    -  [ ] train
    -  [ ] test
    -  [ ] deploy
 
 ## 2. Train
 
-    sh train.sh
+    bash train.sh
+
+tensorboard
+
+    修改 tools_scripts/remote_tensorboard.py 中感兴趣的对比训练，起一个有意义的名字作为key值
+    python tools_scripts/remote_tensorboard.py
+
+
 
 ## 2. Validation
 
+    bash eval.sh
 
 
 ## 3. Deploy
