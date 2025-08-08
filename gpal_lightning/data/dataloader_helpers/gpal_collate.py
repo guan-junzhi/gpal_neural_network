@@ -1,0 +1,17 @@
+from torch.utils.data import dataloader
+
+
+def gpal_collate(batch):
+    """Filter out None samples"""
+    batch = list(filter(lambda x: x is not None, batch))
+    if not batch:
+        batch = [{}]
+    batch_format = {}
+
+    for k in batch[0]:
+        if k in ['label', "meta"]:
+            batch_format[k] = [ele[k] for ele in batch]
+        else:
+            batch_format[k] = dataloader.default_collate(
+                [item[k] for item in batch])
+    return batch_format
