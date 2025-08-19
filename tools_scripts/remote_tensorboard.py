@@ -5,7 +5,10 @@ local_buf = "/data1/remote_workspace_temp"
 
 dirs = {
     "0807_30_epoch": "gpal_neural_network_one_node_traning_job_on_airflow_20250807_12_52_45",
-    "0807_test_run": "gpal_neural_network_one_node_traning_job_on_airflow_20250807_08_20_09"
+    "0807_test_run": "gpal_neural_network_one_node_traning_job_on_airflow_20250807_08_20_09",
+    "0813_zuobin1": "gpal_neural_network_one_node_traning_job_on_airflow_20250813_04_44_17",
+    "0813_zuobin2": "gpal_neural_network_one_node_traning_job_on_airflow_20250813_09_45_53"
+
 }
 
 cmd = f"rm -rf {local_buf}/*"

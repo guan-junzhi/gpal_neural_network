@@ -92,7 +92,7 @@ class EpochModelCheckpoint(ModelCheckpoint):
                         if load_module_names == "all":
                             
                             # print(_search_prefix(state_dict, module_name).keys())
-                            print(module)
+                            # print(module)
                             dict_for_module = Simplify(_search_prefix(state_dict, module_name))
                             self._load_model_weights(
                                 module, module_name, dict_for_module)
