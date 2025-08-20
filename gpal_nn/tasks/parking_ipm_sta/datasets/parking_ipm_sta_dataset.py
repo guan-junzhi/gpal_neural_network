@@ -423,6 +423,7 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         data_dict['meta']["camera_name"] = self.camera_names
         data_dict['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
         data_dict['meta']['sw_sh'] = [sw, sh]
+        data_dict['meta']['wh'] = [self.w, self.h]
 
         return data_dict
 
