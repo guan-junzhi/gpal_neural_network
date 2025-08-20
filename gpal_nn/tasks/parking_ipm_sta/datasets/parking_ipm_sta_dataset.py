@@ -380,6 +380,9 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
 
         image, origin_shape = self.pull_img(image_f)
         rawh, raww, _ = origin_shape
+        model_h = self.h
+        model_w = self.w
+        sw, sh = self.getImageSizeScale(raww, rawh, model_w, model_h)
         if self.phase == const.PHASE_TRAINING:
             slot_anno = self.pull_anno(anno_f)
             slot_maps = self.assigner.assign(slot_anno)
@@ -404,10 +407,6 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             slot_maps = slot_gt.astype(np.float32)
             gt = slot_maps
         else:
-            model_h = self.h
-            model_w = self.w
-            sw, sh = self.getImageSizeScale(raww, rawh, model_w, model_h)
-
             labelInstance = TXTLabelLoader(sw, sh)
             annotations = labelInstance.decodePointLineLabel(anno_f)
             gt = annotations

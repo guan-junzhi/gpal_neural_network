@@ -65,6 +65,13 @@ class PARKING_IPM_STAHead(BaseHead):
         for head_name, head in self.head.items():
             head.load_state_dict(state_dict, strict)
 
+        state_dict_seg_p = {
+            k.replace("seg_p.", ""): state_dict[k] for k in state_dict if "seg_p." in k}
+        self.seg_p.load_state_dict(state_dict_seg_p, strict)
+        state_dict_seg_l = {
+            k.replace("seg_l.", ""): state_dict[k] for k in state_dict if "seg_l." in k}
+        self.seg_l.load_state_dict(state_dict_seg_l, strict)
+
     def forward(self, x: torch.Tensor, calib=None) -> torch.Tensor:
         branch_point = self.seg_p(x)
         branch_line = self.seg_l(x)
