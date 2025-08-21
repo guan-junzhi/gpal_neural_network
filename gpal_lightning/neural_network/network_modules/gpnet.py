@@ -420,8 +420,7 @@ class GpNet(LightningModule):
         time_dp.Duration("prepare", "begin")
 
         optimizer.zero_grad()
-        data = {}
-        data['image'] = batch['image']
+        data = batch['image']
         masks = batch["mask"] if 'mask' in batch else None
         trues = batch["label"]
         calib = batch.get('calib', None)
@@ -660,8 +659,7 @@ class GpNet(LightningModule):
     def _gpal_predict_step(self, batch, batch_idx, dataloader_idx=0):
         metadata = batch["meta"]
 
-        data = {}
-        data['image'] = batch['image']
+        data = batch['image']
         # masks = batch["mask"] if 'mask' in batch else None
         # trues = batch["label"]
         calib = batch.get('calib', None)
@@ -690,9 +688,9 @@ class GpNet(LightningModule):
 
     def slice_forward(self, x, calib):
         if 'image' in x.keys():
-            for key, value in x['image'].items():
+            for key, value in x.items():
                 x.update({key: value})
-            del x['image']
+            del x
 
         assert len(self.curr_tasks) == 1
 
@@ -798,6 +796,12 @@ class GpNet(LightningModule):
                 curr_backbone = self._backbones[curr_task]
                 self.model[curr_backbone].feature_id = self._backbone_feature_id[curr_task]
                 x0 = self.model[curr_backbone](x0)
+
+            if curr_task in self._groups:
+                curr_group = self._groups[curr_task]
+                self.model[curr_group].feature_id = self._group_feature_id[curr_task]
+
+                x0 = self.model[curr_group](x0)
 
             if curr_task in self._necks:
                 curr_neck = self._necks[curr_task]
