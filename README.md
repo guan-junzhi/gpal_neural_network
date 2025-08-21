@@ -37,7 +37,9 @@
 
 ## 2. Train
 
-    bash train.sh
+    车道线训练: bash train.sh 为了兼容正在迁移的工程,先不改
+    APA训练: bash train.sh parking_ipm_sta
+
 
 tensorboard
 
@@ -48,7 +50,8 @@ tensorboard
 
 ## 2. Validation
 
-    bash eval.sh
+    车道线评测: bash eval.sh 为了兼容正在迁移的工程,先不改
+    APA评测: bash eval.sh parking_ipm_sta
 
 
 ## 3. Deploy
