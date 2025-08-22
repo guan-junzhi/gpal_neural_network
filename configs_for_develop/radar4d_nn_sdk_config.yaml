@@ -1,0 +1,85 @@
+image_per_gpu: 24
+workers_per_gpu: 12
+skip_sanity_check: true
+max_iterations: 60000
+save_every_n_iterations: 500
+iteration_based_lr_schedulers: true
+check_val_every_n_epoch: 1000000
+dump_calibset: false
+
+Train:
+  log_every: 1
+  visualize_every: 200
+  max_visu_img_num: 10
+  optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
+  lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
+    after_scheduler: CosineAnnealingLR, T_max: 30000}
+
+Backbones:
+  backbone0:
+    type: DualResShare
+    # ampfp16: true
+    load: all
+    # freeze: all
+    input_source: ['avm']
+    
+Groups:
+  group0:
+    type: DualResNet
+    input_source: backbone0
+    load: all
+
+Necks:
+  neck0: {load: all, type: DummyNeck, input_source: group0}
+    
+Tasks:
+  RADAR4D_NN_SDK:
+    # batch_size: 12
+    # num_worker_limit: 2
+    use_concat_dataset: true
+    load: all
+    # freeze: all
+    amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
+    # cam_used: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front']
+    cam_used: ['avm']
+    transformer: transformer
+    frequency: 1.0
+    grad_bounds: 3.0
+    weight: 1.0
+    backbone_feat_id: [2]
+    group_feat_id: [1, 2, 3]
+    neck_feat_id: [0]
+    pc_range: [0, -16, -2.0, 96.0, 16.0, 2.0]
+    backbone: backbone0
+    group: group0
+    neck: neck0
+
+    
+    Head:
+      head1:
+        head_type: SlotHead
+        num_classes: 1
+        inplanes: 128
+        interplanes: 64
+        scale_factor: 8
+
+    Evaluator: {}
+    datasets:
+      training:
+      - { dataset_name: 'xxx', 
+          root_dir: "bev_park/PointLine_train/",
+          data_list: "train_all.txt",
+          camera_name: ['ipm'],
+          shuffle: False,
+          # fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+        }
+      validation:
+      - { dataset_name: 'xxx', 
+          root_dir: "bev_park/PointLineData_Test/",
+          data_list: "test_all.txt",
+          camera_name: ['ipm'],
+          shuffle: True,
+          # fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+        }
