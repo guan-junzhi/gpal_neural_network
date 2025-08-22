@@ -56,6 +56,11 @@ then
     tasks=parking_ipm_sta 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/checkpoint/epoch=4-step=1000_checkpoint_weiwei.pth
     config=configs_for_develop/parking_ipm_sta_config.yaml
+elif [[ $1 == "radar4d_nn_sdk" ]];
+then
+    tasks=radar4d_nn_sdk 
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/checkpoint/epoch=4-step=1000_checkpoint_weiwei.pth
+    config=configs_for_develop/radar4d_nn_sdk_config.yaml
 else
     tasks=driving_bev_sta 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth

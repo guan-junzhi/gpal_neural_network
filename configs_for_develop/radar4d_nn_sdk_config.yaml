@@ -33,14 +33,15 @@ Necks:
   neck0: {load: all, type: DummyNeck, input_source: group0}
     
 Tasks:
-  PARKING_IPM_STA:
+  RADAR4D_NN_SDK:
     # batch_size: 12
     # num_worker_limit: 2
     use_concat_dataset: true
     load: all
     # freeze: all
     amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
-    cam_used: ['ipm']
+    # cam_used: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front']
+    cam_used: ['avm']
     transformer: transformer
     frequency: 1.0
     grad_bounds: 3.0
@@ -48,6 +49,7 @@ Tasks:
     backbone_feat_id: [2]
     group_feat_id: [1, 2, 3]
     neck_feat_id: [0]
+    pc_range: [0, -16, -2.0, 96.0, 16.0, 2.0]
     backbone: backbone0
     group: group0
     neck: neck0
