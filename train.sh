@@ -67,7 +67,15 @@ echo tasks=$tasks
 echo load_from=$load_from
 echo config=$config
 
+echo "[AIRFLOW ARGS CHECK]:"
+
+if [[ -n "${TRAIN_ARGS:-}" ]]; then
+    echo TRAIN_ARGS=$TRAIN_ARGS
+    echo "[RUN WITH TRAIN_ARGS]"
+    eval python3 train.py $TRAIN_ARGS
+    exit $?
+fi
+
 # python3 train.py --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 666 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 # load_from
 python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 666 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
-
