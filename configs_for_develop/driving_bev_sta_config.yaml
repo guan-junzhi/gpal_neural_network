@@ -17,6 +17,9 @@ Train:
   # lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
   #   after_scheduler: CosineAnnealingLR, T_max: 30000}
 
+Test:
+  visulization: True
+
 Backbones:
   backbone0:
     type: ResNet

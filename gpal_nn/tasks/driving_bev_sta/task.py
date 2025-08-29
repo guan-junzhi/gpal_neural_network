@@ -13,6 +13,9 @@ from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_lightning.utils.json_helpers.dict_to_json import dict_to_json
 from tools_scripts.point_projection import point_projection_lane
 from tools_scripts.data_format_cvt import ShowDataStruct
+import os.path as osp
+import os
+import cv2
 
 
 
@@ -221,3 +224,16 @@ class DRIVING_BEV_STATask(BaseTask):
             if images.ndim == 5:
                 images = images[0].transpose(0, 2, 3, 1)[:, :, :, ::-1].tolist()
         return images
+
+    def eval_visualize(self, save_root, metadata, data, dataloader_idx, preds, trues, batch, json_list, calib):
+        if not osp.exists(save_root):
+            os.makedirs(save_root, exist_ok=True)
+        bev_real2aug = batch["bev_real2aug"]
+        for i in range(len(metadata)):
+            bev_vis = self.GetVis(preds[0][0], trues, i)
+            true_json_list, metadata_list = self.vectors_to_json(
+        metadata, data, dataloader_idx, trues, True)
+            img_vis = self.GetImgVis(data, metadata, calib, bev_real2aug, json_list[0], true_json_list[0], i)
+            concat_vis = self.concat_imgvis_and_bevvis(img_vis, bev_vis)
+        name = metadata[i]['last_img_path'].split('/')[-1]
+        cv2.imwrite(osp.join(save_root, name), concat_vis)

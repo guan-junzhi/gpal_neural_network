@@ -41,8 +41,6 @@ from gpal_lightning.utils.datatype_convert import convert_tensor_to_fp32, conver
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
 import os.path as osp
-import os
-import cv2
 
 
 class GpNet(LightningModule):
@@ -427,8 +425,6 @@ class GpNet(LightningModule):
         masks = batch["mask"] if 'mask' in batch else None
         trues = batch["label"]
         calib = batch.get('calib', None)
-        if calib is not None:
-            calib["bev_real2aug"] = batch["bev_real2aug"]
         metadata = batch['meta']
         curr_task = self.curr_tasks[0]
         camera_name = self.camera_name
@@ -668,14 +664,12 @@ class GpNet(LightningModule):
         # masks = batch["mask"] if 'mask' in batch else None
         trues = batch["label"]
         calib = batch.get('calib', None)
-        if calib is not None:
-            calib["bev_real2aug"] = batch["bev_real2aug"]
         metadata = batch['meta']
         curr_task = self.curr_tasks[0]
-        if "bev_real2aug" in batch:
-            bev_real2aug = batch["bev_real2aug"]
-        else:
-            bev_real2aug = None
+        # if "bev_real2aug" in batch:
+        #     bev_real2aug = batch["bev_real2aug"]
+        # else:
+        #     bev_real2aug = None
         # camera_name = self.camera_name
 
         preds = self.model_forward(
@@ -684,30 +678,11 @@ class GpNet(LightningModule):
         curr_task = self.curr_tasks[0]
         json_list, _ = self.tasks[curr_task].vectors_to_json(
             metadata, data, dataloader_idx, preds[0], False)
-        # print(ShowDataStruct("json_list",json_list))
-        # exit()
-        # print(self.global_config.vis)
-        if self.global_config.vis == True:
-            for i in range(len(metadata)):
-                bev_vis = self.tasks[curr_task].GetVis(preds[0][0], trues, i)
-                true_json_list, metadata_list = self.tasks[curr_task].vectors_to_json(
-            metadata, data, dataloader_idx, trues, True)
-                img_vis = self.tasks[curr_task].GetImgVis(data, metadata, calib, bev_real2aug, json_list[0], true_json_list[0], i)
-                concat_vis = self.tasks[curr_task].concat_imgvis_and_bevvis(img_vis, bev_vis)
-        #     # visulization = lane_visualize(calib, pred_json_list, true_json_list, self.global_config, bev_real2aug)
-        #     # cv2.namedWindow("res", cv2.WINDOW_NORMAL)
-        #     # cv2.imshow("res", paint)
-        #     # cv2.waitKey(10)
-        #     for i in range(len(metadata)):
-        #         visulization = lane_visualize(data, calib, preds, trues[i], bev_real2aug)
-                name = metadata[i]['last_img_path'].split('/')[-1]
-                save_dir = osp.join(self.global_config.save, 'vis')
-                if not osp.exists(save_dir):
-                    os.makedirs(save_dir, exist_ok=True)
-                cv2.imwrite(osp.join(save_dir, name), concat_vis)
-        # print(ShowDataStruct("json_list", json_list[0]))
-        # print(preds[0][0]["all_pts_preds"][-1, 0])
-        # exit(1)
+        
+        if curr_task in ["DRIVING_BEV_STA"]:
+            if self.global_config.Test['visulization']:
+                save_root = osp.join(self.global_config.save, 'vis')
+                self.tasks[curr_task].eval_visualize(save_root, metadata, data, dataloader_idx, preds, trues, batch, json_list, calib)
         return preds, json_list
 
     def forward_fp16(self, fp16_curr_module, fp16_next_module, curr_module, *args, **kwargs):

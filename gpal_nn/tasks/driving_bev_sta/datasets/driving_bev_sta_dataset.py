@@ -284,7 +284,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
         data_dict['image'] = imgs
         data_dict['calib'] = {'exts': np.stack(ego2cam), 'cam2egos': np.stack(
-            cam2ego), 'ists': np.stack(ists), 'ists_norm': np.stack(ists_norm), 'dists': np.stack(dists)}
+            cam2ego), 'ists': np.stack(ists), 'ists_norm': np.stack(ists_norm), 'dists': np.stack(dists), 'bev_real2aug':data_dict['bev_real2aug']}
         data_dict['meta']['ori_shape'] = np.stack(ori_shape)
         data_dict['meta']['last_img_path'] = img_path
         data_dict['meta']['camera_name'] = self.camera_names
