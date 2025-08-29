@@ -11,6 +11,8 @@ import json
 import pickle as pkl
 import shutil
 from tqdm import tqdm
+from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
+from tools_scripts.data_format_cvt import ShowDataStruct
 
 
 def load_json(path, by_list=False):
@@ -36,11 +38,7 @@ class Bevlane_Evaluator(object):
         self.num_pts_per_vec = 20
         self.pc_range = [0, -10.0, -2.0, 80.2, 10.2, 2.0]
         self.score_threshold = None
-        self.map_lane_type_classes = [
-            'normal', 'fishbone', 'stop_line', 'cross_guide_line']
-        self.map_lane_shape_classes = ['single_solid', 'single_dashed', 'double_soild', 'double_dashed',
-                                       'double_left_soild', 'double_right_soild', 'other']
-        self.map_lane_color_classes = ['white', 'yellow', 'other']
+        self.main_classes = list(main_class_type_map.keys())
         self.eval_use_same_gt_sample_num_flag = True
         self.metric = 'chamfer'
 
@@ -107,7 +105,7 @@ class Bevlane_Evaluator(object):
             if not isinstance(mean_ap, list):
                 mean_ap = [mean_ap]
 
-            header = ['gts', 'dets', 'Recall', 'Precision', 'AP']
+            header = ['gts', 'dets', 'Recall', 'Precision', 'AP', 'Dist', 'Dist@95', 'ShapeTypeAcc']
             for i in range(num_scales):
                 table_data = []
                 index = []
@@ -117,11 +115,16 @@ class Bevlane_Evaluator(object):
                         "recall": recalls[i, j],
                         "precision": precisions[i, j],
                         "aps": aps[i, j],
+                        "mean_dist_error": results[j]['mean_dist_error'],
+                        "dist_error_95": results[j]['dist_error_95'],
+                        "shape_type_acc": results[j]["shape_type_acc"],
                     }
 
                     row_data = [
                         num_gts[i, j], results[j]['num_dets'],
-                        f'{recalls[i, j]:.3f}', f'{precisions[i, j]:.3f}', f'{aps[i, j]:.3f}'
+                        f'{recalls[i, j]:.3f}', f'{precisions[i, j]:.3f}', f'{aps[i, j]:.3f}',
+                        f'{results[j]["mean_dist_error"]:.3f}', f'{results[j]["dist_error_95"]:.3f}',
+                        f'{results[j]["shape_type_acc"]:.3f}',
                     ]
                     index.append(rois[j])
                     table_data.append(row_data)
@@ -136,10 +139,9 @@ class Bevlane_Evaluator(object):
     def evaluate_single(self, gen_results, annotations, metric='chamfer'):
         from .mean_ap import eval_map
         from .mean_ap import format_res_gt_by_classes
-
         cls_gens, cls_gts = format_res_gt_by_classes(gen_results,
                                                      annotations,
-                                                     cls_names=self.map_lane_type_classes,
+                                                     cls_names=self.main_classes,
                                                      num_pred_pts_per_instance=self.num_pts_per_vec,
                                                      eval_use_same_gt_sample_num_flag=self.eval_use_same_gt_sample_num_flag,
                                                      pc_range=self.pc_range, code_size=self.code_size)
@@ -158,8 +160,7 @@ class Bevlane_Evaluator(object):
             elif metric == 'iou':
                 thresholds = np.linspace(.5, 0.95, int(
                     np.round((0.95 - .5) / .05)) + 1, endpoint=True)
-            cls_aps = np.zeros(
-                (len(thresholds), len(self.map_lane_type_classes)))
+            cls_aps = np.zeros((len(thresholds), len(self.main_classes)))
 
             for i, thr in enumerate(thresholds):
                 print('-*' * 10 + f'threshhold:{thr}' + '-*' * 10)
@@ -169,7 +170,7 @@ class Bevlane_Evaluator(object):
                     cls_gens,
                     cls_gts,
                     threshold=thr,
-                    cls_names=self.map_lane_type_classes,
+                    cls_names=self.main_classes,
                     logger=None,
                     num_pred_pts_per_instance=self.num_pts_per_vec,
                     pc_range=self.pc_range,
@@ -178,8 +179,7 @@ class Bevlane_Evaluator(object):
 
                 # 每个阈值下结果
                 # cls_ap [{},{}]分别存了每个roi下的指标
-                r_df, r_logs = self.get_map_summary(
-                    mAP, cls_ap, class_name=self.map_lane_type_classes, thr=thr)
+                r_df, r_logs = self.get_map_summary(mAP, cls_ap, class_name=list(main_class_type_map.keys()), thr=thr)
                 df_index = []
                 for k_df, v_df in r_df.items():
                     df_index.append([k_df] + [''] * (len(v_df) - 1))

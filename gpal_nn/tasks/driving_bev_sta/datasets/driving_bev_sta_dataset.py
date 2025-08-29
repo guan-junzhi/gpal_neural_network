@@ -23,18 +23,45 @@ from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopPr
 import time
 import multiprocessing
 from shapely.geometry import LineString
+from tools_scripts.data_format_cvt import ShowDataStruct
+import shutil
 
+def euler_to_rotation_matrix(roll, pitch, yaw):
+    """将欧拉角(roll, pitch, yaw)转换为旋转矩阵"""    
+    # 绕x轴旋转(roll)
+    Rx = np.array([[1, 0, 0],
+                   [0, np.cos(roll), -np.sin(roll)],
+                   [0, np.sin(roll), np.cos(roll)]])
+    
+    # 绕y轴旋转(pitch)
+    Ry = np.array([[np.cos(pitch), 0, np.sin(pitch)],
+                   [0, 1, 0],
+                   [-np.sin(pitch), 0, np.cos(pitch)]])
+    
+    # 绕z轴旋转(yaw)
+    Rz = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                   [np.sin(yaw), np.cos(yaw), 0],
+                   [0, 0, 1]])
+    
+    R = Rz @ Ry @ Rx
+    return R
 
-polyline_class2id = {name: i for i, name in enumerate(map_classes_line)}
-polyline_shape2id = {name: i for i, name in enumerate(shape_type)}
-polyline_color2id = {name: i for i, name in enumerate(color_type)}
-polyline_stop2id = {name: i for i, name in enumerate(stop_type)}
-
-edge_class2id = {name: i for i, name in enumerate(map_classes_edge)}
-
-polygon_class2id = {name: i for i, name in enumerate(map_classes_polygon)}
-polygon_arrow2id = {name: i for i, name in enumerate(arrow_type)}
-
+def yaw_rotation_matrix(yaw_rad):
+    """
+    根据偏航角(yaw)创建绕Z轴的旋转矩阵
+    参数:
+        yaw_rad: 绕Z轴的旋转角度(弧度)
+    返回:
+        3x3旋转矩阵
+    """
+    cos_y = np.cos(yaw_rad)
+    sin_y = np.sin(yaw_rad)
+    
+    return np.array([
+        [cos_y, -sin_y, 0],
+        [sin_y,  cos_y, 0],
+        [0,      0,     1],
+    ])
 
 @DATASETS.register_module()
 class DRIVING_BEV_STADataset(SliceBaseDataset):
@@ -61,7 +88,11 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                  inverse_int=True,
                  pts_per_vector=20,
                  is_random_scale_and_translate=False,
-                 fast_buffer_path=""
+                 fast_buffer_path="",
+                 rpy_aug=False, 
+                 bev_aug=False,
+                 rpy_aug_deg=[3,3,3], 
+                 bev_aug_deg=3
                  ):
         '''
         :param root_dict:
@@ -140,7 +171,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                          worker=worker,
                          pseudo_labels_path=pseudo_labels_path,
                          fast_buffer_path="" if fast_buffer_path == "" else os.path.join(
-                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf")
+                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf",
+                             )
                          )
         cut_start_h = 112
         mean = (0., 0., 0.)
@@ -158,6 +190,10 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 Normalize(mean=mean, std=std),
             ]
         self.task = task_config.name
+        self.rpy_aug = rpy_aug
+        self.bev_aug = bev_aug
+        self.rpy_aug_rad = np.deg2rad(np.array(rpy_aug_deg))
+        self.bev_aug_rad = np.deg2rad(bev_aug_deg)
 
     def _build_world_data_list(self):
         try:
@@ -172,8 +208,14 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             self.pkl_root, self.pkl_infos)
 
     def load_data_infos(self, pkl_root, pkl_infos):
-        pkl_path = os.path.join(pkl_root, pkl_infos + '.pkl')
+        pkl_path = os.path.join(pkl_root, pkl_infos[0] + '.pkl')
         data_infos = pickle.load(open(pkl_path, 'rb'))
+
+        for idx in range(1, len(pkl_infos)):
+            pkl_path = os.path.join(pkl_root, pkl_infos[idx] + '.pkl')
+            tmp_data_info = pickle.load(open(pkl_path, 'rb'))
+            data_infos = data_infos + tmp_data_info
+
         return data_infos
 
     def __len__(self):
@@ -181,9 +223,16 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
     def prepare_data(self, idx):
         cv2.setNumThreads(1)
+        bev_real2aug = np.eye(4, dtype=np.float32)
+        if self.bev_aug:
+            delta_yaw = random.uniform(-self.bev_aug_rad, self.bev_aug_rad)
+            # delta_yaw = np.deg2rad(1.0)
+            bev_real2aug[:3,:3] = yaw_rotation_matrix(delta_yaw)
+
         data_dict = {}
         data_dict['meta'] = {}
         data_dict['label'] = {}
+        data_dict['bev_real2aug'] = bev_real2aug
 
         time_dp = DetailProf()
         time_dp.Tic("begin")
@@ -196,7 +245,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         if ret is None:
             return None, sub_prof
 
-        self.parse_annotations(data_info, data_dict['label'])
+        self.parse_annotations(data_info, data_dict['label'], bev_real2aug)
         time_dp.Duration("parse_annotations", "read_frame")
 
         time_dp.Duration("prepare_data_all", "begin")
@@ -283,6 +332,29 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             if self.is_random_scale_and_translate:
                 resize_image, K = random_scale_and_translate(resize_image, self.in_shape, K=K, scale=0.1,
                                                              offset=0.1)
+
+            if self.rpy_aug:
+                aug_r, aug_p, aug_y = random.uniform(-self.rpy_aug_rad[0], self.rpy_aug_rad[0]), \
+                    random.uniform(-self.rpy_aug_rad[1], self.rpy_aug_rad[1]), \
+                    random.uniform(-self.rpy_aug_rad[2], self.rpy_aug_rad[2])
+                # aug_r, aug_p, aug_y = np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0)
+                Rt_veh2cam = np.eye(4)
+                Rt_veh2cam = np.eye(4)
+                Rt_veh2cam[:3,:3] = rot
+                Rt_veh2cam[:3,3] = T.reshape(3)
+                Rt_cam2veh = np.linalg.inv(Rt_veh2cam)
+
+                delta_R = euler_to_rotation_matrix(aug_r, aug_p, aug_y)
+                new_Rt_cam2veh = np.eye(4)
+                new_Rt_cam2veh[:3, :3] = delta_R @ Rt_cam2veh[:3, :3]
+                new_Rt_cam2veh[:3, 3] = Rt_cam2veh[:3, 3]
+                new_Rt_veh2cam = np.linalg.inv(new_Rt_cam2veh)
+
+                H = K @ (new_Rt_veh2cam @ Rt_cam2veh)[:3,:3] @ np.linalg.inv(K)
+                resize_image = cv2.warpPerspective(resize_image, H, (resize_image.shape[1], resize_image.shape[0]))
+                rot = new_Rt_veh2cam[:3,:3]
+                T = new_Rt_veh2cam[:3,3]
+
             time_dp.Duration("random_scale_and_translate", "imread")
         except Exception as e:
             print(e)
@@ -306,12 +378,12 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
         return image, resize_image, K, norm_K, ext[:3, :], dist, ori_img_h, ori_img_w, img_name, time_dp
 
-    def parse_annotations(self, data_info, data_dict):
+    def parse_annotations(self, data_info, data_dict, bev_real2aug):
         annot = data_info['annotation']
 
-        self.process_polylines(annot['polylines'], data_dict)
-        self.process_edges(annot['edges'], data_dict)
-        self.process_polygons_arrow(annot['polygons'], data_dict)
+        self.process_polylines(annot['polylines'], data_dict, bev_real2aug)
+        self.process_edges(annot['edges'], data_dict, bev_real2aug)
+        self.process_polygons_arrow(annot['polygons'], data_dict, bev_real2aug)
 
     def reorder_points(self, points):
         # turn it into far to near
@@ -320,14 +392,18 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
         return points
 
-    def process_polylines(self, polylines, data_dict):
+    def process_polylines(self, polylines, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
         data_dict['polylines'] = {}
         lanes = []
 
         line_mask = np.zeros(len(polylines['points']), dtype=bool)
         for idx, lane in enumerate(polylines['points']):
             # print(idx)
+            if polylines['classes'][idx] in ["ignore", "others"]:
+                continue
             # TODO: move range filter to pipeline
+            lane_homo = np.concatenate([lane, np.ones((lane.shape[0],1))], axis=-1)
+            lane = (bev_real2aug @ lane_homo.T).T[:,:3]
             lane = _fix_pts_interpolate(
                 lane, max(int(LineString(lane).length / 0.2), self.pts_per_vector))
             # print(lane)
@@ -344,7 +420,6 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
                 # print("continue", self.gt_range)
                 continue
-
             line_mask[idx] = True
             lane = self.reorder_points(lane)
             lanes.append(lane)
@@ -356,41 +431,44 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 1] == self.pts_per_vector, f'gp_points shape:{points.shape} is not {self.pts_per_vector}!'
             data_dict['polylines']['points'] = points
 
-            self.get_polyline_cat_ids(polylines, data_dict, line_mask)
+            self.get_polyline_attributes(polylines, data_dict, line_mask)
 
-    def get_polyline_cat_ids(self, polylines, data_dict, masks):
-        polyline_class_ids = []
-        polyline_shape_ids = []
-        polyline_color_ids = []
-        polyline_stop_ids = []
+    def get_polyline_attributes(self, polylines, data_dict, masks):
+        classes = []
+        shape_type = []
+        color_type = []
+        stop_type = []
 
+        assert len(polylines['points']) == len(masks) == \
+               len(polylines['shape_type']) == len(polylines['color_type']) == len(polylines['stop_type'])
+        
         for mask, name, shape, color, stop in zip(masks, polylines['classes'],
                                                   polylines['shape_type'],
                                                   polylines['color_type'],
                                                   polylines['stop_type']):
             if mask == False:
                 continue
-            if name in map_classes_line:
-                polyline_class_ids.append(polyline_class2id[name])
-            if shape in shape_type:
-                polyline_shape_ids.append(polyline_shape2id[shape])
-            if color in color_type:
-                polyline_color_ids.append(polyline_color2id[color])
-            if stop in stop_type:
-                polyline_stop_ids.append(polyline_stop2id[stop])
+            classes.append(lane_marking_type_map[name])
+            shape_type.append(shape_type_map[shape])
+            color_type.append(color_type_map[color])
+            stop_type.append(stop_type_map[stop])
 
-        data_dict['polylines']['classes'] = polyline_class_ids
-        data_dict['polylines']['shape_type'] = polyline_shape_ids
-        data_dict['polylines']['color_type'] = polyline_color_ids
-        data_dict['polylines']['stop_type'] = polyline_stop_ids
+        data_dict['polylines']['classes'] = classes
+        data_dict['polylines']['shape_type'] = shape_type
+        data_dict['polylines']['color_type'] = color_type
+        data_dict['polylines']['stop_type'] = stop_type
 
-    def process_edges(self, edges, data_dict):
+    def process_edges(self, edges, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
         data_dict['edges'] = {}
         edges_line = []
 
         edge_mask = np.zeros(len(edges['points']), dtype=bool)
         for idx, edge in enumerate(edges['points']):
+            if edges['classes'][idx] in ["others"]:
+                continue
             # TODO: move range filter to pipeline
+            edge_homo = np.concatenate([edge, np.ones((edge.shape[0],1))], axis=-1)
+            edge = (bev_real2aug @ edge_homo.T).T[:,:3]
             edge = _fix_pts_interpolate(
                 edge, max(int(LineString(edge).length / 0.2), self.pts_per_vector))
             mask = edge[..., 0] <= self.gt_range[0]
@@ -412,70 +490,59 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 1] == self.pts_per_vector, f'gp_points shape:{points.shape} is not {self.pts_per_vector}!'
             data_dict['edges']['points'] = points
 
-            self.get_edge_cat_ids(edges, data_dict, edge_mask)
+            self.get_edge_attributes(edges, data_dict, edge_mask)
 
-    def get_edge_cat_ids(self, edges, data_dict, masks):
-        edge_class_ids = []
+    def get_edge_attributes(self, edges, data_dict, masks):
+        classes = []
+
+        assert len(edges['points']) == len(masks) == len(edges['classes'])
 
         for mask, name in zip(masks, edges['classes']):
             if mask == False:
                 continue
-            if name in map_classes_edge:
-                edge_class_ids.append(edge_class2id[name])
+            classes.append(edge_type_map[name])
 
-        data_dict['edges']['classes'] = edge_class_ids
+        data_dict['edges']['classes'] = classes
 
-    def process_polygons_arrow(self, polygons, data_dict):
+    def process_polygons_arrow(self, polygons, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
         data_dict['polygon_arrows'] = {}
         polygons_points = []
 
         polygon_mask = np.zeros(len(polygons['points']), dtype=bool)
         for idx, polygon in enumerate(polygons['points']):
             # TODO: move range filter to pipeline
+            polygon_homo = np.concatenate([polygon, np.ones((polygon.shape[0],1))], axis=-1)
+            polygon = (bev_real2aug @ polygon_homo.T).T[:,:3]
             mask = polygon[..., 0] <= self.gt_range[0]
             mask *= polygon[..., 0] >= self.gt_range[3]
             mask *= polygon[..., 1] <= self.gt_range[1]
             mask *= polygon[..., 1] >= self.gt_range[4]
             filter_polygon = polygon[mask]
-            if len(filter_polygon) != len(polygon) or len(polygon) != 5:
+            if len(filter_polygon) < 3:
                 continue
 
             polygon_mask[idx] = True
-            polygons_points.append(polygon)
+            polygons_points.append(filter_polygon)
 
         # process labels
         if len(polygons_points) > 0:
             data_dict['polygon_arrows']['points'] = polygons_points
-            self.get_polygon_arrow_cat_ids(polygons, data_dict, polygon_mask)
+            self.get_polygon_arrow_attributes(polygons, data_dict, polygon_mask)
 
-    def get_polygon_arrow_cat_ids(self, polygons, data_dict, masks):
-        polygon_class_ids = []
-        arrow_type_ids = []
+    def get_polygon_arrow_attributes(self, polygons, data_dict, masks):
+        polygon_classes = []
+        arrow_types = []
+
+        assert len(polygons['points']) == len(masks) == len(polygons['classes']) == len(polygons['arrow_type'])
 
         for mask, name, arrow_type in zip(masks, polygons['classes'], polygons['arrow_type']):
             if mask == False:
                 continue
-            if name in map_classes_polygon:
-                polygon_class_ids.append(polygon_class2id[name])
-                arrow_type_ids.append(polygon_arrow2id[arrow_type])
-            else:
-                polygon_class_ids.append(-999)
-                arrow_type_ids.append(-999)
+            polygon_classes.append(polygon_type_map[name])
+            arrow_types.append(arrow_type_map[arrow_type])
 
-        polygon_class_ids = np.array(polygon_class_ids)
-        arrow_type_ids = np.array(arrow_type_ids)
-        arrow_idx = map_classes_polygon.index('arrow')
-        arrow_mask = (arrow_idx == polygon_class_ids)
-
-        data_dict['polygon_arrows']['classes'] = arrow_type_ids[arrow_mask]
-
-        arrow_array = []
-        for arrow, mask in zip(data_dict['polygon_arrows']['points'], arrow_mask):
-            if mask == True:
-                arrow_array.append(arrow[1:])
-
-        data_dict['polygon_arrows']['points'] = np.array(
-            arrow_array, dtype=np.float32)
+        data_dict['polygon_arrows']['classes'] = polygon_classes
+        data_dict['polygon_arrows']['arrow_type'] = arrow_types
 
     @TimeProf
     def __getitem__(self, idx):

@@ -7,6 +7,7 @@ from gpal_nn.tasks.driving_bev_sta.postprocess.decode_pred import decode_pred_wi
 
 # from testing.decode.decode_pred import decode_pred_with_score, coordinate_transport_local
 import numpy as np
+from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 
 
 @POSTPROCESSES.register_module()
@@ -32,19 +33,21 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
         _vectors = {'lane_3d_output':
                     [
                         vectors['all_cls_scores'],
-                        vectors['all_pts_preds']
+                        vectors['all_pts_preds'],
+                        vectors['all_shape_types_preds']
                     ]
                     }
 
         # print(ShowDataStruct("_vectors", _vectors))
         outputs = {}
         if 'lane_3d_output' in _vectors:
-            outputs_classes, intermediate_reference_points = _vectors['lane_3d_output']
-            cls_pred, points_pred = outputs_classes[self.num_decode_layer - 1].softmax(-1), \
-                intermediate_reference_points[self.num_decode_layer - 1]
+            outputs_classes, intermediate_reference_points, shape_types = _vectors['lane_3d_output']
+            cls_pred, points_pred, shape_type_pred = outputs_classes[self.num_decode_layer - 1], \
+                intermediate_reference_points[self.num_decode_layer - 1], \
+                shape_types[self.num_decode_layer - 1]
             # cls_pred, points_pred = self.dequant_0(cls_pred), self.dequant_1(points_pred)
             # bbox_pred, points_pred = self.lane_map_head.transform_box(points_pred)
-            outputs['lane_3d_output'] = cls_pred, points_pred
+            outputs['lane_3d_output'] = cls_pred, points_pred, shape_type_pred
 
         outputs2 = {}
         outputs2['static_3d_pred'] = outputs
@@ -53,8 +56,8 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
         results = []
 
         outputs2["static_3d_pred"]["lane_3d_output"] = (
-            outputs2["static_3d_pred"]["lane_3d_output"][0], None, outputs2["static_3d_pred"]["lane_3d_output"][1])
-        cls_pred, bbox_pred, points_pred = outputs2['static_3d_pred']['lane_3d_output']
+            outputs2["static_3d_pred"]["lane_3d_output"][0], None, outputs2["static_3d_pred"]["lane_3d_output"][1], outputs2["static_3d_pred"]["lane_3d_output"][2])
+        cls_pred, bbox_pred, points_pred, shape_types_pred = outputs2['static_3d_pred']['lane_3d_output']
 
         for idx in range(len(points_pred)):
             result = dict()
@@ -62,12 +65,14 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
 
             bbox_per_pred = bbox_pred[idx] if bbox_pred is not None else None
             point_per_pred = points_pred[idx]
+            cls_per_pred = cls_pred[idx]
+            shape_types_per_pred = shape_types_pred[idx]
 
             # print(self.pc_range)
             # print(point_per_pred)
             cls_per_pred = cls_pred[idx]
-            bbox_per_pred, point_per_pred, score_per_pred = decode_pred_with_score(cls_per_pred, bbox_per_pred,
-                                                                                   point_per_pred,
+            bbox_per_pred, point_per_pred, score_per_pred, type_per_pred, shape_type_per_pred = decode_pred_with_score(cls_per_pred, bbox_per_pred,
+                                                                                   point_per_pred, shape_types_per_pred,
                                                                                    pc_range=self.pc_range,
                                                                                    num_query=self.num_vec)
             point_per_pred = coordinate_transport_local(
@@ -77,12 +82,13 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
             # exit(1)
             score_per_pred = score_per_pred.cpu().numpy()
 
-            for idx, item in enumerate(point_per_pred):
+            for idx, item in enumerate(zip(point_per_pred, type_per_pred, shape_type_per_pred)):
                 static_target = {
-                    'pts': item[..., :2].tolist(),
+                    'pts': item[0][..., :2].tolist(),
                     'confidence_level': score_per_pred[idx],
-                    'type': 0,
-                    'cls_name': 'normal',
+                    'type': item[1].item(),
+                    'cls_name': main_class_name_map[item[1].item()],
+                    'shape_type': item[2].item(),    
                 }
 
                 result['vectors'].append(static_target)
@@ -92,33 +98,40 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
 
     def pack_polyline_gt_points(self, data, bs_idx):
         annos = []
+        classes = []
+        shape_types = []
         if 'points' in data['polylines']:
             annos.append(data['polylines']['points'])
+            shape_types.append(data['polylines']['shape_type'])
+            classes.append(np.ones(len(data['polylines']['points'])) * main_class_type_map['lane_marking'])
         if 'points' in data['edges']:
             annos.append(data['edges']['points'])
+            shape_types.append(np.ones(len(data['edges']['points'])) * (-1))
+            classes.append(np.ones(len(data['edges']['points'])) * main_class_type_map['edge'])
 
         if len(annos) > 0:
             annos = np.concatenate(annos, axis=0)
-        return annos
+            classes = np.concatenate(classes, axis=0)
+            shape_types = np.concatenate(shape_types, axis=0)
+        return annos, classes, shape_types
 
     def process_gt(self, vectors, metadata: dict):
-
         results = []
         for idx, data in enumerate(vectors):
-            # print(ShowDataStruct("data", data))
             result = dict()
             result['gt_vectors'] = []
-            points = self.pack_polyline_gt_points(data, idx)
+            points, cls, shape_types = self.pack_polyline_gt_points(data, idx)
 
             # points = shift_lane_points(points, self.pts_per_vector)
             if self.is_set_gt_z_as_zero == True and isinstance(points, np.ndarray):
                 points[..., 2] = 0.0
 
-            for index, item in enumerate(points):
+            for index, item in enumerate(zip(points, cls, shape_types)):
                 static_target = {
-                    'pts': item.tolist(),
-                    'type': 0,
-                    'cls_name': 'normal',
+                    'pts': item[0].tolist(),
+                    'type': item[1],
+                    'cls_name': main_class_name_map[item[1]],
+                    'shape_type': item[2], 
                 }
                 result['gt_vectors'].append(static_target)
             results.append(result)

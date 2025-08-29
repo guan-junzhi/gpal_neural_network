@@ -4,8 +4,64 @@ from .utils import bbox_overlaps
 from scipy.spatial import distance
 from shapely.geometry import CAP_STYLE, JOIN_STYLE, LineString, Polygon
 from shapely.strtree import STRtree
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial import KDTree
 
+def find_nearest_points(point_cloud_a, point_cloud_b, k=1):
+    pc_a = np.zeros((point_cloud_a.shape[0], 3))
+    pc_b = np.zeros((point_cloud_b.shape[0], 3))
+    pc_a[:, :2] = point_cloud_a[:, :2]
+    pc_b[:, :2] = point_cloud_b[:, :2]
+    
+    # 构建点云B的KDTree索引
+    kdtree = KDTree(pc_b)
+    
+    # 搜索每个点在点云A中的最近邻（k=1表示只找最近的一个）
+    distances, indices = kdtree.query(pc_a, k=k)
+    
+    return indices
 
+def get_dense_polyline(curve, n_points):
+    if not isinstance(curve, np.ndarray):
+        curve = np.asarray(curve)
+    # 计算累积弦长
+    diffs = np.diff(curve, axis=0)
+    seg_lengths = np.sqrt((diffs**2).sum(axis=1))
+    cum_length = np.concatenate([[0], np.cumsum(seg_lengths)])
+    
+    # 生成插值点
+    total_length = cum_length[-1]
+    # n = max(2, int(total_length / 0.1))
+    distances = np.linspace(0, total_length, n_points)
+    
+    # 线性插值
+    interp_x = np.interp(distances, cum_length, curve[:,0])
+    interp_y = np.interp(distances, cum_length, curve[:,1])
+    sampled_points = np.column_stack((interp_x, interp_y)).astype(np.float32)
+    return sampled_points
+
+def get_dis_error(pred_points, gt_points):
+
+    pred_len = np.sum(np.sqrt(np.sum(np.diff(pred_points, axis=0)**2, axis=1)))
+    gt_len = np.sum(np.sqrt(np.sum(np.diff(gt_points, axis=0)**2, axis=1)))
+
+    pred_points = get_dense_polyline(pred_points, int(pred_len / 0.01) + 2)
+    gt_points = get_dense_polyline(gt_points, int(gt_len / 0.01) + 2)
+
+    indice_gt_for_pred = find_nearest_points(pred_points, gt_points)
+    indice_pred_for_gt = find_nearest_points(gt_points, pred_points)
+
+    
+    # 构建有效匹配掩码
+    pre_indices = np.arange(len(pred_points))
+    mask = indice_pred_for_gt[indice_gt_for_pred] == pre_indices
+    
+    if not np.any(mask):
+        return np.nan
+    # 计算距离
+    dists = np.sqrt(((pred_points[mask] - gt_points[indice_gt_for_pred][mask]) ** 2).sum(axis=1))
+    dist_error = np.mean(dists)
+    return dist_error
 def tpfp_gen(gen_lines,
              gt_lines,
              threshold=0.5,
@@ -35,44 +91,55 @@ def tpfp_gen(gen_lines,
 
     # tp and fp
     tp = np.zeros((num_gens), dtype=np.float32)
-    fp = np.zeros((num_gens), dtype=np.float32)
+    fp = np.ones((num_gens), dtype=np.float32)
+    shape_type_acc = []
+    dist_error_list = []
 
     # if there is no gt bboxes in this image, then all det bboxes
     # within area range are false positives
     if num_gts == 0:
         fp[...] = 1
-        return tp, fp
+        return tp, fp, dist_error_list, shape_type_acc
     
     if num_gens == 0:
-        return tp, fp
+        return tp, fp, dist_error_list, shape_type_acc
     
     gen_scores = gen_lines[:,-1] # n
     # distance matrix: n x m
     matrix = polyline_score(
-            gen_lines[:,:-1].reshape(num_gens,-1,coord_dim), 
-            gt_lines.reshape(num_gts,-1,coord_dim),linewidth=2.,metric=metric)
-    # for each det, the max iou with all gts
-    matrix_max = matrix.max(axis=1)
-    # for each det, which gt overlaps most with it
-    matrix_argmax = matrix.argmax(axis=1)
-    # sort all dets in descending order by scores
-    sort_inds = np.argsort(-gen_scores)
+            gen_lines[:,:-2].reshape(num_gens,-1,coord_dim), 
+            gt_lines[:,:-1].reshape(num_gts,-1,coord_dim),linewidth=2.,metric=metric)
 
-    gt_covered = np.zeros(num_gts, dtype=bool)
+    row_ind, col_ind = linear_sum_assignment(-matrix)
+    for pred_idx, gt_idx in zip(row_ind, col_ind):
+        if matrix[pred_idx, gt_idx] >= threshold:
+            tp[pred_idx] = 1
+            fp[pred_idx] = 0
+            dist_error = get_dis_error(gen_lines[pred_idx,:-2].reshape(-1, 2), gt_lines[gt_idx,:-1].reshape(-1, 2))
+            dist_error_list.append(dist_error)
+            shape_type_acc.append(gen_lines[pred_idx,-1] == gt_lines[gt_idx,-1])
+    # # for each det, the max iou with all gts
+    # matrix_max = matrix.max(axis=1)
+    # # for each det, which gt overlaps most with it
+    # matrix_argmax = matrix.argmax(axis=1)
+    # # sort all dets in descending order by scores
+    # sort_inds = np.argsort(-gen_scores)
 
-    # tp = 0 and fp = 0 means ignore this detected bbox,
-    for i in sort_inds:
-        if matrix_max[i] >= threshold:
-            matched_gt = matrix_argmax[i]
-            if not gt_covered[matched_gt]:
-                gt_covered[matched_gt] = True
-                tp[i] = 1
-            else:
-                fp[i] = 1
-        else:
-            fp[i] = 1
+    # gt_covered = np.zeros(num_gts, dtype=bool)
 
-    return tp, fp
+    # # tp = 0 and fp = 0 means ignore this detected bbox,
+    # for i in sort_inds:
+    #     if matrix_max[i] >= threshold:
+    #         matched_gt = matrix_argmax[i]
+    #         if not gt_covered[matched_gt]:
+    #             gt_covered[matched_gt] = True
+    #             tp[i] = 1
+    #         else:
+    #             fp[i] = 1
+    #     else:
+    #         fp[i] = 1
+
+    return tp, fp, dist_error_list, shape_type_acc
 
 
 def polyline_score(pred_lines, gt_lines, linewidth=1., metric='POR'):

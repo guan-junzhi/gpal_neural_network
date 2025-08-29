@@ -10,6 +10,7 @@ import os
 from functools import partial
 from .tpfp import custom_tpfp_gen
 from .tgfg import tpfp_gen
+from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
 
 
 def average_precision(recalls, precisions, mode='area'):
@@ -60,7 +61,8 @@ def average_precision(recalls, precisions, mode='area'):
 
 
 def get_roi_points(p_list, rois=["0-10", "10-30", "30-50", "50-80", "80-100"]):
-
+    np_p_list = np.array(p_list)
+    p_list = _fix_pts_interpolate(np_p_list, int(LineString(np_p_list).length / 0.1)).tolist()  # 先稠密化再分区域
     p_list = sorted(p_list, key=lambda x: x[0])  # 升序
 
     # import pdb;pdb.set_trace()
@@ -98,7 +100,7 @@ def get_cls_results_roi(gen_results,
     """
     # if len(gen_results) == 0 or
 
-    cls_gens, cls_scores = [], []
+    cls_gens, cls_scores, shape_types = [], [], []
     # import pdb;pdb.set_trace()
     # if len(rois) > 1:
     #     num_sample = num_sample * len(rois)
@@ -136,11 +138,13 @@ def get_cls_results_roi(gen_results,
             # 这一帧的某一条车道线
             cls_gens.append(roi_lines_)  # [{},{},{}] 每一条线按roi划分
             cls_scores.append(res['confidence_level'])
+            shape_types.append(res['shape_type'])
 
     # 处理cls_gens 生成roi车道线 1->5
 
     # import pdb;pdb.set_trace()
     cls_gts = []
+    shape_types_gt = []
     for ann in annotations['vectors']:
         if ann['type'] == class_id:
             line = ann['pts']
@@ -162,6 +166,7 @@ def get_cls_results_roi(gen_results,
                 # roi_lines_gt[roi] = sampled_points
 
             cls_gts.append(roi_lines_gt_)
+            shape_types_gt.append(ann['shape_type'])
 
     roi_gen_dict = {}
     roi_gt_dict = {}
@@ -170,39 +175,44 @@ def get_cls_results_roi(gen_results,
 
         cls_gens_ = [i[roi] for i in cls_gens]
         cls_scores_ = []
+        shape_types_ = []
 
         for i, cg in enumerate(cls_gens_):
             if isinstance(cg, np.ndarray):
                 cls_scores_.append(cls_scores[i])
+                shape_types_.append(shape_types[i])
         cls_gens_ = [i for i in cls_gens_ if isinstance(i, np.ndarray)]
         num_res = len(cls_gens_)
         if num_res > 0:
             cls_gens_ = np.stack(cls_gens_).reshape(num_res, -1)
             cls_scores_ = np.array(cls_scores_)[:, np.newaxis]
+            cls_shape_types_ = np.array(shape_types_)[:, np.newaxis]
             # print(roi,cls_gens_.shape,cls_scores_.shape)
             # import pdb;pdb.set_trace()
-            cls_gens_ = np.concatenate([cls_gens_, cls_scores_], axis=-1)
+            cls_gens_ = np.concatenate([cls_gens_, cls_scores_, cls_shape_types_], axis=-1)
 
         else:
             if not eval_use_same_gt_sample_num_flag:
-                cls_gens_ = np.zeros(
-                    (0, num_pred_pts_per_instance * code_size + 1))
+                cls_gens_ = np.zeros((0, num_pred_pts_per_instance * code_size + 2))
             else:
-                cls_gens_ = np.zeros((0, num_sample * code_size + 1))
+                cls_gens_ = np.zeros((0, num_sample * code_size + 2))
             # print(f'for class {i}, cls_gens has shape {cls_gens.shape}')
         roi_gen_dict[roi] = cls_gens_
 
         # gt
         cls_gts_ = [i[roi] for i in cls_gts if roi in i]
         cls_gts_ = [i for i in cls_gts_ if isinstance(i, np.ndarray)]
+        shape_types_gt_ = [shape_types_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
         num_gts = len(cls_gts_)
         if num_gts > 0:
             # print([gg for gg in cls_gts_ if not isinstance(gg,np.ndarray)])
 
             cls_gts_ = np.stack(cls_gts_).reshape(num_gts, -1)
+            shape_types_gt_ = np.array(shape_types_gt_)[:, np.newaxis]
+            cls_gts_ = np.concatenate([cls_gts_, shape_types_gt_], axis=-1)
 
         else:
-            cls_gts_ = np.zeros((0, num_sample * code_size))
+            cls_gts_ = np.zeros((0, num_sample * code_size + 1))
         roi_gt_dict[roi] = cls_gts_
 
     return roi_gen_dict, roi_gt_dict
@@ -399,7 +409,17 @@ def eval_map(gen_results,
                 zip(cls_gen, cls_gt, *args))
 
             # import pdb;pdb.set_trace()
-            tp, fp = tuple(zip(*tpfp))
+            tp, fp, dist_error_tuple, shape_type_acc = tuple(zip(*tpfp))
+            dist_error_list = []
+            shape_type_acc_list = []
+            for dist in dist_error_tuple:
+                dist_error_list.extend(dist)
+            for acc in shape_type_acc:
+                shape_type_acc_list.extend(acc)
+
+            mean_dist_error = np.nanmean(dist_error_list)
+            dist_error_95 = np.nanpercentile(dist_error_list, 95)
+            shape_type_acc = np.sum(shape_type_acc_list) / len(shape_type_acc_list)
 
             # map_results = map(
             #     tpfp_fn,
@@ -454,7 +474,10 @@ def eval_map(gen_results,
                 'recall': recalls,
                 'precision': precisions,
                 'ap': ap,
-                'roi': roi
+                'roi': roi,
+                'mean_dist_error':mean_dist_error,
+                'dist_error_95':dist_error_95,
+                'shape_type_acc':shape_type_acc
 
             })
             # print('cls:{} done in {:2f}s!!'.format(clsname,float(timer.since_last_check())))

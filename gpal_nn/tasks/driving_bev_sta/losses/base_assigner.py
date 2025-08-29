@@ -54,10 +54,9 @@ def denormalize_2d_pts(pts, pc_range):
 
 
 class MapAssigner(nn.Module):
-    def __init__(self, pc_range, num_label, cls_weight=2.0, reg_weight=0.0, iou_weight=0.0, pts_weight=5.0):
+    def __init__(self, pc_range, cls_cost, reg_weight=0.0, iou_weight=0.0, pts_weight=5.0):
         super().__init__()
-        self.cls_cost = ClassLabelLossWithCost(num_label)
-        self.cls_weight = cls_weight
+        self.cls_cost = cls_cost
 
         self.reg_cost = BBoxL1LossWithCost()
         self.reg_weight = reg_weight
@@ -78,10 +77,11 @@ class MapAssigner(nn.Module):
             f"bbox query {bbox_pred.shape} is not equal pts query {pts_pred.shape}"
 
         num_gts, num_preds = gt_bboxes.shape[0], bbox_pred.shape[0]
+        num_cls = cls_pred.shape[-1]
 
         assigned_gt_inds = bbox_pred.new_full(
             (num_preds,), -1, dtype=torch.long)
-        assigned_labels = bbox_pred.new_full((num_preds,), 0, dtype=torch.long)
+        assigned_labels = bbox_pred.new_full((num_preds,), num_cls, dtype=torch.long)
         assigned_index = bbox_pred.new_full((num_preds,), -1, dtype=torch.long)
 
         # if num_gts == 0 or num_preds == 0:
@@ -91,7 +91,7 @@ class MapAssigner(nn.Module):
         #         assigned_gt_inds[:] = 0
         #     return None
 
-        cls_cost = self.cls_cost.cost(cls_pred, gt_label) * self.cls_weight
+        cls_cost = self.cls_cost.cost(cls_pred, gt_label.clone())
 
         normalized_gt_bboxes = normalize_2d_bbox(gt_bboxes, self.pc_range)
         reg_cost = self.reg_cost.cost(
@@ -138,8 +138,7 @@ class MapAssigner(nn.Module):
         assigned_gt_inds[:] = 0
         # assign foregrounds based on matching results
         assigned_gt_inds[matched_row_inds] = matched_col_inds + 1
-        assigned_labels[matched_row_inds] = gt_label[matched_col_inds].argmax(
-            -1)
+        assigned_labels[matched_row_inds] = gt_label[matched_col_inds]
         assigned_index[matched_row_inds] = order_index[matched_row_inds,
                                                        matched_col_inds]
         return assigned_gt_inds, assigned_labels, assigned_index
