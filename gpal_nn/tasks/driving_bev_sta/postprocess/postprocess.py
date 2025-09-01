@@ -8,6 +8,7 @@ from gpal_nn.tasks.driving_bev_sta.postprocess.decode_pred import decode_pred_wi
 # from testing.decode.decode_pred import decode_pred_with_score, coordinate_transport_local
 import numpy as np
 from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
+from gpal_nn.tasks.driving_bev_sta.losses.loss import pack_polyline_gt_points
 
 
 @POSTPROCESSES.register_module()
@@ -96,31 +97,12 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
 
         return results
 
-    def pack_polyline_gt_points(self, data, bs_idx):
-        annos = []
-        classes = []
-        shape_types = []
-        if 'points' in data['polylines']:
-            annos.append(data['polylines']['points'])
-            shape_types.append(data['polylines']['shape_type'])
-            classes.append(np.ones(len(data['polylines']['points'])) * main_class_type_map['lane_marking'])
-        if 'points' in data['edges']:
-            annos.append(data['edges']['points'])
-            shape_types.append(np.ones(len(data['edges']['points'])) * (-1))
-            classes.append(np.ones(len(data['edges']['points'])) * main_class_type_map['edge'])
-
-        if len(annos) > 0:
-            annos = np.concatenate(annos, axis=0)
-            classes = np.concatenate(classes, axis=0)
-            shape_types = np.concatenate(shape_types, axis=0)
-        return annos, classes, shape_types
-
     def process_gt(self, vectors, metadata: dict):
         results = []
         for idx, data in enumerate(vectors):
             result = dict()
             result['gt_vectors'] = []
-            points, cls, shape_types = self.pack_polyline_gt_points(data, idx)
+            points, cls, shape_types = pack_polyline_gt_points(data)
 
             # points = shift_lane_points(points, self.pts_per_vector)
             if self.is_set_gt_z_as_zero == True and isinstance(points, np.ndarray):

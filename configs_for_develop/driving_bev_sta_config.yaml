@@ -83,7 +83,7 @@ Tasks:
         head_type: MapInstanceDetectorHead
         layers_config:
           compatible_with_MVLane_loss: True
-          shape_type_num: 2
+          # shape_type_num: 2
           in_channels: 256
           num_cam: 2
           bev_w: 100  # bev_x
@@ -133,8 +133,8 @@ Tasks:
           is_random_scale_and_translate: False,
           # shuffle = False,
           fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
-          rpy_aug: True, 
-          bev_aug: True,
+          rpy_aug: False, 
+          bev_aug: False,
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1
         }

@@ -666,11 +666,6 @@ class GpNet(LightningModule):
         calib = batch.get('calib', None)
         metadata = batch['meta']
         curr_task = self.curr_tasks[0]
-        # if "bev_real2aug" in batch:
-        #     bev_real2aug = batch["bev_real2aug"]
-        # else:
-        #     bev_real2aug = None
-        # camera_name = self.camera_name
 
         preds = self.model_forward(
             data, calib, metadata, phase=const.PHASE_VALIDATION)

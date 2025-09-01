@@ -30,6 +30,7 @@ from gpal_lightning.neural_network.global_config import GlobalConfig
 from gpal_lightning.neural_network.tasks.base.config_parsers import BaseConfigParser
 from gpal_nn.tasks.driving_bev_sta.heads.maptr.utils import QuantStub
 from tools_scripts.data_format_cvt import ShowDataStruct
+from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class MapInstanceDetectorHead(nn.Module):
 
         super(MapInstanceDetectorHead, self).__init__()
         self.compatible_with_MVLane_loss = layers_config['compatible_with_MVLane_loss']
-        self.shape_type_num = layers_config['shape_type_num']
+        self.shape_type_num = max(shape_type_map.values()) + 1
         self.in_channels = layers_config['in_channels']
         self.queue_length = layers_config.get("queue_length", 1)
         self.num_cam = layers_config['num_cam']
