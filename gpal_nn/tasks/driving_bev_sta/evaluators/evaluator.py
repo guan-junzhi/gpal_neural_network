@@ -46,8 +46,9 @@ class DRIVING_BEV_STAEvaluator(BaseEvaluator):
             for gt in gts:
                 gt_lane = {
                     'pts': [e[:2] for e in gt['pts']],
-                    'type': 0,
-                    'cls_name': 'normal'
+                    'type': gt['type'],
+                    'cls_name': gt['cls_name'],
+                    'shape_type': gt['shape_type'],
                 }
                 gt_lanes['vectors'].append(gt_lane)
             gt_all_data.append(gt_lanes)

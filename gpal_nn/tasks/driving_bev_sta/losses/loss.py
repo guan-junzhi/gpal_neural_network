@@ -6,6 +6,7 @@ from gpal_lightning.neural_network.tasks.builder import LOSSES
 from gpal_nn.tasks.driving_bev_sta.losses.transform_gt import transform_gt_box, shift_polyline_points, shift_polygen_points
 from gpal_nn.tasks.driving_bev_sta.losses.map_loss import BaseMapLossCost
 from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
+from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 import time
 from tools_scripts.data_format_cvt import ShowDataStruct
 import pickle as pkl
@@ -13,15 +14,22 @@ import pickle as pkl
 
 def pack_polyline_gt_points(data):
     annos = []
+    classes = []
+    shape_types = []
     if 'points' in data['polylines']:
         annos.append(data['polylines']['points'])
+        shape_types.append(data['polylines']['shape_type'])
+        classes.append(np.ones(len(data['polylines']['points'])) * main_class_type_map['lane_marking'])
     if 'points' in data['edges']:
         annos.append(data['edges']['points'])
+        shape_types.append(np.ones(len(data['edges']['points'])) * (-1))
+        classes.append(np.ones(len(data['edges']['points'])) * main_class_type_map['edge'])
 
     if len(annos) > 0:
         annos = np.concatenate(annos, axis=0)
-    return annos
-
+        classes = np.concatenate(classes, axis=0)
+        shape_types = np.concatenate(shape_types, axis=0)
+    return annos, classes, shape_types
 
 def lane_loss_computation(preds, data, loss_func):
 
@@ -34,8 +42,8 @@ def lane_loss_computation(preds, data, loss_func):
     # print(ShowDataStruct("data", data))
     # bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred = \
     #     preds['bev_embed'], preds['all_cls_scores'], preds['all_bbox_pred'], preds['all_pts_pred']
-    bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred = \
-        None, preds['all_cls_scores'], preds['all_bbox_preds'], preds['all_pts_preds']
+    bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred, all_shape_types_pred = \
+            None, preds['all_cls_scores'], preds['all_bbox_preds'], preds['all_pts_preds'], preds['all_shape_types_preds']
     # num_iter_layer, bs, num_query, score shape
     num_iter, bs, _, pts_per_vector, _ = all_pts_pred.shape
 
@@ -49,12 +57,11 @@ def lane_loss_computation(preds, data, loss_func):
             time_dp = DetailProf()
             time_dp.Tic("begin")
 
-            score_pred, bbox_pred, pts_pred = all_cls_scores[k,
-                                                             j], all_bbox_pred[k, j], all_pts_pred[k, j]
+            score_pred, bbox_pred, pts_pred, shape_type_pred = all_cls_scores[k, j], all_bbox_pred[k, j], all_pts_pred[k, j], all_shape_types_pred[k, j]
             #  [n, 2], [n, 4], [n, 20, 2]
             subdata = data[j]
             # subdata = data['annot'][j]
-            annos = pack_polyline_gt_points(subdata)
+            annos, classes, shape_types = pack_polyline_gt_points(subdata)
             time_dp.Duration("lane_loss_computation_all_1", "begin")
 
             start_x = 120
@@ -72,7 +79,7 @@ def lane_loss_computation(preds, data, loss_func):
             time_dp.Duration("lane_loss_computation_all_3",
                              "lane_loss_computation_all_2")
             single_loss_dict = loss_func(
-                (score_pred, bbox_pred, pts_pred), (bboxes_gt, points_gt))
+                (score_pred, bbox_pred, pts_pred, shape_type_pred), (classes, bboxes_gt, points_gt, shape_types))
 
             time_dp.Duration("lane_loss_computation_all_4",
                              "lane_loss_computation_all_3")
@@ -202,7 +209,7 @@ class DRIVING_BEV_STALoss(BaseLoss):
         pc_range = task_config.pc_range
         pc_range = [0, 0, 0, 32.0, 120.0, 0]
         super(DRIVING_BEV_STALoss, self).__init__(pc_range, task_config)
-        self.polyline_loss = BaseMapLossCost(2, pc_range, cls_loss_weight=1.0, l1_loss_weight=4.0,
+        self.polyline_loss = BaseMapLossCost(pc_range, cls_loss_weight=1.0, l1_loss_weight=4.0,
                                              giou_loss_weight=0.01, pts_l1_loss_weight=5.0, pts_dir_loss_weight=0.005)
 
     def forward(self, preds: torch.Tensor, trues: torch.Tensor, masks: torch.Tensor) -> dict:

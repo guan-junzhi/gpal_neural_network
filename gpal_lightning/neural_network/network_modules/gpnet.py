@@ -40,6 +40,7 @@ from gpal_lightning.utils.distributed import all_gather_by_chunks
 from gpal_lightning.utils.datatype_convert import convert_tensor_to_fp32, convert_half_to_single_precision
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
+import os.path as osp
 
 
 class GpNet(LightningModule):
@@ -661,11 +662,10 @@ class GpNet(LightningModule):
 
         data = batch['image']
         # masks = batch["mask"] if 'mask' in batch else None
-        # trues = batch["label"]
+        trues = batch["label"]
         calib = batch.get('calib', None)
         metadata = batch['meta']
         curr_task = self.curr_tasks[0]
-        # camera_name = self.camera_name
 
         preds = self.model_forward(
             data, calib, metadata, phase=const.PHASE_VALIDATION)
@@ -673,10 +673,11 @@ class GpNet(LightningModule):
         curr_task = self.curr_tasks[0]
         json_list, _ = self.tasks[curr_task].vectors_to_json(
             metadata, data, dataloader_idx, preds[0], False)
-
-        # print(ShowDataStruct("json_list", json_list))
-        # print(preds[0][0]["all_pts_preds"][-1, 0])
-        # exit(1)
+        
+        if curr_task in ["DRIVING_BEV_STA"]:
+            if self.global_config.Test['visulization']:
+                save_root = osp.join(self.global_config.save, 'vis')
+                self.tasks[curr_task].eval_visualize(save_root, metadata, data, dataloader_idx, preds, trues, batch, json_list, calib)
         return preds, json_list
 
     def forward_fp16(self, fp16_curr_module, fp16_next_module, curr_module, *args, **kwargs):

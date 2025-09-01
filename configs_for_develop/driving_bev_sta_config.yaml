@@ -1,5 +1,5 @@
-image_per_gpu: 24
-workers_per_gpu: 12
+image_per_gpu: 32
+workers_per_gpu: 8
 skip_sanity_check: true
 max_iterations: 60000
 save_every_n_iterations: 500
@@ -11,9 +11,14 @@ Train:
   log_every: 10
   visualize_every: 200
   max_visu_img_num: 10
-  optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
-  lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
-    after_scheduler: CosineAnnealingLR, T_max: 30000}
+  optimizer: {type: AdamW, lr: 3.0e-04, weight_decay: 1.0e-06}
+  lr_scheduler: {type: CosineAnnealingLR, T_max: 60000}
+  # optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
+  # lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
+  #   after_scheduler: CosineAnnealingLR, T_max: 30000}
+
+Test:
+  visulization: True
 
 Backbones:
   backbone0:
@@ -69,7 +74,8 @@ Tasks:
     backbone_feat_id: [2]
     group_feat_id: [1, 2, 3]
     neck_feat_id: [0]
-    pc_range: [0, -16, -2.0, 96.0, 16.0, 2.0]
+    # pc_range: [0, -16, -2.0, 96.0, 16.0, 2.0]
+    pc_range: [0, 0, 0, 32, 120, 0]
 
     
     Head:
@@ -77,6 +83,7 @@ Tasks:
         head_type: MapInstanceDetectorHead
         layers_config:
           compatible_with_MVLane_loss: True
+          # shape_type_num: 2
           in_channels: 256
           num_cam: 2
           bev_w: 100  # bev_x
@@ -97,27 +104,37 @@ Tasks:
       - { dataset_name: 'gpal', 
           # root_dir:  "../lane_data",
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
-          pkl_infos: "gpal_songbiao_no_stop_20250604",
-          pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
-          in_shape: [432, 768],
-          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
-          camera_name: ['img_front_30', 'img_front_120'],
-          gt_range: [120, 16, 0, 0.0, -16.0, 0],
-          is_random_scale_and_translate: true,
-          fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
-          # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
-        }
-      validation:
-      - { dataset_name: 'gpal', 
-          # root_dir:  "../lane_data",
-          root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
-          pkl_infos: "gpal_songbiao_no_stop_20250604_calib",
+          pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250809_gpal_bev_train_full_part1",
+               "20250809_gpal_bev_train_full_part2", "20250809_gpal_bev_train_full_part3"],
+          # pkl_infos: ["gpal_songbiao_no_stop_20250716"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           in_shape: [432, 768],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
           camera_name: ['img_front_30', 'img_front_120'],
           gt_range: [120, 16, 0, 0.0, -16.0, 0],
           is_random_scale_and_translate: False,
-          shuffle = False,
-          fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          rpy_aug: True, 
+          bev_aug: True,
+          rpy_aug_deg: [3,3,3], 
+          bev_aug_deg: 1
+        }
+      validation:
+      - { dataset_name: 'gpal', 
+          # root_dir:  "../lane_data",
+          root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
+          pkl_infos: ["gpal_songbiao_no_stop_20250604_tiny_test"],
+          pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
+          in_shape: [432, 768],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: False,
+          # shuffle = False,
+          fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          rpy_aug: False, 
+          bev_aug: False,
+          rpy_aug_deg: [3,3,3], 
+          bev_aug_deg: 1
         }
