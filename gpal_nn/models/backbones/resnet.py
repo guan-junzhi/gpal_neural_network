@@ -60,6 +60,74 @@ class ResNet(BaseModule):
         return self.export_layers_channel
 
 
+class UpsamplingConcat(nn.Module):
+    def __init__(self, in_channels, out_channels, scale_factor=2):
+        super().__init__()
+
+        # self.upsample = nn.Upsample(scale_factor=scale_factor, mode='bilinear', align_corners=False)
+        self.upsample = nn.Sequential(
+            # 降低通道数至原1/4
+            nn.Conv2d(1024, 256, 1),                  # 预降维
+            nn.ConvTranspose2d(256, 256, 4, 2, 1),     # 反卷积
+            # 3x3卷积增强特征融合
+            nn.Conv2d(256, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU()
+        )
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(64),
+            nn.ReLU(inplace=True),
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(512, 64, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(64),
+            nn.ReLU(inplace=True),
+        )
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(128),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x_to_upsample, x):
+        x_to_upsample = self.upsample(x_to_upsample)
+        x_to_upsample = self.conv1(x_to_upsample)
+        x = self.conv2(x)
+        x_to_upsample = torch.cat([x, x_to_upsample], dim=1)
+        return self.conv3(x_to_upsample)
+
+
+@BACKBONES.register_module()
+class EncoderRes50(BaseModule):
+    def __init__(self, global_config, out_channels):
+        super(EncoderRes50, self).__init__(global_config)
+
+        self.C = out_channels
+        resnet = models.resnet50(pretrained=False)
+        self.backbone = nn.Sequential(*list(resnet.children())[:-4])
+        self.layer3 = resnet.layer3
+        self.depth_layer = nn.Conv2d(128, self.C, kernel_size=1, padding=0)
+        self.upsampling_layer = UpsamplingConcat(0, 0)
+
+    def forward(self, x):
+        x1 = self.backbone(x)
+        x2 = self.layer3(x1)
+        x = self.upsampling_layer(x2, x1)
+        x = self.depth_layer(x)
+        return [x]
+
+
 if __name__ == "__main__":
     x = torch.randn((4, 3, 640, 640)).cuda()
     bb = ResNet(34).cuda()

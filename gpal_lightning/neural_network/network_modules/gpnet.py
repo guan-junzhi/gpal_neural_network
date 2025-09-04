@@ -762,7 +762,6 @@ class GpNet(LightningModule):
             #     for fea in cam_feats[k]:
             #         print(k, fea.shape)
 
-            cam_feats_bkp = {k: [cam_feats_bkp[k]] for k in cam_feats_bkp}
             if curr_task in self._transformers:
                 curr_transformer = self._transformers[curr_task]
                 output = {"img_bev_feat": self.model[curr_transformer](
