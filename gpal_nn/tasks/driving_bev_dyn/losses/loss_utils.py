@@ -238,18 +238,6 @@ class Points_Loss(nn.Module):
 
         l_score = self.focal_loss(pred_score, gt_score, True)
 
-        # print(ShowDataStruct("pred_cen", pred_cen))
-        # print(ShowDataStruct("trues[mode+'obj_mask']", trues[mode+'obj_mask']),
-        #       trues[mode+'obj_mask'].min(), trues[mode+'obj_mask'].max())
-        # print(ShowDataStruct(
-        #     "trues[mode+'indices_center']", trues[mode+'indices_center']))
-        # print(ShowDataStruct(
-        #     "trues[mode+'cen_offset']", trues[mode+'cen_offset']))
-
-        # import pickle as pkl
-        # pkl.dump((pred_cen, trues), open("new_repo.pkl", 'wb'))
-
-        # breakpoint()
         l_cen = self.l1_loss(
             pred_cen, trues[mode+'obj_mask'], trues[mode+'indices_center'], trues[mode+'cen_offset'])
         l_z = self.l1_loss_balanced(
@@ -262,16 +250,7 @@ class Points_Loss(nn.Module):
         l_vel = self.l1_loss(
             pred_vel, trues[mode+'obj_mask'], trues[mode+'indices_center'], trues[mode+'vel'])
 
-        total_loss = l_score + l_cen + l_z + l_dim + l_dir + l_vel
-        # total_loss = l_score + l_cen  # + l_z + l_dim + l_dir + l_vel
-
         tb_dict = {}
-        # # tb_dict['track_loss_score'] = l_score.item()
-        # # tb_dict['track_loss_cen']   = l_cen.item()
-        # # tb_dict['track_loss_z']     = l_z.item()
-        # # tb_dict['track_loss_dim']   = l_dim.item()
-        # # tb_dict['track_loss_dir']   = l_dir.item()
-        # # tb_dict['track_loss_vel']   = l_vel.item()
         tb_dict['track_loss_score'] = l_score
         tb_dict['track_loss_cen'] = l_cen
         tb_dict['track_loss_z'] = l_z
@@ -279,7 +258,7 @@ class Points_Loss(nn.Module):
         tb_dict['track_loss_dir'] = l_dir
         tb_dict['track_loss_vel'] = l_vel
 
-        return total_loss, tb_dict
+        return tb_dict
         # return total_loss, 0.0
 
 
