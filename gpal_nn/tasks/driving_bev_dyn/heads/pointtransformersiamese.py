@@ -7,6 +7,7 @@ from gpal_nn.tasks.driving_bev_dyn.heads.transformer import TransformerDecoder, 
 from gpal_nn.tasks.driving_bev_dyn.heads.multihead_attention import MultiheadAttention
 # from ..model_utils.losses import Points_Loss
 import time
+from tools_scripts.data_format_cvt import ShowDataStruct
 
 
 def _sigmoid(x):
@@ -209,21 +210,21 @@ class PointnetTransformerSiamese(nn.Module):
         else:
             _, label = batch_dict['score'].max(dim=1)  # 原始的score含通道
             batch_dict['batch_pred_labels'] = label.view(
-                batch_dict['batch_size'], -1) + 1
+                batch_dict['score'].shape[0], -1) + 1
 
-            self.forward_ret_dict['forward'] = {
+            batch_dict['Points_Loss'] = {
                 'estimation_cen': estimation_cen,
                 'estimation_z': estimation_z,
                 'estimation_dim': estimation_dim,
                 'estimation_dir': estimation_dir,
                 'estimation_vel': estimation_vel,
-                'score': estimation_score,
+                'estimation_score': estimation_score,
                 'template_xyz': template_xyz,  # xy实际位置和上一帧得分
             }
 
         if not self.training or self.predict_boxes_when_training:
-            batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
-                batch_size=batch_dict['batch_size'])
+            batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(batch_dict['Points_Loss'], 
+                batch_size=batch_dict['score'].shape[0])
             batch_dict['batch_cls_preds'] = batch_cls_preds
             batch_dict['batch_box_preds'] = batch_box_preds
             batch_dict['cls_preds_normalized'] = True
@@ -237,9 +238,7 @@ class PointnetTransformerSiamese(nn.Module):
         return rpn_loss, tb_dict
 
     @torch.no_grad()
-    def generate_predicted_boxes(self, batch_size, **kwargs):
-
-        outputs = self.forward_ret_dict['forward']
+    def generate_predicted_boxes(self, outputs, batch_size, **kwargs):
         template_xyz = outputs['template_xyz'][:, :,
                                                :2].view(-1, 2)  # 前一帧的xy实际位置(从keypts获得)和得分
         pred_cen = outputs['estimation_cen'].permute(0, 2, 1)
@@ -248,7 +247,7 @@ class PointnetTransformerSiamese(nn.Module):
         pred_dir = outputs['estimation_dir'].permute(0, 2, 1)
         pred_yaw = torch.atan2(pred_dir[:, :, :1], pred_dir[:, :, 1:])  # y/x
         pred_vel = outputs['estimation_vel'].sigmoid().permute(0, 2, 1)
-        pred_score = outputs['score'].sigmoid().permute(
+        pred_score = outputs['estimation_score'].sigmoid().permute(
             0, 2, 1)  # 得分，时序特征融合后的得分
 
         indicee = torch.arange(0, 256).to(pred_vel).float().view(-1, 256, 1)

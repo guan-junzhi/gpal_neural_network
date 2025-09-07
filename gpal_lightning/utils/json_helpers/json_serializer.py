@@ -10,8 +10,11 @@ class JsonSerializer(json.JSONEncoder):
         if isinstance(o, np.ndarray):
             o = o.squeeze()
             shape = o.shape
-            o = np.array([float(obj) for obj in o.flatten()]).reshape(shape)
-            o = o.tolist()
+            if isinstance(o.flatten()[0], str):
+                o = [obj for obj in o.flatten()]
+            else:
+                o = np.array([float(obj) for obj in o.flatten()]).reshape(shape)
+                o = o.tolist()
         elif isinstance(o, list):
             o = [float(obj) for obj in o]
         elif isinstance(o, (str, bool)):

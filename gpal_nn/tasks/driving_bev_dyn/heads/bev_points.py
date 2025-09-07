@@ -106,8 +106,14 @@ class Bev_To_Points(nn.Module):
                 0, 2, 1).view(batch_size, -1, 64)  # -> N, 256, 64
             batch_dict['pred_curr_track_point_coords'] = xys_topk.permute(
                 0, 2, 1).view(batch_size, self.num_key_points, -1)  # (BxN, 4)
-            # batch_dict['score'] = score_gt_topk.view(
-            #     batch_size, -1, 1, self.num_key_points)  # -> [1, 4, 1, 256]  # 只是用当前帧的
+
+            hm = batch_dict['hm_cen_pred'][:, 0].view(batch_size, C, -1)
+            score_gt_topk = hm[torch.arange(B)[:, None, None],
+                               torch.arange(hm.shape[1])[
+                None, :, None],
+                indice_topk.reshape(B, 1, -1).repeat(1, hm.shape[1], 1)]
+            batch_dict['score'] = score_gt_topk.view(
+                batch_size, -1, 1, self.num_key_points)  # -> [1, 4, 1, 256]  # 只是用当前帧的
 
         elif "prev" in mode_pred:
             batch_dict['pred_prev_score'] = score_topk.view(

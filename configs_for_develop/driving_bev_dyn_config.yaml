@@ -103,6 +103,7 @@ Tasks:
           # middle_json_str: ""
 
           is_manual_label: false,
+          have_prev_label: true,
           image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           json_dir: "od_occ_group/qiyingli/SaveModelResult/samples", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
           middle_json_str: "3d_detection_json_post",
@@ -116,8 +117,14 @@ Tasks:
         }
       validation:
       - { dataset_name: 'xxx', 
+          is_manual_label: true,
+          have_prev_label: false,
+          image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_no_post", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          middle_json_str: "3d_detection_json",
+
           root_dir: "bev_park/PointLineData_Test/",
-          data_list: ["/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_7546.pkl"],
+          data_list: ["/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"],
           camera_name: ['img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30',],
           shuffle: True,
           # fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT

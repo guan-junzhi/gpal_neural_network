@@ -19,6 +19,8 @@ class DRIVING_BEV_DYNLoss(BaseLoss):
     def GtToTorch(self, trues, device):
         gt_torch_batch = {}
         for key in trues[0]:
+            if key == "gt_boxes":
+                continue
             gt_torch_batch[key] = torch.from_numpy(np.stack(
                 [ele[key] for ele in trues], axis=0)).to(device).float()
 

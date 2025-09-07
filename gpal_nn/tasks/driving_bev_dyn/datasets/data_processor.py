@@ -699,7 +699,8 @@ class DataProcessor(object):
         if data_dict is None:
             return partial(self.build_targets_former, config=config)
 
-        if config['TARGET_ENABLED'][self.mode]:
+        # if config['TARGET_ENABLED'][self.mode]:
+        if True:
             point_cloud_range = self.point_cloud_range
             # minX,maxX, minY,maxY,minZ,maxZ=point_cloud_range[0],point_cloud_range[3],point_cloud_range[1],point_cloud_range[4],point_cloud_range[2],point_cloud_range[5]
             minX, minY, minZ, maxX, maxY, maxZ = point_cloud_range
@@ -751,7 +752,8 @@ class DataProcessor(object):
         if data_dict is None:
             return partial(self.build_targets_track, config=config)
 
-        if config['TARGET_ENABLED'][self.mode]:
+        # if config['TARGET_ENABLED'][self.mode]:
+        if True:
             point_cloud_range = self.point_cloud_range
             minX, minY, minZ, maxX, maxY, maxZ = point_cloud_range
             gt_boxes = data_dict['gt_boxes']
@@ -823,7 +825,8 @@ class DataProcessor(object):
         if data_dict is None:
             return partial(self.build_od_gt_targets, config=config)
 
-        if config.TARGET_ENABLED[self.mode]:
+        # if config.TARGET_ENABLED[self.mode]:
+        if True:
             minX, minY, minZ, maxX, maxY, maxZ = self.point_cloud_range
             gt_boxes = data_dict['gt_boxes']
             num_objects = min(gt_boxes.shape[0], config['max_objects'])

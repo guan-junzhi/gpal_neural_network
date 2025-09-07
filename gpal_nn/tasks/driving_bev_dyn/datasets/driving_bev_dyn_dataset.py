@@ -67,6 +67,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                  fast_buffer_path="",
                  data_list=[],
                  is_manual_label=False,
+                 have_prev_label=False,
                  image_dir="",
                  json_dir="",
                  middle_json_str=""
@@ -89,6 +90,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         #           fast_buffer_path,
         #           data_list,
         #           is_manual_label,
+        #           have_prev_label,
         #           image_dir,
         #           json_dir,
         #           middle_json_str]
@@ -110,6 +112,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.middle_json_str = middle_json_str
 
         self.id_to_type = task_config.class_dict
+        self.have_prev_label = have_prev_label
+        self.camera_names = camera_name
+        self.task = task_config.name
 
         print(self.id_to_type)
         self.type_to_id = {
@@ -183,11 +188,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             #     VOXEL_SIZE=BEV_MAP_VOXEL_SIZE,
             #     BEV_ENABLED=True
             # ),
-            # dict(
-            #     NAME='mask_points_and_boxes_outside_range',
-            #     OCC_RANGE=OCC_RANGE,
-            #     REMOVE_OUTSIDE_BOXES=True
-            # ),
+            dict(
+                NAME='mask_points_and_boxes_outside_range',
+                OCC_RANGE=OCC_RANGE,
+                REMOVE_OUTSIDE_BOXES=True
+            ),
             # dict(
             #     NAME='shuffle_points',
             #     SHUFFLE_ENABLED=dict(train=True, test=False)
@@ -330,12 +335,38 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             '2025-07-10_11-12-52-674',
             '2025-07-10_10-49-52-675',
         ]
-        if phase != const.PHASE_TRAINING:
-            skip_subday_list = []
+
         fusion_infos = [i for i in fusion_infos if i['sequence_name'].split(
             '/')[-1] not in skip_subday_list]
 
-        fusion_infos = [fusion_infos[4000]] * 1000
+        if phase != const.PHASE_TRAINING:
+            skip_subday_list = [
+                "EKART_ID4001_2025-07-01-13-18-12",
+                "EKART_ID4001_2025-07-01-15-45-23",
+                "EKART_ID4001_2025-07-01-17-13-05",
+                "EKART_ID4001_2025-07-05-12-56-38",
+                "EKART_ID4001_2025-07-06-13-19-04",
+                "EKART_ID4001_2025-07-06-13-48-04",
+                "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-36-52-674",
+                "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-46-52-674",
+                "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-52-52-674",
+                "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-38-52-674",
+                "EKART_ID4001_2025-07-10-09-30-00/2025-07-10_09-46-14-102",
+            ]
+            fusion_infos_new = []
+            for info in fusion_infos:
+                flag_name_0 = info['sequence_name'].split('/')[0]
+                flag_name_1 = info['sequence_name']
+                # if flag_name_1 == 'EKART_ID4001_2025-07-10-09-30-00/2025-07-10_09-46-14-102':
+                #     breakpoint()
+                if flag_name_0 in skip_subday_list:
+                    continue
+                if flag_name_1 in skip_subday_list:
+                    continue
+                fusion_infos_new.append(info)
+
+            fusion_infos = fusion_infos_new
+            self.fusion_infos = []
 
         print('Total samples for HeSai dataset: %d' %
               (len(fusion_infos)))
@@ -431,9 +462,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         gt_boxes = np.array(obj_list)
         gt_names = np.array(gt_names_list)
         is_visible = np.array(is_visible_list).astype(np.bool_)
-        if self.phase == const.PHASE_TRAINING:
-            gt_boxes = gt_boxes[is_visible]
-            gt_names = gt_names[is_visible]
+        gt_boxes = gt_boxes[is_visible]
+        gt_names = gt_names[is_visible]
 
         return gt_boxes, gt_names
 
@@ -572,21 +602,27 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         # print(f"input_dict['gt_boxes'] = {input_dict['gt_boxes'][0]}")
 
         # === 前一帧
-        # if self.dataset_cfg.HAVE_PREV_LABEL:
-        if True:
-            prev_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{prev_time_stamp}.json'
+        if self.have_prev_label:
+            prev_json_file = f'{json_dir}/{sequence_name}/{middle_json_str}/{prev_time_stamp}.json'
             prev_json_data = self.json_data.load(prev_json_file)
-            re_prev_infos = self.json_data.parse_json(
-                prev_json_data)  # 上一帧不需要真值(但模型输出的有(是连续的))
+            
+            try:
+                prev_json_data = self.json_data.load(prev_json_file)
+            except:
+                print(f'error json file: {prev_json_file}')
+                
+            re_prev_infos  = self.json_data.parse_json(prev_json_data)  # 上一帧不需要真值(但模型输出的有(是连续的))
             meta_info, cameras, bounding_boxes, special_labels = re_prev_infos
 
-            gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
-            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(
-                cam_infos=cameras)
-            _, _, _, camera_sizes = self.get_camera_parameters(
-                cam_infos=cameras)
+            gt_boxes_, gt_names_ = self.get_box(bounding_boxes=bounding_boxes)
+            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+            _, _, _, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+
+            input_dict['gt_names_former'] = gt_names_
+            input_dict['gt_boxes_former'] = gt_boxes_
         else:
-            pass
+            input_dict['gt_names_former'] = gt_names
+            input_dict['gt_boxes_former'] = gt_boxes
 
         input_dict['gt_names_former'] = gt_names
         input_dict['gt_boxes_former'] = gt_boxes
@@ -710,13 +746,19 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 data_dict_ret["label"][key] = data_dict[key]
             if "gt_prev_" in key:
                 data_dict_ret["label"][key] = data_dict[key]
+        data_dict_ret["label"]["gt_boxes"] = data_dict["gt_boxes"]
 
         for key in ["intrinsic", "cam_dist", "extrinsic"]:
             data_dict_ret["calib"][key] = data_dict[key]
 
         data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
 
-        # print(ShowDataStruct("data_dict_ret", data_dict_ret))
+        data_dict_ret['meta']['camera_name'] = self.camera_names
+        data_dict_ret['meta']['task_name'] = self.task
+        frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
+        data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
+        data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
+
         return data_dict_ret
 
 
@@ -742,6 +784,8 @@ if __name__ == "__main__":
 
     d = train_dataset[0]
     print(d.keys())
+    print(d["label"]["gt_boxes"])
+    exit(1)
 
     for d in train_dataset:
         # print(d["frame_id"])
