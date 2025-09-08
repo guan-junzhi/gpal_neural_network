@@ -567,168 +567,178 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         Returns:
             tuple: (image, target) where target is the image segmentation.
         """
+        try:
+            info = copy.deepcopy(self.dataset[idx])
 
-        info = copy.deepcopy(self.dataset[idx])
+            # print(f"__getitem__ {idx}")
+            # print(info)
+            input_dict = {}
 
-        # print(f"__getitem__ {idx}")
-        # print(info)
-        input_dict = {}
+            # 总起
+            sequence_name = info['sequence_name']
+            curr_time_stamp, prev_time_stamp = info['time_stamp'].split('/')
 
-        # 总起
-        sequence_name = info['sequence_name']
-        curr_time_stamp, prev_time_stamp = info['time_stamp'].split('/')
+            # === 当前帧 格式必须统一
+            curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
+            curr_json_data = self.json_data.load(curr_json_file)
+            re_curr_infos = self.json_data.parse_json(curr_json_data)
+            meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
 
-        # === 当前帧 格式必须统一
-        curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
-        curr_json_data = self.json_data.load(curr_json_file)
-        re_curr_infos = self.json_data.parse_json(curr_json_data)
-        meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
+            gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
+            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(
+                cam_infos=cameras)
 
-        gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
-        intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(
-            cam_infos=cameras)
-
-        input_dict['gt_names'] = gt_names
-        input_dict['gt_boxes'] = gt_boxes
+            input_dict['gt_names'] = gt_names
+            input_dict['gt_boxes'] = gt_boxes
 
 
-        # === 前一帧
-        if self.have_prev_label:
-            prev_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{prev_time_stamp}.json'
-            prev_json_data = self.json_data.load(prev_json_file)
-            
-            try:
+            # === 前一帧
+            if self.have_prev_label:
+                prev_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{prev_time_stamp}.json'
                 prev_json_data = self.json_data.load(prev_json_file)
-            except:
-                print(f'error json file: {prev_json_file}')
                 
-            re_prev_infos  = self.json_data.parse_json(prev_json_data)  # 上一帧不需要真值(但模型输出的有(是连续的))
-            meta_info, cameras, bounding_boxes, special_labels = re_prev_infos
+                try:
+                    prev_json_data = self.json_data.load(prev_json_file)
+                except:
+                    print(f'error json file: {prev_json_file}')
+                    
+                re_prev_infos  = self.json_data.parse_json(prev_json_data)  # 上一帧不需要真值(但模型输出的有(是连续的))
+                meta_info, cameras, bounding_boxes, special_labels = re_prev_infos
 
-            gt_boxes_, gt_names_ = self.get_box(bounding_boxes=bounding_boxes)
-            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
-            _, _, _, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+                gt_boxes_, gt_names_ = self.get_box(bounding_boxes=bounding_boxes)
+                intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+                _, _, _, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
 
-            input_dict['gt_names_former'] = gt_names_
-            input_dict['gt_boxes_former'] = gt_boxes_
-        else:
-            input_dict['gt_names_former'] = gt_names
-            input_dict['gt_boxes_former'] = gt_boxes
-
-
-        # === 共同信息
-        input_dict['frame_id'] = info['time_stamp']
-
-        # if self.dataset_cfg.USE_CAMERA_YAML:
-        if True:
-            intrinsic = self.intrinsic
-            cam_dist = self.cam_dist
-            temp = np.stack([np.eye(4) for i in range(7)], axis=0)
-            temp[:, :3:, :3] = self.r_mat_np
-            temp[:, :3:, [3]] = self.t_vec_np
-            extrinsic = temp
-
-        input_dict['intrinsic'] = intrinsic  # np.stack([intrinsic, intrinsic])
-        input_dict['cam_dist'] = cam_dist  # np.stack([cam_dist, cam_dist])
-        input_dict['extrinsic'] = extrinsic  # np.stack([extrinsic, extrinsic])
-        input_dict['camera_names'] = self.image_view
-        input_dict['camera_sizes'] = camera_sizes
-
-        if self.image_dir == '/opt/airflow/process-prod-bucket/data_collect/./':
-            current_image_save_path = f'/opt/airflow/local_datasets/tmp_train/od/{sequence_name}/{curr_time_stamp}.npy'
-            previous_image_save_path = f'/opt/airflow/local_datasets/tmp_train/od/{sequence_name}/{prev_time_stamp}.npy'
-            if not os.path.exists(current_image_save_path) or not os.path.exists(previous_image_save_path):
-                os.makedirs(os.path.dirname(
-                    current_image_save_path), exist_ok=True)
-                current_images = np.zeros(
-                    (7, self.img_crop_size[0], self.img_crop_size[1], 3), dtype=np.uint8)
-                previous_images = np.zeros(
-                    (7, self.img_crop_size[0], self.img_crop_size[1], 3), dtype=np.uint8)
-                for view_idx, camera_view in enumerate(self.image_view):
-                    image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
-                    current_img = self.get_image(
-                        image_file, view_idx)  # cv2: BGR
-
-                    current_images[view_idx] = current_img
-
-                    if self.phase == const.PHASE_TRAINING:
-                        # current_img = aug_image(current_img)
-                        pass
-                    input_dict[f'images_input{view_idx}'] = current_img.astype(
-                        np.float32) / 255.0
-
-                    image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
-                    previous_img = self.get_image(image_file, view_idx)
-                    previous_images[view_idx] = previous_img
-                    if self.phase == const.PHASE_TRAINING:
-                        # previous_img = aug_image(previous_img)
-                        pass
-                    input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
-                        np.float32) / 255.0
-                if not os.path.exists(current_image_save_path):
-                    np.save(current_image_save_path, current_images)
-                if not os.path.exists(previous_image_save_path):
-                    np.save(previous_image_save_path, previous_images)
+                input_dict['gt_names_former'] = gt_names_
+                input_dict['gt_boxes_former'] = gt_boxes_
             else:
-                current_images = np.load(current_image_save_path)
-                previous_images = np.load(previous_image_save_path)
-                for view_idx, camera_view in enumerate(self.image_view):
-                    current_img = current_images[view_idx]
-                    previous_img = previous_images[view_idx]
-                    if self.training:
-                        # current_img = aug_image(current_img)
-                        # previous_img = aug_image(previous_img)
+                input_dict['gt_names_former'] = gt_names
+                input_dict['gt_boxes_former'] = gt_boxes
+
+
+            # === 共同信息
+            input_dict['frame_id'] = info['time_stamp']
+
+            # if self.dataset_cfg.USE_CAMERA_YAML:
+            if True:
+                intrinsic = self.intrinsic
+                cam_dist = self.cam_dist
+                temp = np.stack([np.eye(4) for i in range(7)], axis=0)
+                temp[:, :3:, :3] = self.r_mat_np
+                temp[:, :3:, [3]] = self.t_vec_np
+                extrinsic = temp
+
+            input_dict['intrinsic'] = intrinsic  # np.stack([intrinsic, intrinsic])
+            input_dict['cam_dist'] = cam_dist  # np.stack([cam_dist, cam_dist])
+            input_dict['extrinsic'] = extrinsic  # np.stack([extrinsic, extrinsic])
+            input_dict['camera_names'] = self.image_view
+            input_dict['camera_sizes'] = camera_sizes
+
+            if self.image_dir == '/opt/airflow/process-prod-bucket/data_collect/./':
+                current_image_save_path = f'/opt/airflow/local_datasets/tmp_train/od/{sequence_name}/{curr_time_stamp}.npy'
+                previous_image_save_path = f'/opt/airflow/local_datasets/tmp_train/od/{sequence_name}/{prev_time_stamp}.npy'
+                if not os.path.exists(current_image_save_path) or not os.path.exists(previous_image_save_path):
+                    os.makedirs(os.path.dirname(
+                        current_image_save_path), exist_ok=True)
+                    current_images = np.zeros(
+                        (7, self.img_crop_size[0], self.img_crop_size[1], 3), dtype=np.uint8)
+                    previous_images = np.zeros(
+                        (7, self.img_crop_size[0], self.img_crop_size[1], 3), dtype=np.uint8)
+                    for view_idx, camera_view in enumerate(self.image_view):
+                        image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                        current_img = self.get_image(
+                            image_file, view_idx)  # cv2: BGR
+
+                        current_images[view_idx] = current_img
+
+                        if self.phase == const.PHASE_TRAINING:
+                            # current_img = aug_image(current_img)
+                            pass
+                        input_dict[f'images_input{view_idx}'] = current_img.astype(
+                            np.float32) / 255.0
+
+                        image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
+                        previous_img = self.get_image(image_file, view_idx)
+                        previous_images[view_idx] = previous_img
+                        if self.phase == const.PHASE_TRAINING:
+                            # previous_img = aug_image(previous_img)
+                            pass
+                        input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
+                            np.float32) / 255.0
+                    if not os.path.exists(current_image_save_path):
+                        np.save(current_image_save_path, current_images)
+                    if not os.path.exists(previous_image_save_path):
+                        np.save(previous_image_save_path, previous_images)
+                else:
+                    current_images = np.load(current_image_save_path)
+                    previous_images = np.load(previous_image_save_path)
+                    for view_idx, camera_view in enumerate(self.image_view):
+                        current_img = current_images[view_idx]
+                        previous_img = previous_images[view_idx]
+                        if self.training:
+                            # current_img = aug_image(current_img)
+                            # previous_img = aug_image(previous_img)
+                            pass
+                        input_dict[f'images_input{view_idx}'] = current_img.astype(
+                            np.float32) / 255.0
+                        input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
+                            np.float32) / 255.0
+            else:
+                for i, cur_view in enumerate(self.image_view):
+                    image_file = f'{self.image_dir}/{sequence_name}/{cur_view}/{curr_time_stamp}.jpg'
+                    img = self.get_image(image_file, i)  # -> BGR
+
+                    if self.phase == const.PHASE_TRAINING:
+                        # img = aug_image(img)
                         pass
-                    input_dict[f'images_input{view_idx}'] = current_img.astype(
+                    input_dict[f'images_input{i}'] = img.astype(np.float32) / 255.0
+
+                    image_file = f'{self.image_dir}/{sequence_name}/{cur_view}/{prev_time_stamp}.jpg'
+                    img = self.get_image(image_file, i)
+                    if self.phase == const.PHASE_TRAINING:
+                        # img = aug_image(img)
+                        pass
+                    input_dict[f'images_input_former{i}'] = img.astype(
                         np.float32) / 255.0
-                    input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
-                        np.float32) / 255.0
-        else:
-            for i, cur_view in enumerate(self.image_view):
-                image_file = f'{self.image_dir}/{sequence_name}/{cur_view}/{curr_time_stamp}.jpg'
-                img = self.get_image(image_file, i)  # -> BGR
 
-                if self.phase == const.PHASE_TRAINING:
-                    # img = aug_image(img)
-                    pass
-                input_dict[f'images_input{i}'] = img.astype(np.float32) / 255.0
-
-                image_file = f'{self.image_dir}/{sequence_name}/{cur_view}/{prev_time_stamp}.jpg'
-                img = self.get_image(image_file, i)
-                if self.phase == const.PHASE_TRAINING:
-                    # img = aug_image(img)
-                    pass
-                input_dict[f'images_input_former{i}'] = img.astype(
-                    np.float32) / 255.0
-
-        data_dict = self.prepare_data(data_dict=input_dict)
+            data_dict = self.prepare_data(data_dict=input_dict)
 
 
-        data_dict_ret = {
-            "meta": {"frame_id": data_dict["frame_id"]}, 'image': {}, "label": {}, "calib": {}}
-        for i in range(len(data_dict["camera_names"])):
-            data_dict_ret['image'][data_dict["camera_names"]
-                                   [i]] = data_dict[f"images_input{i}"].transpose(2, 0, 1)
-            data_dict_ret['image'][data_dict["camera_names"]
-                                   [i]+"_pre"] = data_dict[f"images_input_former{i}"].transpose(2, 0, 1)
+            data_dict_ret = {
+                "meta": {"frame_id": data_dict["frame_id"]}, 'image': {}, "label": {}, "calib": {}}
+            for i in range(len(data_dict["camera_names"])):
+                data_dict_ret['image'][data_dict["camera_names"]
+                                    [i]] = data_dict[f"images_input{i}"].transpose(2, 0, 1)
+                data_dict_ret['image'][data_dict["camera_names"]
+                                    [i]+"_pre"] = data_dict[f"images_input_former{i}"].transpose(2, 0, 1)
 
-        for key in data_dict:
-            if "gt_curr_" in key:
-                data_dict_ret["label"][key] = data_dict[key]
-            if "gt_prev_" in key:
-                data_dict_ret["label"][key] = data_dict[key]
-        data_dict_ret["label"]["gt_boxes"] = data_dict["gt_boxes"]
+            for key in data_dict:
+                if "gt_curr_" in key:
+                    data_dict_ret["label"][key] = data_dict[key]
+                if "gt_prev_" in key:
+                    data_dict_ret["label"][key] = data_dict[key]
+            data_dict_ret["label"]["gt_boxes"] = data_dict["gt_boxes"]
 
-        for key in ["intrinsic", "cam_dist", "extrinsic"]:
-            data_dict_ret["calib"][key] = data_dict[key]
+            for key in ["intrinsic", "cam_dist", "extrinsic"]:
+                data_dict_ret["calib"][key] = data_dict[key]
 
-        data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
+            data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
 
-        data_dict_ret['meta']['camera_name'] = self.camera_names
-        data_dict_ret['meta']['task_name'] = self.task
-        frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
-        data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
-        data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
+            data_dict_ret['meta']['camera_name'] = self.camera_names
+            data_dict_ret['meta']['task_name'] = self.task
+            frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
+            data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
+            data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
+        except:
+
+            if self.phase == const.PHASE_TRAINING:
+                new_index = np.random.randint(self.__len__())
+                print(f"PHASE_TRAINING {idx} load faild, resample trig {new_index}")
+                return self.__getitem__(new_index)
+            else:
+                print(f"PHASE_TRAINING {idx} load faild, faild exit(1)")
+                exit(1)
+
 
         return data_dict_ret
 
