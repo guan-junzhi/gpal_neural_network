@@ -141,7 +141,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.image_view = camera_name
 
         # self.fusion_infos = []
-        self.data_list = data_list
+        self.data_list = [os.path.join(WORKDIRS_ROOT, ele)
+                          for ele in data_list]
 
         super().__init__(global_config=global_config,
                          task_config=task_config,
