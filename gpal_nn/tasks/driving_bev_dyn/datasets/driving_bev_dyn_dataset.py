@@ -258,6 +258,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         # self.logger = logger
 
         # if self.dataset_cfg.USE_CAMERA_YAML:
+
+        cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
         if True:
             intrinsic = []
             distort_coeff = []
@@ -265,7 +267,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             t_vec = []
             # breakpoint()
             for curr_view in self.image_view:
-                curr_view_yaml_file = f"{WORKDIRS_ROOT}/gpal_neural_network_group/sikong/temp_dir_for_od/camera/{curr_view.replace('img_', '')}.yaml"
+                curr_view_yaml_file = f"{WORKDIRS_ROOT}/gpal_neural_network_group/sikong/temp_dir_for_od/{cam_calib_dir}/{curr_view.replace('img_', '')}.yaml"
                 yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
                 intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
                 distort_coeff.append(
@@ -367,7 +369,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             fusion_infos = fusion_infos_new
             self.fusion_infos = []
-
+        # fusion_infos = [fusion_infos[100]] * 16
         print('Total samples for HeSai dataset: %d' %
               (len(fusion_infos)))
         return fusion_infos
@@ -612,9 +614,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         else:
             input_dict['gt_names_former'] = gt_names
             input_dict['gt_boxes_former'] = gt_boxes
-
-        input_dict['gt_names_former'] = gt_names
-        input_dict['gt_boxes_former'] = gt_boxes
 
 
         # === 共同信息
