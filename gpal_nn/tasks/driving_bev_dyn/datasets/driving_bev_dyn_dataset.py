@@ -546,9 +546,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict=data_dict
         )
 
-        if (self.phase == const.PHASE_TRAINING) and (len(data_dict['gt_boxes']) == 0):
-            new_index = np.random.randint(self.__len__())
-            return self.__getitem__(new_index)
+        # if (self.phase == const.PHASE_TRAINING) and (len(data_dict['gt_boxes']) == 0):
+        #     new_index = np.random.randint(self.__len__())
+        #     print(f"resample trig {new_index}")
+        #     return self.__getitem__(new_index)
 
         data_dict.pop('gt_names', None)
         if data_dict.get('gt_names_former', None) is not None:
@@ -569,11 +570,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         # print(f"__getitem__ {idx}")
         # print(info)
-        # exit(1)
-        # print(self.image_dir)
-        # print(self.json_dir)
-        # print(self.middle_json_str)
-
         input_dict = {}
 
         # 总起
@@ -586,11 +582,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         re_curr_infos = self.json_data.parse_json(curr_json_data)
         meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
 
-        # print(ShowDataStruct("meta_info", meta_info))
-        # print(ShowDataStruct("cameras", cameras))
-        # print(ShowDataStruct("bounding_boxes", bounding_boxes))
-        # print(ShowDataStruct("special_labels", special_labels))
-
         gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
         intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(
             cam_infos=cameras)
@@ -598,12 +589,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         input_dict['gt_names'] = gt_names
         input_dict['gt_boxes'] = gt_boxes
 
-        # print(f"gt_boxes = {gt_boxes[0]}")
-        # print(f"input_dict['gt_boxes'] = {input_dict['gt_boxes'][0]}")
 
         # === 前一帧
         if self.have_prev_label:
-            prev_json_file = f'{json_dir}/{sequence_name}/{middle_json_str}/{prev_time_stamp}.json'
+            prev_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{prev_time_stamp}.json'
             prev_json_data = self.json_data.load(prev_json_file)
             
             try:
@@ -627,10 +616,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         input_dict['gt_names_former'] = gt_names
         input_dict['gt_boxes_former'] = gt_boxes
 
-        # print(f"gt_boxes = {gt_boxes[0]}")
-        # print(f"input_dict['gt_boxes'] = {input_dict['gt_boxes'][0]}")
-        # print(
-        #     f"input_dict['gt_boxes_former'] = {input_dict['gt_boxes_former'][0]}")
 
         # === 共同信息
         input_dict['frame_id'] = info['time_stamp']
@@ -717,21 +702,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 input_dict[f'images_input_former{i}'] = img.astype(
                     np.float32) / 255.0
 
-        # 训练策略
-        # if self.mode == "train":
-        #     num_views = len(self.image_view)
-        #     mask = np.ones(num_views, dtype=np.float32)  # 初始全1
-        #     mask_nums = np.random.randint(0, num_views+1)  # 几个视角丢失？
-        #     discard_indices = np.random.choice(num_views, size=mask_nums, replace=False)  # 无重复采样
-        #     mask[discard_indices] = 0  # 对应位置置0
-        #     for i in range(num_views):
-        #         input_dict[f'images_input_{i}'] *= mask[i]
         data_dict = self.prepare_data(data_dict=input_dict)
 
-        # print(data_dict["gt_curr_indices_center"])
-        # exit(1)
-        # print(ShowDataStruct("data_dict", data_dict))
-        # exit(1)
 
         data_dict_ret = {
             "meta": {"frame_id": data_dict["frame_id"]}, 'image': {}, "label": {}, "calib": {}}

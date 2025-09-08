@@ -105,11 +105,11 @@ Tasks:
           is_manual_label: false,
           have_prev_label: true,
           image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
-          json_dir: "od_occ_group/qiyingli/SaveModelResult/samples", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
-          middle_json_str: "3d_detection_json_post",
+          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_no_post", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
+          middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLine_train/",
-          data_list: ["/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/train_frame_pairs_182658.pkl"],
+          data_list: ["/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20250904-144419/20250904-144419_train_frame_pairs_sampled_107231.pkl"],
           camera_name: ['img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30'],
           shuffle: False,
           # fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
