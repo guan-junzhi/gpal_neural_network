@@ -9,6 +9,7 @@ pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install pandas
 pip install terminaltables
 pip install similaritymeasures
+pip install matplotlib
 
 echo "[READ GLOBAL ENV VAR]:"
 airflow_key="gpal_neural_network_one_node_traning_job_on_airflow"
