@@ -1,4 +1,4 @@
-image_per_gpu: 3
+image_per_gpu: 6
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 60000
@@ -8,7 +8,7 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  log_every: 1
+  log_every: 10
   visualize_every: 200
   max_visu_img_num: 10
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
@@ -112,8 +112,8 @@ Tasks:
           data_list: ["/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20250904-144419/20250904-144419_train_frame_pairs_sampled_107231.pkl"],
           camera_name: ['img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30'],
           shuffle: False,
-          # fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
-          fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
       validation:
       - { dataset_name: 'xxx', 

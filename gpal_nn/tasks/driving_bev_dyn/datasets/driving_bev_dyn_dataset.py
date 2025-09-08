@@ -285,6 +285,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             self.r_mat_np = r_mat_np
             self.t_vec_np = t_vec_np
 
+        self.ClearFastBufCnt()
+
     def include_fusion_data(self, phase):
 
         print('Loading HeSai dataset ...')
@@ -472,9 +474,18 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
     def get_image(self, filepath, view_idx):
         """统一处理不同视角的图像"""
         img_file = filepath
-        image = read_img(str(img_file), self.image_resize + [3])
-        image = cv2.resize(image, self.image_resize[::-1])
-        image = image[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+        self.fast_buf_try_cnt += 1
+        database_key = "_".join(img_file.split('/')[-4:])
+        image, hw_origin = self._image_buffer_access(database_key)
+        if image is None:
+            image = read_img(str(img_file), self.image_resize + [3])
+            image = cv2.resize(image, self.image_resize[::-1])
+            image = image[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+            self._image_cache(
+                database_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
+        else:
+            self.fast_buf_sec_cnt += 1
+
         return image
 
     def prepare_data(self, data_dict):
@@ -558,6 +569,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict.pop('gt_names_former', None)
         return data_dict
 
+    def ClearFastBufCnt(self):
+        self.fast_buf_try_cnt = 0
+        self.fast_buf_sec_cnt = 0
+
     @TimeProf
     def __getitem__(self, idx):
         """
@@ -567,6 +582,12 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         Returns:
             tuple: (image, target) where target is the image segmentation.
         """
+
+        self.ClearFastBufCnt()
+
+        time_dp = DetailProf()
+        time_dp.Tic("begin")
+
         try:
             info = copy.deepcopy(self.dataset[idx])
 
@@ -591,6 +612,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['gt_names'] = gt_names
             input_dict['gt_boxes'] = gt_boxes
 
+            time_dp.Duration("cur_json", "begin")
 
             # === 前一帧
             if self.have_prev_label:
@@ -615,6 +637,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 input_dict['gt_names_former'] = gt_names
                 input_dict['gt_boxes_former'] = gt_boxes
 
+
+            time_dp.Duration("prev_json", "cur_json")
 
             # === 共同信息
             input_dict['frame_id'] = info['time_stamp']
@@ -700,9 +724,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                         pass
                     input_dict[f'images_input_former{i}'] = img.astype(
                         np.float32) / 255.0
+            time_dp.Duration("image", "prev_json")
 
             data_dict = self.prepare_data(data_dict=input_dict)
-
+            time_dp.Duration("prepare_data", "image")
 
             data_dict_ret = {
                 "meta": {"frame_id": data_dict["frame_id"]}, 'image': {}, "label": {}, "calib": {}}
@@ -729,6 +754,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
             data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
             data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
+            data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
+            data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
+            
         except:
 
             if self.phase == const.PHASE_TRAINING:
@@ -739,7 +767,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 print(f"PHASE_TRAINING {idx} load faild, faild exit(1)")
                 exit(1)
 
+        time_dp.Duration("move_data", "prepare_data")
 
+        time_dp.Duration("dataset.getitem", "begin")
+        # time_dp.Print()
         return data_dict_ret
 
 
@@ -757,6 +788,13 @@ if __name__ == "__main__":
     os.environ['MASTER_PORT'] = '29501'
     os.environ['RANK'] = '0'
     os.environ['WORLD_SIZE'] = '1'
+
+    os.environ["ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT"] = '/data/ai_group/datasets/'
+    os.environ["ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT"] ='/data1/'
+    os.environ["ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT"] = '/data/ai_group/workdirs/'
+    os.environ["ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT"] = '/data/dp_group/process-prod-bucket/data_collect/'
+
+
     distributed.init_process_group(backend='nccl')
     print(1, len(inputs))
     train_dataset = DRIVING_BEV_DYNDataset(*inputs)
@@ -764,12 +802,12 @@ if __name__ == "__main__":
     print(len(train_dataset))
 
     d = train_dataset[0]
-    print(d.keys())
-    print(d["label"]["gt_boxes"])
-    exit(1)
+    
+    # exit(1)
 
     for d in train_dataset:
         # print(d["frame_id"])
+        print(d["meta"]["fast_try_sum"], d["meta"]["fast_sec_sum"])
         pass
 
     exit(1)
