@@ -372,7 +372,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             fusion_infos = fusion_infos_new
             self.fusion_infos = []
-        # fusion_infos = [fusion_infos[100]] * 16
+        # fusion_infos = [fusion_infos[100]] * 6
         print('Total samples for HeSai dataset: %d' %
               (len(fusion_infos)))
         return fusion_infos
@@ -583,7 +583,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         Returns:
             tuple: (image, target) where target is the image segmentation.
         """
-
         self.ClearFastBufCnt()
 
         time_dp = DetailProf()
@@ -660,54 +659,22 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['camera_sizes'] = camera_sizes
 
             if self.image_dir == '/opt/airflow/process-prod-bucket/data_collect/./':
-                current_image_save_path = f'/opt/airflow/local_datasets/tmp_train/od/{sequence_name}/{curr_time_stamp}.npy'
-                previous_image_save_path = f'/opt/airflow/local_datasets/tmp_train/od/{sequence_name}/{prev_time_stamp}.npy'
-                if not os.path.exists(current_image_save_path) or not os.path.exists(previous_image_save_path):
-                    os.makedirs(os.path.dirname(
-                        current_image_save_path), exist_ok=True)
-                    current_images = np.zeros(
-                        (7, self.img_crop_size[0], self.img_crop_size[1], 3), dtype=np.uint8)
-                    previous_images = np.zeros(
-                        (7, self.img_crop_size[0], self.img_crop_size[1], 3), dtype=np.uint8)
-                    for view_idx, camera_view in enumerate(self.image_view):
-                        image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
-                        current_img = self.get_image(
-                            image_file, view_idx)  # cv2: BGR
-
-                        current_images[view_idx] = current_img
-
-                        if self.phase == const.PHASE_TRAINING:
-                            # current_img = aug_image(current_img)
-                            pass
-                        input_dict[f'images_input{view_idx}'] = current_img.astype(
-                            np.float32) / 255.0
-
-                        image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
-                        previous_img = self.get_image(image_file, view_idx)
-                        previous_images[view_idx] = previous_img
-                        if self.phase == const.PHASE_TRAINING:
-                            # previous_img = aug_image(previous_img)
-                            pass
-                        input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
-                            np.float32) / 255.0
-                    if not os.path.exists(current_image_save_path):
-                        np.save(current_image_save_path, current_images)
-                    if not os.path.exists(previous_image_save_path):
-                        np.save(previous_image_save_path, previous_images)
-                else:
-                    current_images = np.load(current_image_save_path)
-                    previous_images = np.load(previous_image_save_path)
-                    for view_idx, camera_view in enumerate(self.image_view):
-                        current_img = current_images[view_idx]
-                        previous_img = previous_images[view_idx]
-                        if self.training:
-                            # current_img = aug_image(current_img)
-                            # previous_img = aug_image(previous_img)
-                            pass
-                        input_dict[f'images_input{view_idx}'] = current_img.astype(
-                            np.float32) / 255.0
-                        input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
-                            np.float32) / 255.0
+                for view_idx, camera_view in enumerate(self.image_view):
+                    image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                    current_img = self.get_image(
+                        image_file, view_idx)  # cv2: BGR
+                    if self.phase == const.PHASE_TRAINING:
+                        # current_img = aug_image(current_img)
+                        pass
+                    input_dict[f'images_input{view_idx}'] = current_img.astype(
+                        np.float32) / 255.0
+                    image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
+                    previous_img = self.get_image(image_file, view_idx)
+                    if self.phase == const.PHASE_TRAINING:
+                        # previous_img = aug_image(previous_img)
+                        pass
+                    input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
+                        np.float32) / 255.0
             else:
                 for i, cur_view in enumerate(self.image_view):
                     image_file = f'{self.image_dir}/{sequence_name}/{cur_view}/{curr_time_stamp}.jpg'
