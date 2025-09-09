@@ -10,10 +10,6 @@ import time
 from tools_scripts.data_format_cvt import ShowDataStruct
 
 
-def _sigmoid(x):
-    return torch.clamp(x.sigmoid_(), min=1e-4, max=1 - 1e-4)
-
-
 class PositionEmbeddingLearned(nn.Module):
     """ 
     Absolute pos embedding, learned.
@@ -185,50 +181,21 @@ class PointnetTransformerSiamese(nn.Module):
         estimation_z = self.FC_proposal_z(
             fusion_xyz_offset_featured).squeeze(-1)
 
-        if self.training:
-            batch_dict['Points_Loss'] = {
-                'estimation_cen': estimation_cen,
-                'estimation_z': estimation_z,
-                'estimation_dim': estimation_dim,
-                'estimation_dir': estimation_dir,
-                'estimation_vel': estimation_vel,
-                'estimation_score': estimation_score,
-            }
+        
+        _, label = batch_dict['score'].max(dim=1)  # 原始的score含通道
+        batch_dict['batch_pred_labels'] = label.view(
+            batch_dict['score'].shape[0], -1) + 1
 
-            # 热力图原始得分(含通道) 训练和测试会切换
-            # self.forward_ret_dict['score'] = batch_dict['score']
-            # self.forward_ret_dict['track_cen_offset'] = batch_dict['gt_curr_cen_offset']
-            # self.forward_ret_dict['track_dim'] = batch_dict['gt_curr_dim']
-            # self.forward_ret_dict['track_direction'] = batch_dict['gt_curr_direction']
-            # self.forward_ret_dict['track_z_coor'] = batch_dict['gt_curr_z_coor']
-            # self.forward_ret_dict['track_vel'] = batch_dict['gt_curr_vel']
-            # self.forward_ret_dict['track_obj_mask'] = batch_dict['gt_curr_obj_mask']
-            # self.forward_ret_dict['track_indices_center'] = batch_dict['gt_curr_indices_center']
+        batch_dict['Points_Loss'] = {
+            'estimation_cen': estimation_cen,
+            'estimation_z': estimation_z,
+            'estimation_dim': estimation_dim,
+            'estimation_dir': estimation_dir,
+            'estimation_vel': estimation_vel,
+            'estimation_score': estimation_score,
+            'template_xyz': template_xyz,  # xy实际位置和上一帧得分
+        }
 
-            # self.forward_ret_dict['batch_size'] = batch_dict['batch_size']
-
-        else:
-            _, label = batch_dict['score'].max(dim=1)  # 原始的score含通道
-            batch_dict['batch_pred_labels'] = label.view(
-                batch_dict['score'].shape[0], -1) + 1
-
-            batch_dict['Points_Loss'] = {
-                'estimation_cen': estimation_cen,
-                'estimation_z': estimation_z,
-                'estimation_dim': estimation_dim,
-                'estimation_dir': estimation_dir,
-                'estimation_vel': estimation_vel,
-                'estimation_score': estimation_score,
-                'template_xyz': template_xyz,  # xy实际位置和上一帧得分
-            }
-
-        if not self.training or self.predict_boxes_when_training:
-            batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(batch_dict['Points_Loss'], 
-                batch_size=batch_dict['score'].shape[0])
-            batch_dict['batch_cls_preds'] = batch_cls_preds
-            batch_dict['batch_box_preds'] = batch_box_preds
-            batch_dict['cls_preds_normalized'] = True
-            batch_dict['has_class_labels'] = True
 
         return batch_dict
 
@@ -237,29 +204,3 @@ class PointnetTransformerSiamese(nn.Module):
         tb_dict['track_loss_rpn(tot)'] = rpn_loss
         return rpn_loss, tb_dict
 
-    @torch.no_grad()
-    def generate_predicted_boxes(self, outputs, batch_size, **kwargs):
-        template_xyz = outputs['template_xyz'][:, :,
-                                               :2].view(-1, 2)  # 前一帧的xy实际位置(从keypts获得)和得分
-        pred_cen = outputs['estimation_cen'].permute(0, 2, 1)
-        pred_z = outputs['estimation_z'].permute(0, 2, 1)
-        pred_dim = outputs['estimation_dim'].permute(0, 2, 1)
-        pred_dir = outputs['estimation_dir'].permute(0, 2, 1)
-        pred_yaw = torch.atan2(pred_dir[:, :, :1], pred_dir[:, :, 1:])  # y/x
-        pred_vel = outputs['estimation_vel'].sigmoid().permute(0, 2, 1)
-        pred_score = outputs['estimation_score'].sigmoid().permute(
-            0, 2, 1)  # 得分，时序特征融合后的得分
-
-        indicee = torch.arange(0, 256).to(pred_vel).float().view(-1, 256, 1)
-
-        track_boxes = torch.cat([pred_cen,
-                                 pred_z,
-                                 pred_dim,
-                                 pred_yaw,
-                                 pred_vel*40,
-                                 #   template_xyz.view(-1, 256, 2),
-                                 #   indicee
-                                 ], dim=-1
-                                )
-
-        return pred_score, track_boxes

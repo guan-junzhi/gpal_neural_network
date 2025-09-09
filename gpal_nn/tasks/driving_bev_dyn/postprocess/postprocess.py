@@ -239,12 +239,48 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
         return pred_dicts, recall_dict
 
 
+    @torch.no_grad()
+    def generate_predicted_boxes(self, outputs, batch_size, **kwargs):
+        template_xyz = outputs['template_xyz'][:, :,
+                                            :2].view(-1, 2)  # 前一帧的xy实际位置(从keypts获得)和得分
+        pred_cen = outputs['estimation_cen'].permute(0, 2, 1)
+        pred_z = outputs['estimation_z'].permute(0, 2, 1)
+        pred_dim = outputs['estimation_dim'].permute(0, 2, 1)
+        pred_dir = outputs['estimation_dir'].permute(0, 2, 1)
+        pred_yaw = torch.atan2(pred_dir[:, :, :1], pred_dir[:, :, 1:])  # y/x
+        pred_vel = outputs['estimation_vel'].sigmoid().permute(0, 2, 1)
+        pred_score = outputs['estimation_score'].sigmoid().permute(
+            0, 2, 1)  # 得分，时序特征融合后的得分
+
+        indicee = torch.arange(0, 256).to(pred_vel).float().view(-1, 256, 1)
+
+        track_boxes = torch.cat([pred_cen,
+                                pred_z,
+                                pred_dim,
+                                pred_yaw,
+                                pred_vel*40,
+                                #   template_xyz.view(-1, 256, 2),
+                                #   indicee
+                                ], dim=-1
+                                )
+
+        return pred_score, track_boxes
+
     def process(self, vectors, metadata: dict, is_gt: bool = False) -> dict:
         # print(ShowDataStruct(f"vectors gt = {is_gt}", vectors))
         if is_gt:
             gt_list = [{"gt_boxes": ele["gt_boxes"]} for ele in vectors]
             return gt_list
         else:
+            #   if not self.training or self.predict_boxes_when_training:
+            batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(vectors[0]['Points_Loss'],
+                                                                             batch_size=vectors[0]['score'].shape[0])
+            vectors[0]['batch_cls_preds'] = batch_cls_preds
+            vectors[0]['batch_box_preds'] = batch_box_preds
+            vectors[0]['cls_preds_normalized'] = True
+            vectors[0]['has_class_labels'] = True
+
+
             pred_dicts, recall_dict = self.post_processing(vectors[0])
             pred_dicts = self.generate_prediction_dicts(pred_dicts, self.class_name)
             return pred_dicts

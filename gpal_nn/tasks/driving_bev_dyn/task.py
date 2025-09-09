@@ -11,6 +11,14 @@ from gpal_lightning.neural_network.tasks.builder import TASKS
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_lightning.utils.json_helpers.dict_to_json import dict_to_json
 
+def GetBoxTf(x,y,yaw):
+    tf = np.array([[np.cos(yaw), -np.sin(yaw), 0, x],
+                   [np.sin(yaw), np.cos(yaw), 0, y],
+                   [0, 0, 1, 0],
+                   [0, 0, 0, 1]])
+    return tf
+
+
 
 @TASKS.register_module()
 class DRIVING_BEV_DYNTask(BaseTask):
@@ -18,8 +26,32 @@ class DRIVING_BEV_DYNTask(BaseTask):
         super().__init__(global_config, task_config, name, None)
         pass
 
+    def GetVis(self, preds, gts, metadata, idx):
+        from tools_scripts.vis_2d import Vis2D
+        vis1 = Vis2D([-30, 100], [-30, 30], 0.1)
+        try:
+            pred_objs = self.vector_to_json(preds, metadata, False)
+            for box in gts[idx]['gt_boxes']:
+                #  [x, y, z, dx, dy, dz, heading]
+                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[6]), [box[3], box[4]], None, [0, 255, 0],
+                            [255, 255, 255], line_width=1)
+            for box, score in zip(pred_objs[idx]['boxes_lidar'], pred_objs[idx]['score']):
+                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[6]), [box[3], box[4]], None, [0, 0, 255],
+                            [255, 255, 255], line_width=1)
+        except:
+            print("DRIVING_BEV_DYNTask GetVis faild")
+            pass
+        vis_draw1 = vis1.Draw()
+        return vis_draw1
+
     def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, loss_info=None):
-        pass
+        imgs = []
+        for idx in range(4):
+            vis = self.GetVis(preds, trues, metadata, idx)
+            imgs.append(vis)
+        imgs = np.concatenate(imgs, axis=1)
+        self.logger.image_log(iteration, phase, log_writer,
+                              0, torch.from_numpy(imgs).permute(2, 0, 1).flip(0))
 
     def vectors_to_json(self, metadata, data, dataloader_idx, vectors, is_gt):
         trues_or_preds = const.TRUES if is_gt else const.PREDS
