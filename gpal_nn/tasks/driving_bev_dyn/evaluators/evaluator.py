@@ -8,7 +8,8 @@ from gpal_lightning.neural_network.tasks.builder import EVALUATORS
 # from gpal_nn.tasks.driving_bev_dyn.datasets.txtlabel_instance_p3 import TXTLabelLoader
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.evaluators.evaluation_node import ObjectDetectionEvaluator
-
+from tqdm import tqdm
+import json
 
 def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08_44_34/od_eval_result"):
     # if 'annos' not in self.infos[0].keys():
@@ -127,8 +128,8 @@ class DRIVING_BEV_DYNEvaluator(BaseEvaluator):
         self.meta_all += metadata
 
     def process(self, pred: dict, true: dict, metadata: dict) -> None:
-        print(ShowDataStruct("pred", pred, 2, 2))
-        print(ShowDataStruct("true", true, 2, 2))
+        # print(ShowDataStruct("pred", pred, 2, 2))
+        # print(ShowDataStruct("true", true, 2, 2))
         self.compute_metrics(pred, true, metadata)
         
 
@@ -138,8 +139,31 @@ if __name__ == "__main__":
 
     print(ShowDataStruct("inputs", inputs, 2, 4))
 
-    print(len(inputs))
-    print(inputs[-1])
-    evaluation(*inputs)
+    root_dir = "workspace/20250908_11_58_09_eval_save/20250908115829/DRIVING_BEV_DYN/0"
+    meta_file_list = [os.path.join(root_dir, "metadata", ele) for ele in os.listdir(os.path.join(root_dir, "metadata"))]
+    gt_file_list = [os.path.join(root_dir, "trues", ele)
+                    for ele in os.listdir(os.path.join(root_dir, "trues"))]
+    pred_file_list = [os.path.join(root_dir, "preds", ele) for ele in os.listdir(os.path.join(root_dir, "preds"))]
+
+    print(len(meta_file_list), len(gt_file_list), len(pred_file_list))
+    # exit(1)
+
+    
+    metas = []
+    gts = []
+    preds = []
+
+    for p, g, m in tqdm(zip(pred_file_list, gt_file_list, meta_file_list)):
+        metas += json.load(open(m, 'r'))
+        gts += json.load(open(g, 'r'))
+        preds += json.load(open(p, 'r'))
+
+
+    print(ShowDataStruct("gts", gts, 2, 4))
+
+    # print(len(inputs))
+    # print(inputs[-1])
+    # evaluation(*inputs)
+    evaluation(preds, gts, metas, inputs[3])
 
     

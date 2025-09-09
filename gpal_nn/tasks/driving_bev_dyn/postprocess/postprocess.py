@@ -98,7 +98,10 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
         """
         def get_template_prediction(num_samples):
             ret_dict = {
-                'name': np.zeros(num_samples) , 'score': np.zeros(num_samples), 'boxes_lidar': np.zeros([num_samples, 7])
+                'name': np.zeros([num_samples, 1]) , 
+                'score': np.zeros(num_samples), 
+                'boxes_lidar': np.zeros([num_samples, 9]), 
+                'pred_labels': np.zeros([num_samples]),
             }
             return ret_dict
 
