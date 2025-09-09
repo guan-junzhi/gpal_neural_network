@@ -5,7 +5,7 @@ import torch.nn as nn
 
 
 def _sigmoid(x):
-    return torch.clamp(x.sigmoid_(), min=1e-4, max=1 - 1e-4)
+    return torch.clamp(x.sigmoid(), min=1e-4, max=1 - 1e-4)
 
 
 def _neg_loss(pred, gt, track, alpha=2, beta=4):
@@ -278,9 +278,9 @@ class Compute_Loss(nn.Module):
         is_track_task = True
         outputs = preds  # batch_dict['target']
 
-        outputs['hm_cen'] = _sigmoid(outputs['hm_cen'])  # 固定的字段, 来自于yaml
+        hm_cen_sigmoid = _sigmoid(outputs['hm_cen'])  # 固定的字段, 来自于yaml
         l_hm_cen = self.focal_loss(
-            outputs['hm_cen'], trues['gt_curr_hm_cen'], False)
+            hm_cen_sigmoid, trues['gt_curr_hm_cen'], False)
         total_loss = l_hm_cen * self.weight_hm_cen
         # tb_dict['track_loss_heatmap'] = l_hm_cen.item()
         tb_dict['track_loss_hm'] = l_hm_cen  # with gradient
@@ -288,17 +288,17 @@ class Compute_Loss(nn.Module):
         # det, not track, drop
         if not is_track_task:
             raise NotImplementedError
-            outputs['cen_offset'] = _sigmoid(outputs['cen_offset'])
-            outputs['vel'] = _sigmoid(outputs['vel'])
-            outputs['z_coor'] = outputs['z_coor']
+            cen_offset_sigmoid = _sigmoid(outputs['cen_offset'])
+            vel_sigmoid = _sigmoid(outputs['vel'])
+            z_coor_sigmoid = outputs['z_coor']
             l_z_coor = self.l1_loss(
-                outputs['z_coor'], batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['z_coor'])
+                z_coor_sigmoid, batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['z_coor'])
             l_dim = self.l1_loss_balanced(
                 outputs['dim'], batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['dim'])
             l_vel = self.l1_loss(
-                outputs['vel'], batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['vel'])
+                vel_sigmoid, batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['vel'])
             l_cen_offset = self.l1_loss(
-                outputs['cen_offset'], batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['cen_offset'])
+                cen_offset_sigmoid, batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['cen_offset'])
             l_direction = self.l1_loss(
                 outputs['direction'], batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['direction'])
             box_loss = l_cen_offset * self.weight_cenoff + \
