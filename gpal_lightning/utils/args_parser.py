@@ -49,6 +49,8 @@ class ArgumentParserHelper:
             "--tasks", type=str, nargs="+", help="only train/evalute/inference these tasks.")
         cls._model_parser.add_argument(
             "--seed", type=int, help="fix the random seed of the job.")
+        cls._model_parser.add_argument(
+            "--vis", type=bool, default=False)
 
     @staticmethod
     def _argument_check(args):

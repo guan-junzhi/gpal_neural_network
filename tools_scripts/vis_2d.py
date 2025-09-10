@@ -50,18 +50,94 @@ class Vis2D():
         cv2.line(map, self.XyToUv(xy1[0], xy1[1]), self.XyToUv(
             xy2[0], xy2[1]), color, line_width)
 
-    def DrawLine(self, xy1, xy2, color, line_width=1):
-        # print(xy1[0], xy1[1], self.XyToUv(xy1[0], xy1[1]))
-        cv2.line(self.map, self.XyToUv(xy1[0], xy1[1]), self.XyToUv(
-            xy2[0], xy2[1]), color, line_width)
+    # def DrawLine(self, xy1, xy2, color, line_width=1):
+    #     # print(xy1[0], xy1[1], self.XyToUv(xy1[0], xy1[1]))
+    #     cv2.line(self.map, self.XyToUv(xy1[0], xy1[1]), self.XyToUv(
+    #         xy2[0], xy2[1]), color, line_width)
 
-    def DrawPolyline(self, pts, color, line_width=1):
-        # pts N*2
-        if (len(pts.shape) != 2) or (pts.shape[0] < 2) or (pts.shape[0] < 2):
+    # def DrawPolyline(self, pts, color, line_width=1):
+    #     # pts N*2
+    #     if (len(pts.shape) != 2) or (pts.shape[0] < 2) or (pts.shape[0] < 2):
+    #         return
+    #     for p, q in zip(pts[:-1], pts[1:]):
+    #         self.DrawLine([p[0], p[1]], [q[0], q[1]],
+    #                       color, line_width=line_width)
+
+    def DrawLine(self, xy1, xy2, color, line_width=1, line_type='solid', dash_length=10):
+        """
+        绘制直线，可以是实线或虚线
+        
+        参数:
+            xy1: 起点坐标 (x, y)
+            xy2: 终点坐标 (x, y)
+            color: 线条颜色
+            line_width: 线条宽度
+            line_type: 线条类型，'solid' 为实线，'dashed' 为虚线
+            dash_length: 虚线中每段实线的长度，仅在line_type为'dashed'时有效
+        """
+        # 转换坐标
+        uv1 = self.XyToUv(xy1[0], xy1[1])
+        uv2 = self.XyToUv(xy2[0], xy2[1])
+        
+        if line_type == 'solid':
+            # 绘制实线
+            cv2.line(self.map, uv1, uv2, color, line_width, cv2.LINE_AA)
+        elif line_type == 'dashed':
+            # 绘制虚线
+            # 计算线段总长度
+            dx = uv2[0] - uv1[0]
+            dy = uv2[1] - uv1[1]
+            distance = (dx**2 + dy**2)**0.5
+            
+            # 计算单位向量
+            if distance > 0:
+                unit_dx = dx / distance
+                unit_dy = dy / distance
+                
+                # 绘制虚线分段
+                current = 0
+                while current < distance:
+                    # 计算当前段的终点
+                    end = min(current + dash_length, distance)
+                    x1 = int(uv1[0] + unit_dx * current)
+                    y1 = int(uv1[1] + unit_dy * current)
+                    x2 = int(uv1[0] + unit_dx * end)
+                    y2 = int(uv1[1] + unit_dy * end)
+                    
+                    # 绘制当前段（实线部分）
+                    cv2.line(self.map, (x1, y1), (x2, y2), color, line_width, cv2.LINE_8)
+                    
+                    # 跳过空白部分（长度等于实线部分）
+                    current += 2 * dash_length
+
+    def DrawPolyline(self, pts, color, line_width=1, line_type='solid', dash_length=10):
+        """
+        绘制多边形线条，可以是实线或虚线
+        
+        参数:
+            pts: 点集，形状为N*2
+            color: 线条颜色
+            line_width: 线条宽度
+            line_type: 线条类型，'solid' 为实线，'dashed' 为虚线
+            dash_length: 虚线中每段实线的长度，仅在line_type为'dashed'时有效
+        """
+        # 检查输入点集的有效性
+        if len(pts.shape) != 2 or pts.shape[0] < 2 or pts.shape[1] < 2:
             return
+        
+        # 依次绘制每一段线
         for p, q in zip(pts[:-1], pts[1:]):
-            self.DrawLine([p[0], p[1]], [q[0], q[1]],
-                          color, line_width=line_width)
+            self.DrawLine(
+                [p[0], p[1]], 
+                [q[0], q[1]], 
+                color, 
+                line_width=line_width,
+                line_type=line_type,
+                dash_length=dash_length
+            )
+
+    def DrawKeypoint(self, xy, r, color, thickness=1):
+        cv2.circle(self.map, self.XyToUv(xy[0], xy[1]), int(r), color, -1)
 
     def DrawText(self, map, xy1, txt, color, scale, line_width=1):
         # print(xy1[0], xy1[1], self.XyToUv(xy1[0], xy1[1]))\

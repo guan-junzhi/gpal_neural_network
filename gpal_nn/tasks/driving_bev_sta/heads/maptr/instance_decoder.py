@@ -29,6 +29,8 @@ from gpal_nn.tasks.driving_bev_sta.heads.maptr.utils import bias_init_with_prob,
 from gpal_lightning.neural_network.global_config import GlobalConfig
 from gpal_lightning.neural_network.tasks.base.config_parsers import BaseConfigParser
 from gpal_nn.tasks.driving_bev_sta.heads.maptr.utils import QuantStub
+from tools_scripts.data_format_cvt import ShowDataStruct
+from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 
 logger = logging.getLogger(__name__)
 
@@ -100,13 +102,15 @@ class MapInstanceDetectorHead(nn.Module):
 
         super(MapInstanceDetectorHead, self).__init__()
         self.compatible_with_MVLane_loss = layers_config['compatible_with_MVLane_loss']
+        self.shape_type_num = max(shape_type_map.values()) + 1
         self.in_channels = layers_config['in_channels']
         self.queue_length = layers_config.get("queue_length", 1)
         self.num_cam = layers_config['num_cam']
         self.bev_h = layers_config['bev_h']
         self.bev_w = layers_config['bev_w']
         self.embed_dims = layers_config['head_embed_dims']
-        self.num_vec_one2one = layers_config['num_vec_one2one']
+        # self.num_vec_one2one = layers_config['num_vec_one2one']
+        self.num_vec_one2one = sum(value[1] for value in task_config.output_name_group.values())
         self.num_vec_one2many = layers_config['num_vec_one2many']
         self.num_vec = layers_config.get("num_vec", None)
         self.k_one2many = layers_config['k_one2many']
@@ -124,7 +128,7 @@ class MapInstanceDetectorHead(nn.Module):
         self.num_query = self.num_vec_one2one + self.num_vec_one2many
         self.aux_seg = layers_config.get("aux_seg", None)
 
-        super(MapInstanceDetectorHead, self).__init__()
+        # super(MapInstanceDetectorHead, self).__init__()
         # self.in_channels = in_channels
         # self.queue_length = queue_length
         # self.num_cam = num_cam
@@ -193,6 +197,14 @@ class MapInstanceDetectorHead(nn.Module):
             Linear(self.embed_dims, self.cls_out_channels)
         )
 
+        shape_type_branch = nn.Sequential(
+            Linear(self.embed_dims, self.shape_type_num)
+        )
+
+        keypoint_cls_branch = nn.Sequential(
+            Linear(self.embed_dims, 1)
+        )
+
         reg_branch = [
             Linear(self.embed_dims, 2 * self.embed_dims),
             nn.LayerNorm(2 * self.embed_dims),
@@ -204,15 +216,34 @@ class MapInstanceDetectorHead(nn.Module):
         ]
         reg_branch = nn.Sequential(*reg_branch)
 
+        keypoint_reg_branch = [
+            Linear(self.embed_dims, 2 * self.embed_dims),
+            nn.LayerNorm(2 * self.embed_dims),
+            nn.ReLU(),
+            Linear(2 * self.embed_dims, 2 * self.embed_dims),
+            nn.LayerNorm(2 * self.embed_dims),
+            nn.ReLU(),
+            Linear(2 * self.embed_dims, 1),
+            nn.Sigmoid(),
+        ]
+        keypoint_reg_branch = nn.Sequential(*keypoint_reg_branch)
+
         # last reg_branch is used to generate proposal from
         # encode feature map when as_two_stage is True.
 
         num_layers = self.decoder.num_layers
         cls_branches = nn.ModuleList([cls_branch for _ in range(num_layers)])
         reg_branches = nn.ModuleList([reg_branch for _ in range(num_layers)])
+        shape_type_branches = nn.ModuleList([shape_type_branch for _ in range(num_layers)])
+        keypoint_cls_branches = nn.ModuleList([keypoint_cls_branch for _ in range(num_layers)])
+        keypoint_reg_branches = nn.ModuleList([keypoint_reg_branch for _ in range(num_layers)])
 
         self.reg_branches = reg_branches
         self.cls_branches = cls_branches
+        self.shape_type_branches = shape_type_branches
+        self.keypoint_cls_branches = keypoint_cls_branches
+        self.keypoint_reg_branches = keypoint_reg_branches
+
         self.sigmoid = torch.nn.Sigmoid()
 
         self.seg_head = None
@@ -263,6 +294,9 @@ class MapInstanceDetectorHead(nn.Module):
 
         self.quant_object_query_embed = QuantStub()
         self.dequant = DeQuantStub()
+        self.dequant_shape_type = DeQuantStub()
+        self.dequant_keypoint_cls = DeQuantStub()
+        self.dequant_keypoint_reg = DeQuantStub()
 
     def init_weights(self):
         """Initialize weights of the head."""
@@ -277,6 +311,11 @@ class MapInstanceDetectorHead(nn.Module):
                 if param.dim() > 1:
                     nn.init.xavier_uniform_(param)
 
+        for m in self.keypoint_reg_branches:
+            for param in m.parameters():
+                if param.dim() > 1:
+                    nn.init.xavier_uniform_(param)
+
         bias_init = bias_init_with_prob(0.01)
         if isinstance(self.cls_branches, nn.ModuleList):
             for m in self.cls_branches:
@@ -284,6 +323,22 @@ class MapInstanceDetectorHead(nn.Module):
                     nn.init.constant_(m.bias, bias_init)
         else:
             m = self.cls_branches
+            nn.init.constant_(m.bias, bias_init)
+
+        if isinstance(self.shape_type_branches, nn.ModuleList):
+            for m in self.shape_type_branches:
+                if hasattr(m, "bias"):
+                    nn.init.constant_(m.bias, bias_init)
+        else:
+            m = self.shape_type_branches
+            nn.init.constant_(m.bias, bias_init)
+
+        if isinstance(self.keypoint_cls_branches, nn.ModuleList):
+            for m in self.keypoint_cls_branches:
+                if hasattr(m, "bias"):
+                    nn.init.constant_(m.bias, bias_init)
+        else:
+            m = self.keypoint_cls_branches
             nn.init.constant_(m.bias, bias_init)
 
     def _init_embedding(self):
@@ -360,15 +415,24 @@ class MapInstanceDetectorHead(nn.Module):
         self,
         outputs_classes: List[Tensor],
         reference_out: List[Tensor],
+        outputs_shape_types: List[Tensor],
+        outputs_keypoint_classes: List[Tensor],
+        outputs_keypoint_regs: List[Tensor],
         outputs_seg=None,
         outputs_pv_seg=None,
     ) -> Dict:
 
         outputs_classes_one2one = []
+        outputs_shape_types_one2one = []
+        outputs_keypoint_classes_one2one = []
+        outputs_keypoint_regs_one2one = []
         outputs_coords_one2one = []
         outputs_pts_coords_one2one = []
 
         outputs_classes_one2many = []
+        outputs_shape_types_one2many = []
+        outputs_keypoint_classes_one2many = []
+        outputs_keypoint_regs_one2many = []
         outputs_coords_one2many = []
         outputs_pts_coords_one2many = []
 
@@ -377,6 +441,9 @@ class MapInstanceDetectorHead(nn.Module):
 
             outputs_coord, outputs_pts_coord = self.transform_box(tmp)
             outputs_class = outputs_classes[lvl].float()
+            outputs_shape_type = outputs_shape_types[lvl].float()
+            outputs_keypoint_class = outputs_keypoint_classes[lvl].float()
+            outputs_keypoint_reg = outputs_keypoint_regs[lvl].float()
 
             outputs_classes_one2one.append(
                 outputs_class[:, 0: self.num_vec_one2one]
@@ -386,6 +453,15 @@ class MapInstanceDetectorHead(nn.Module):
             )
             outputs_pts_coords_one2one.append(
                 outputs_pts_coord[:, 0: self.num_vec_one2one]
+            )
+            outputs_shape_types_one2one.append(
+                outputs_shape_type[:, 0 : self.num_vec_one2one]
+            )
+            outputs_keypoint_classes_one2one.append(
+                outputs_keypoint_class[:, 0 : self.num_vec_one2one]
+            )
+            outputs_keypoint_regs_one2one.append(
+                outputs_keypoint_reg[:, 0 : self.num_vec_one2one]
             )
 
             outputs_classes_one2many.append(
@@ -397,19 +473,37 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_pts_coords_one2many.append(
                 outputs_pts_coord[:, self.num_vec_one2one:]
             )
+            outputs_shape_types_one2many.append(
+                outputs_shape_type[:, self.num_vec_one2one :]
+            )
+            outputs_keypoint_classes_one2many.append(
+                outputs_keypoint_class[:, self.num_vec_one2one :]
+            )
+            outputs_keypoint_regs_one2many.append(
+                outputs_keypoint_reg[:, self.num_vec_one2one :]
+            )
 
         outputs_classes_one2one = torch.stack(outputs_classes_one2one)
         outputs_coords_one2one = torch.stack(outputs_coords_one2one)
         outputs_pts_coords_one2one = torch.stack(outputs_pts_coords_one2one)
+        outputs_shape_types_one2one = torch.stack(outputs_shape_types_one2one)
+        outputs_keypoint_classes_one2one = torch.stack(outputs_keypoint_classes_one2one)
+        outputs_keypoint_regs_one2one = torch.stack(outputs_keypoint_regs_one2one)
 
         outputs_classes_one2many = torch.stack(outputs_classes_one2many)
         outputs_coords_one2many = torch.stack(outputs_coords_one2many)
         outputs_pts_coords_one2many = torch.stack(outputs_pts_coords_one2many)
+        outputs_shape_types_one2many = torch.stack(outputs_shape_types_one2many)
+        outputs_keypoint_classes_one2many = torch.stack(outputs_keypoint_classes_one2many)
+        outputs_keypoint_regs_one2many = torch.stack(outputs_keypoint_regs_one2many)
 
         preds_dicts = {
             "all_cls_scores": outputs_classes_one2one,
             "all_bbox_preds": outputs_coords_one2one,
             "all_pts_preds": outputs_pts_coords_one2one,
+            "all_shape_types_preds": outputs_shape_types_one2one,
+            "all_keypoint_classes_preds": outputs_keypoint_classes_one2one,
+            "all_keypoint_regs_preds": outputs_keypoint_regs_one2one,
             "enc_cls_scores": None,
             "enc_bbox_preds": None,
             "enc_pts_preds": None,
@@ -421,6 +515,9 @@ class MapInstanceDetectorHead(nn.Module):
                 "all_cls_scores": outputs_classes_one2many,
                 "all_bbox_preds": outputs_coords_one2many,
                 "all_pts_preds": outputs_pts_coords_one2many,
+                "all_shape_types_preds": outputs_shape_types_one2many,
+                "all_keypoint_classes_preds": outputs_keypoint_classes_one2many,
+                "all_keypoint_regs_preds": outputs_keypoint_regs_one2many,
                 "enc_cls_scores": None,
                 "enc_bbox_preds": None,
                 "enc_pts_preds": None,
@@ -551,12 +648,22 @@ class MapInstanceDetectorHead(nn.Module):
         )
 
         outputs_classes = []
+        outputs_shape_types = []
         reference_out = []
+        outputs_keypoint_classes = []
+        outputs_keypoint_regs = []
         for lvl in range(len(inter_states)):
             reg_points = inter_references[lvl]
             outputs_class = self.cls_branches[lvl](inter_states[lvl])
+            output_shape_type = self.shape_type_branches[lvl](inter_states[lvl])
+            outputs_keypoint_class = self.keypoint_cls_branches[lvl](inter_states[lvl])
+            outputs_keypoint_reg = self.keypoint_reg_branches[lvl](inter_states[lvl])
             outputs_classes.append(self.dequant(outputs_class))
             reference_out.append(self.dequant(reg_points))
+            outputs_shape_types.append(self.dequant_shape_type(output_shape_type))
+            outputs_keypoint_classes.append(self.dequant_keypoint_cls(outputs_keypoint_class))
+            outputs_keypoint_regs.append(self.dequant_keypoint_reg(outputs_keypoint_reg))
+
 
         outputs_seg = None
         outputs_pv_segs = None
@@ -591,11 +698,17 @@ class MapInstanceDetectorHead(nn.Module):
             return (
                 outputs_classes[-1],
                 reference_out[-1],
+                outputs_shape_types[-1],
+                outputs_keypoint_classes[-1],
+                outputs_keypoint_regs[-1],
             )
         else:
             return (
                 outputs_classes,
                 reference_out,
+                outputs_shape_types,
+                outputs_keypoint_classes,
+                outputs_keypoint_regs,
                 outputs_seg,
                 outputs_pv_segs,
             )
@@ -609,17 +722,23 @@ class MapInstanceDetectorHead(nn.Module):
         (
             outputs_classes,
             reference_out,
+            outputs_shape_types,
+            outputs_keypoint_classes,
+            outputs_keypoint_regs,
             outputs_seg,
             outputs_pv_seg,
         ) = outputs
         outputs = self.get_outputs(
             outputs_classes,
             reference_out,
+            outputs_shape_types,
+            outputs_keypoint_classes,
+            outputs_keypoint_regs,
             outputs_seg,
             outputs_pv_seg,
         )
         if self.compatible_with_MVLane_loss:
-            # outputs['bev_embed'] = bev_embed
+            # print("outputs", outputs)
             return outputs
         return self._post_process(data, outputs)
 

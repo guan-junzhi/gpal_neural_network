@@ -293,6 +293,7 @@ class BevFormerViewTransformer(BaseModule):
         pc_range: List[float],
         img_metas: Dict,
         im_shape: Tuple[int],
+        bev_real2aug: Tensor,
     ) -> Tuple[Tensor, Tensor]:
         """Sample img points."""
         reference_points = reference_points.to(torch.float32)
@@ -333,6 +334,10 @@ class BevFormerViewTransformer(BaseModule):
         reference_points = torch.cat(
             (reference_points, torch.ones_like(reference_points[..., :1])), -1
         )
+
+        bev_aug2real = torch.inverse(bev_real2aug).to(reference_points.device)
+        bs, z_num, hw, _ = reference_points.shape
+        reference_points = (bev_aug2real @ reference_points.flatten(1,2).transpose(1,2)).transpose(1,2).view(bs, z_num, hw, 4)
 
         reference_points = reference_points.permute(1, 0, 2, 3)
         D, B, num_query = reference_points.size()[:3]
@@ -1013,7 +1018,7 @@ class SingleBevFormerViewTransformer(BevFormerViewTransformer):
                 queries_rebatch_grid,
                 restore_bev_grid,
                 bev_pillar_counts,
-            ) = self.point_sampling(ref3d, self.pc_range, data, im_shape)
+            ) = self.point_sampling(ref3d, self.pc_range, data, im_shape, data["bev_real2aug"])
 
             bev_emb = self.get_bev_embed(
                 feats=feats,
