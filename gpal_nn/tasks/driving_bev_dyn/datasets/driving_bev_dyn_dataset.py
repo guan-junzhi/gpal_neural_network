@@ -588,8 +588,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         time_dp = DetailProf()
         time_dp.Tic("begin")
 
-        # try:
-        if True:
+        try:
             info = copy.deepcopy(self.dataset[idx])
 
             # print(f"__getitem__ {idx}")
@@ -710,15 +709,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
             data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
             
-        # except:
+        except:
 
-        #     if self.phase == const.PHASE_TRAINING:
-        #         new_index = np.random.randint(self.__len__())
-        #         print(f"PHASE_TRAINING {idx} load faild, resample trig {new_index}")
-        #         return self.__getitem__(new_index)
-        #     else:
-        #         print(f"PHASE_TRAINING {idx} load faild, faild exit(1)")
-        #         exit(1)
+            if self.phase == const.PHASE_TRAINING:
+                new_index = np.random.randint(self.__len__())
+                print(f"PHASE_TRAINING {idx} load faild, resample trig {new_index}")
+                return self.__getitem__(new_index)
+            else:
+                print(f"PHASE_TRAINING {idx} load faild, faild exit(1)")
+                exit(1)
 
         time_dp.Duration("move_data", "prepare_data")
 
