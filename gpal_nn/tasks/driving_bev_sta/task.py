@@ -16,7 +16,8 @@ from tools_scripts.data_format_cvt import ShowDataStruct
 import os.path as osp
 import os
 import cv2
-
+from shapely.geometry import LineString
+import copy
 
 
 @TASKS.register_module()
@@ -36,26 +37,42 @@ class DRIVING_BEV_STATask(BaseTask):
             for i,l in enumerate(gts[idx]['polylines']['points']):
                 shape_type = gts[idx]['polylines']['shape_type'][i]
                 vis1.DrawPolyline(l, [0, 255, 0], 2, linetype_list[shape_type])
+            if 'centerlines' in gts[idx]:
+                for i,l in enumerate(gts[idx]['centerlines']['points']):
+                # for l in gts[idx]['centerlines']['points']:
+                    vis1.DrawPolyline(l, [0, 165, 255], 2, 'solid')
+                    if gts[idx]['centerlines']['is_split_merge'][i]:
+                        # print(ShowDataStruct("gts keypoint", gts[idx]['centerlines']['keypoint']))
+                        vis1.DrawKeypoint(gts[idx]['centerlines']['keypoint'][i], 5, [135, 138, 128])
         except:
             pass
         vis_draw1 = vis1.Draw()
         pre_pts = preds['all_pts_preds']
         # print(ShowDataStruct("preds", preds))
-        color_list=[(0, 0, 255), (255, 0, 0)]
+        color_list=[(0, 0, 255), (255, 0, 0), (0, 165, 255)]
         pre_pts_denorm = torch.stack(
             [(1-pre_pts[..., 1]) * 120, ((1-pre_pts[..., 0])-0.5) * 32], dim=-1)
 
         vis2 = Vis2D([-30, 130], [-20, 20], 0.1)
-        for l, ln, s, shape_type in zip(pre_pts_denorm[-1, idx], pre_pts[-1, idx], preds['all_cls_scores'][-1, idx], preds['all_shape_types_preds'][-1, idx]):
+        for l, ln, s, shape_type,is_split_merge,split_keypoint in zip(pre_pts_denorm[-1, idx], pre_pts[-1, idx], preds['all_cls_scores'][-1, idx], preds['all_shape_types_preds'][-1, idx],
+                                        preds['all_keypoint_classes_preds'][-1, idx], preds['all_keypoint_regs_preds'][-1, idx]):
             # if s[1:].sigmoid().max() > 0.3:
             cls_score_pred = s.squeeze().sigmoid()
             value, cls_pred = cls_score_pred.max(-1)
+            is_split_merge = is_split_merge.squeeze().sigmoid()
+            is_split_merge_pred = is_split_merge.max(-1)
             if value > 0.3:
                 # print(f"ln \n{s.sigmoid().max()}")
                 # color = [random.randint(0, 255), random.randint(
                 #     0, 255), random.randint(0, 255)]
-                _, shape_type = shape_type.max(-1)
-                vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                try:
+                    _, shape_type = shape_type.max(-1)
+                    vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                    if is_split_merge_pred.values > 0.5:
+                        split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
+                        vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
+                except:
+                    pass
         # exit()
         vis_draw2 = vis2.Draw()
 
@@ -237,3 +254,77 @@ class DRIVING_BEV_STATask(BaseTask):
             concat_vis = self.concat_imgvis_and_bevvis(img_vis, bev_vis)
         name = metadata[i]['last_img_path'].split('/')[-1]
         cv2.imwrite(osp.join(save_root, name), concat_vis)
+
+    def get_point_from_normalized_position(self, points, normalized_pos):
+        """
+        根据归一化位置计算线上对应点的坐标，支持张量输入
+        
+        参数:
+            points: 点集，可以是numpy数组或PyTorch张量，形状为(N, 2)
+            normalized_pos: 归一化位置，可以是数值、单元素numpy数组或单元素PyTorch张量，范围应在[0, 1]之间
+            
+        返回:
+            目标点坐标，与输入points同类型
+        """
+        # 处理归一化位置的张量格式
+        if isinstance(normalized_pos, torch.Tensor):
+            # 确保是标量值（处理单元素张量情况）
+            normalized_pos = normalized_pos.item()
+        elif isinstance(normalized_pos, np.ndarray):
+            # 处理numpy数组情况
+            normalized_pos = normalized_pos.item()
+        
+        # 确保输入是numpy数组以便计算（保留原始类型用于输出）
+        is_tensor = isinstance(points, torch.Tensor)
+        if is_tensor:
+            points_np = points.cpu().numpy()
+        else:
+            points_np = np.asarray(points)
+        
+        # 检查输入有效性
+        if len(points_np) < 2:
+            raise ValueError("点集至少需要包含2个点")
+        if normalized_pos < 0 or normalized_pos > 1:
+            raise ValueError("归一化位置应在[0, 1]范围内")
+        
+        # 计算各线段长度
+        segment_lengths = []
+        for i in range(len(points_np) - 1):
+            dx = points_np[i+1][0] - points_np[i][0]
+            dy = points_np[i+1][1] - points_np[i][1]
+            segment_lengths.append(np.sqrt(dx**2 + dy**2))
+        
+        total_length = sum(segment_lengths)
+        if total_length < 1e-9:  # 处理所有点重合的特殊情况
+            return points[0]
+        
+        # 计算目标点距离起点的实际距离
+        target_distance = normalized_pos * total_length
+        
+        # 找到目标点所在的线段
+        cumulative_distance = 0.0
+        segment_index = 0
+        for i, length in enumerate(segment_lengths):
+            if cumulative_distance + length >= target_distance:
+                segment_index = i
+                break
+            cumulative_distance += length
+        else:  # 处理刚好在最后一个点的情况
+            segment_index = len(segment_lengths) - 1
+        
+        # 计算在线段上的插值比例
+        remaining_distance = target_distance - cumulative_distance
+        segment_fraction = remaining_distance / segment_lengths[segment_index]
+        
+        # 计算目标点坐标
+        start_point = points_np[segment_index]
+        end_point = points_np[segment_index + 1]
+        target_x = start_point[0] + segment_fraction * (end_point[0] - start_point[0])
+        target_y = start_point[1] + segment_fraction * (end_point[1] - start_point[1])
+        
+        # 转换回原始类型
+        result = np.array([target_x, target_y])
+        if is_tensor:
+            result = torch.tensor(result, device=points.device, dtype=points.dtype)
+        
+        return result
