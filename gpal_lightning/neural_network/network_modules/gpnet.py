@@ -533,7 +533,7 @@ class GpNet(LightningModule):
         # image_log is used for visualizing images in tensorboard drawn by task-defined visualization functions
         if is_logging(self.global_rank, curr_iteration, self.global_config.visualize_every) and (curr_task in ["DRIVING_BEV_STA", "DRIVING_BEV_DYN"]):
             self.image_log(curr_task, curr_iteration, data,
-                           preds, masks, trues, metadata, total_loss)
+                           preds, masks, trues, metadata, calib, total_loss)
         if const.JOBNAME != -1:
             rank_zero_info(
                 f"iteration: {curr_iteration}, "
@@ -841,12 +841,12 @@ class GpNet(LightningModule):
         losses = self.tasks[curr_task].head.loss(preds, trues, masks, **kwargs)
         return losses
 
-    def image_log(self, curr_task, curr_iteration, data, preds, masks, trues, metadata, loss=None):
+    def image_log(self, curr_task, curr_iteration, data, preds, masks, trues, metadata, calib, loss=None):
         self.tasks[curr_task].heavy_log(
             curr_iteration,
             "training",
             self.logger.experiment,
-            data, preds, masks, trues, metadata, loss_info=loss
+            data, preds, masks, trues, metadata, calib, loss_info=loss
 
         )
 

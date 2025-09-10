@@ -47,7 +47,7 @@ class DRIVING_BEV_STATask(BaseTask):
 
         return np.concatenate([vis_draw1, vis_draw2], axis=1)
 
-    def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, loss_info=None):
+    def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, calib, loss_info=None):
         imgs = []
         for idx in range(4):
             vis = self.GetVis(preds[0], trues, idx)

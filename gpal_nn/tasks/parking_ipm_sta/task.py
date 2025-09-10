@@ -18,7 +18,7 @@ class PARKING_IPM_STATask(BaseTask):
         super().__init__(global_config, task_config, name, None)
         pass
 
-    def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, loss_info=None):
+    def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, calib, loss_info=None):
         pass
 
     def vectors_to_json(self, metadata, data, dataloader_idx, vectors, is_gt):

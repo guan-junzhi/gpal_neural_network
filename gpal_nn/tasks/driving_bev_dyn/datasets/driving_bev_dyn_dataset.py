@@ -659,40 +659,23 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['camera_names'] = self.image_view
             input_dict['camera_sizes'] = camera_sizes
 
-            if self.image_dir == '/opt/airflow/process-prod-bucket/data_collect/./':
-                for view_idx, camera_view in enumerate(self.image_view):
-                    image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
-                    current_img = self.get_image(
-                        image_file, view_idx)  # cv2: BGR
-                    if self.phase == const.PHASE_TRAINING:
-                        # current_img = aug_image(current_img)
-                        pass
-                    input_dict[f'images_input{view_idx}'] = current_img.astype(
-                        np.float32) / 255.0
-                    image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
-                    previous_img = self.get_image(image_file, view_idx)
-                    if self.phase == const.PHASE_TRAINING:
-                        # previous_img = aug_image(previous_img)
-                        pass
-                    input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
-                        np.float32) / 255.0
-            else:
-                for i, cur_view in enumerate(self.image_view):
-                    image_file = f'{self.image_dir}/{sequence_name}/{cur_view}/{curr_time_stamp}.jpg'
-                    img = self.get_image(image_file, i)  # -> BGR
-
-                    if self.phase == const.PHASE_TRAINING:
-                        # img = aug_image(img)
-                        pass
-                    input_dict[f'images_input{i}'] = img.astype(np.float32) / 255.0
-
-                    image_file = f'{self.image_dir}/{sequence_name}/{cur_view}/{prev_time_stamp}.jpg'
-                    img = self.get_image(image_file, i)
-                    if self.phase == const.PHASE_TRAINING:
-                        # img = aug_image(img)
-                        pass
-                    input_dict[f'images_input_former{i}'] = img.astype(
-                        np.float32) / 255.0
+            img_path = {}
+            for view_idx, camera_view in enumerate(self.image_view):
+                image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                img_path[camera_view] = image_file
+                current_img = self.get_image(image_file, view_idx)  # cv2: BGR
+                if self.phase == const.PHASE_TRAINING:
+                    # current_img = aug_image(current_img)
+                    pass
+                input_dict[f'images_input{view_idx}'] = current_img.astype(
+                    np.float32) / 255.0
+                image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
+                previous_img = self.get_image(image_file, view_idx)
+                if self.phase == const.PHASE_TRAINING:
+                    # previous_img = aug_image(previous_img)
+                    pass
+                input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
+                    np.float32) / 255.0
             time_dp.Duration("image", "prev_json")
 
             data_dict = self.prepare_data(data_dict=input_dict)
@@ -720,6 +703,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
+            data_dict_ret['meta']['img_path'] = img_path
             frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
             data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
             data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
