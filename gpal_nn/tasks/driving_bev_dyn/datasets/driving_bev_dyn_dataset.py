@@ -663,6 +663,18 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
                 img_path[camera_view] = image_file
                 current_img = self.get_image(image_file, view_idx)  # cv2: BGR
+
+                calib_intrin = copy.deepcopy(input_dict['intrinsic'][view_idx])
+                calib_extrin = copy.deepcopy(input_dict["extrinsic"][view_idx])
+                calib_dist = copy.deepcopy(input_dict["cam_dist"][view_idx])
+                img_crop_dict = copy.deepcopy(self.img_crop_dict)
+                
+                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
+                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
+
+                current_img = cv2.undistort(
+                    current_img, calib_intrin, calib_dist, calib_intrin)
+
                 if self.phase == const.PHASE_TRAINING:
                     # current_img = aug_image(current_img)
                     pass
@@ -670,6 +682,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     np.float32) / 255.0
                 image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
                 previous_img = self.get_image(image_file, view_idx)
+
+                previous_img = cv2.undistort(
+                    previous_img, calib_intrin, calib_dist, calib_intrin)
+
+
                 if self.phase == const.PHASE_TRAINING:
                     # previous_img = aug_image(previous_img)
                     pass
@@ -698,6 +715,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             for key in ["intrinsic", "cam_dist", "extrinsic"]:
                 data_dict_ret["calib"][key] = data_dict[key]
 
+            data_dict_ret["calib"]["cam_dist"] *= 0.0
+            
             data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
 
             data_dict_ret['meta']['camera_name'] = self.camera_names
