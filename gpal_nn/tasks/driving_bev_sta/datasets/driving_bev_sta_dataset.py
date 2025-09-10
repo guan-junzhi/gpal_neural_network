@@ -13,9 +13,11 @@ from gpal_lightning import const
 from gpal_lightning.neural_network.tasks.builder import DATASETS
 from gpal_lightning.neural_network.tasks.base.datasets.slice_base_dataset import SliceBaseDataset
 from gpal_lightning.neural_network.global_config import GlobalConfig
+from gpal_lightning.utils.data_buffer import FastLoaderBuffer
 from gpal_nn.tasks.driving_bev_sta.datasets.transform import *
 from gpal_nn.tasks.driving_bev_sta.datasets.letter_box import letterbox_image, random_scale_and_translate
 from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
+from gpal_nn.tasks.driving_bev_sta.datasets.centerline_connector import merge_connected_centerlines
 from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
 from gpal_lightning.utils.profiling import TimeProf
 import random
@@ -92,7 +94,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                  rpy_aug=False, 
                  bev_aug=False,
                  rpy_aug_deg=[3,3,3], 
-                 bev_aug_deg=3
+                 bev_aug_deg=3,
+                 lmdb_path='static_data_lmdb'
                  ):
         '''
         :param root_dict:
@@ -194,6 +197,10 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         self.bev_aug = bev_aug
         self.rpy_aug_rad = np.deg2rad(np.array(rpy_aug_deg))
         self.bev_aug_rad = np.deg2rad(bev_aug_deg)
+        self.lmdb_path = os.path.join(pkl_root, lmdb_path)
+        if self.lmdb_path != '':
+            self.label_buffer = FastLoaderBuffer(self.lmdb_path)
+        
 
     def _build_world_data_list(self):
         try:
@@ -238,6 +245,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         time_dp.Tic("begin")
 
         data_info = copy.deepcopy(self.dataset[idx])
+        if isinstance(data_info, str):
+            data_info = pickle.loads(self.label_buffer[data_info])
         ret, sub_prof = self.read_frame(data_info, data_dict)
         time_dp.AddSubProf("read_frame_sub", sub_prof)
 
@@ -384,6 +393,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         self.process_polylines(annot['polylines'], data_dict, bev_real2aug)
         self.process_edges(annot['edges'], data_dict, bev_real2aug)
         self.process_polygons_arrow(annot['polygons'], data_dict, bev_real2aug)
+        if 'centerlines' in annot:
+            self.process_centerline(annot['centerlines'], data_dict, bev_real2aug)
+        data_dict["calib_type"] = data_info['sensor']['calib_type']
 
     def reorder_points(self, points):
         # turn it into far to near
@@ -406,7 +418,6 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             lane = (bev_real2aug @ lane_homo.T).T[:,:3]
             lane = _fix_pts_interpolate(
                 lane, max(int(LineString(lane).length / 0.2), self.pts_per_vector))
-            # print(lane)
             try:
                 mask = lane[..., 0] <= self.gt_range[0]
                 mask *= lane[..., 0] >= self.gt_range[3]
@@ -503,6 +514,65 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             classes.append(edge_type_map[name])
 
         data_dict['edges']['classes'] = classes
+
+    def process_centerline(self, centerlines, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
+
+        for centerline_idx in range(len(centerlines['classes'])):
+            if isinstance(centerlines['classes'][centerline_idx], list):
+                centerlines['classes'][centerline_idx] = centerlines['classes'][centerline_idx][0]
+            if isinstance(centerlines['behavior_type'][centerline_idx], list):
+                centerlines['behavior_type'][centerline_idx] = centerlines['behavior_type'][centerline_idx][0]
+
+        data_dict['centerlines'] = {}
+        centerline_pts_list = []
+
+        centerline_mask = np.zeros(len(centerlines['points']), dtype=bool)
+        for idx, centerline in enumerate(centerlines['points']):
+            # TODO: move range filter to pipeline
+            if len(centerline) <= 1:
+                continue
+            centerline_homo = np.concatenate([centerline, np.ones((centerline.shape[0],1))], axis=-1)
+            centerline = (bev_real2aug @ centerline_homo.T).T[:,:3]
+            centerline = _fix_pts_interpolate(centerline, int(LineString(centerline).length / 0.2))
+            if len(centerline) <= 1:
+                continue
+            mask = centerline[..., 0] <= self.gt_range[0]
+            mask *= centerline[..., 0] >= self.gt_range[3]
+            mask *= centerline[..., 1] <= self.gt_range[1]
+            mask *= centerline[..., 1] >= self.gt_range[4]
+            centerline = centerline[mask]
+            if len(centerline) <= 1:
+                continue
+
+            centerline_mask[idx] = True
+            centerline_pts_list.append(centerline)
+
+        centerline_pts_idx = 0
+        assert len(centerline_pts_list) == centerline_mask.sum()
+        centerline_list = []
+        for centerline_idx, centerline_valid in enumerate(centerline_mask):
+            if centerline_valid:
+                cur_dict = {
+                    "id": centerlines["id"][centerline_idx],
+                    "points": centerline_pts_list[centerline_pts_idx],
+                    "class": centerlines["classes"][centerline_idx],
+                    "behavior_type": centerlines["behavior_type"][centerline_idx],
+                    "connect_forward_id": centerlines["connect_forward_id"][centerline_idx],
+                }
+                centerline_list.append(cur_dict)
+                centerline_pts_idx += 1
+        centerline_dict = merge_connected_centerlines(centerline_list)
+        if len(centerline_dict["points"]) <= 0:
+            return
+        data_dict['centerlines'] = centerline_dict
+        for centerline_idx in range(len(data_dict['centerlines']['points'])):
+            data_dict['centerlines']['points'][centerline_idx] = \
+                _fix_pts_interpolate(data_dict['centerlines']['points'][centerline_idx], self.pts_per_vector)
+            # data_dict['centerlines']['points'][centerline_idx] = \
+            #     self.reorder_points(data_dict['centerlines']['points'][centerline_idx])
+            data_dict['centerlines']['classes'][centerline_idx] = centerline_type_map[data_dict['centerlines']['classes'][centerline_idx]]
+            data_dict['centerlines']['behavior_type'][centerline_idx] = behavior_type_map[data_dict['centerlines']['behavior_type'][centerline_idx]]
+        data_dict['centerlines']['points'] = np.array(data_dict['centerlines']['points'])
 
     def process_polygons_arrow(self, polygons, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
         data_dict['polygon_arrows'] = {}

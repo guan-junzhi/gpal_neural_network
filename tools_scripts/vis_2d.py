@@ -136,6 +136,8 @@ class Vis2D():
                 dash_length=dash_length
             )
 
+    def DrawKeypoint(self, xy, r, color, thickness=1):
+        cv2.circle(self.map, self.XyToUv(xy[0], xy[1]), int(r), color, -1)
 
     def DrawText(self, map, xy1, txt, color, scale, line_width=1):
         # print(xy1[0], xy1[1], self.XyToUv(xy1[0], xy1[1]))\

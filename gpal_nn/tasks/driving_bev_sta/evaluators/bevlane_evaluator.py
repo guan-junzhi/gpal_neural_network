@@ -190,6 +190,8 @@ class Bevlane_Evaluator(object):
                 m_index = pd.MultiIndex.from_arrays(
                     [df_index, df_data.index.tolist()])
                 df_data.set_index(m_index, inplace=True)
+                pd.set_option('display.max_columns', None)
+                pd.set_option('display.width', 1000)  # 可根据需要调整宽度
 
                 print(df_data)
 

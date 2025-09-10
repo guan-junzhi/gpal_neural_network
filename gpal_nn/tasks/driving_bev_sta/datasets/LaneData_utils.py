@@ -18,6 +18,7 @@ lane_marking_type_map = {
     "fishbone": 0,
     "stop_line": 0,
     "cross_guide_line": 0,
+    'cross_guide_ line': 0,
     "bike_cross_line": 0,
     "wait_line": 0,    # 兼容老标注规范
     "waiting_line": 0,
@@ -112,9 +113,17 @@ polygon_type_map = {
     "left_waiting_zone": 0,
     "straight_waiting_zone": 0,
     "right_waiting_zone": 0,
+    "other_waiting_zone": 0,
     "slow_down_zone": 0,
     "danger_zone": 0,
+    "vertical_parking_slot": 0,
+    "horizontal_parking_slot": 0,
+    "inclined_parking_slot": 0,
+    "big_vertical_parking_slot": 0,
+    "big_horizontal_parking_slot": 0,
+    "big_inclined_parking_slot": 0,
     "others": -1,
+    "other": -1,
 }
 
 arrow_type_map = {
@@ -125,6 +134,7 @@ arrow_type_map = {
     "turnleft": 0,
     "turnleft_uturn": 0,
     "turnleft_mergeleft": 0,
+    "nleft_mergeleft": 0,
     "turnright": 0,
     "turnright_mergeright": 0,
     "turnleft_turnright": 0,
@@ -141,6 +151,7 @@ arrow_type_map = {
     "bike_direction": 0,
     "others": -1,
     None:-1,
+    "": -1,
 }
 
 # --------------------------- parking_slot --------------------------------------------------------------
