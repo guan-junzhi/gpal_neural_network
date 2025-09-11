@@ -1,4 +1,4 @@
-image_per_gpu: 12
+image_per_gpu: 20
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 30000
@@ -18,7 +18,7 @@ Train:
 Backbones:
   backbone0:
     type: EncoderRes50
-    # ampfp16: true
+    ampfp16: true
     load: all
     # freeze: all
     out_channels: 64

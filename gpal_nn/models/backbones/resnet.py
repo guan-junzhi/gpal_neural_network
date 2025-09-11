@@ -114,7 +114,7 @@ class EncoderRes50(BaseModule):
         super(EncoderRes50, self).__init__(global_config)
 
         self.C = out_channels
-        resnet = models.resnet50(pretrained=False)
+        resnet = models.resnet50(pretrained=True)
         self.backbone = nn.Sequential(*list(resnet.children())[:-4])
         self.layer3 = resnet.layer3
         self.depth_layer = nn.Conv2d(128, self.C, kernel_size=1, padding=0)
