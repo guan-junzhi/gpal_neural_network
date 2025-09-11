@@ -258,8 +258,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         time_dp.Duration("parse_annotations", "read_frame")
 
         time_dp.Duration("prepare_data_all", "begin")
-        # if idx % 10 == 0:
-        #     time_dp.Print()
+        if idx % 10 == 0:
+            time_dp.Print()
         return data_dict, time_dp
 
     def Ego2Img(self, extrin, intrin):
