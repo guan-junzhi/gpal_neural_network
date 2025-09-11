@@ -342,7 +342,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
                 image = cv2.undistort(image, K, dist)
                 self._image_cache(
-                    database_key, image, pre_resize=(960, 540), quality=100)
+                    database_key, image, pre_resize=(960, 540), quality=95)
                 # print("cache")
             else:
                 self.fast_buf_sec_cnt += 1
