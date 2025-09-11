@@ -31,8 +31,10 @@ class DRIVING_BEV_DYNLoss(BaseLoss):
         trues = self.GtToTorch(trues, preds["hm_cen"].device)
 
         B, C, H, W = trues['gt_curr_hm_cen'].shape
+        # gt_curr_hm_cen = torch.stack(
+        #     [trues['gt_curr_hm_cen'], trues['gt_prev_hm_cen']], dim=1).view(B*2, C, H, W)  #
         gt_curr_hm_cen = torch.stack(
-            [trues['gt_curr_hm_cen'], trues['gt_prev_hm_cen']], dim=1).view(B*2, C, H, W)  #
+            [trues['gt_curr_hm_cen']], dim=1).view(B, C, H, W)  #
 
         processed_gt["gt_curr_hm_cen"] = gt_curr_hm_cen
 

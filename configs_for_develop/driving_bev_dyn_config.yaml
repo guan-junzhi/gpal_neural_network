@@ -1,4 +1,4 @@
-image_per_gpu: 6
+image_per_gpu: 12
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 30000
@@ -22,8 +22,7 @@ Backbones:
     load: all
     # freeze: all
     out_channels: 64
-    input_source: [ 'img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30',
-                    'img_front_120_pre', 'img_front_left_pre', 'img_rear_left_pre', 'img_front_right_pre', 'img_rear_right_pre', 'img_back_pre', 'img_front_30_pre']
+    input_source: [ 'img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30']
     
 Groups:
   group0: {load: all, freeze: all, type: DummyBackbone, input_source: backbone0}
@@ -39,8 +38,7 @@ Transformer:
     task_name: DRIVING_BEV_DYN
     bev_map_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
     bev_map_voxel_size: [0.64, 0.64, 0.5]
-    input_source: [ 'img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30',
-                    'img_front_120_pre', 'img_front_left_pre', 'img_rear_left_pre', 'img_front_right_pre', 'img_rear_right_pre', 'img_back_pre', 'img_front_30_pre']
+    input_source: [ 'img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30']
     
 
 Tasks:

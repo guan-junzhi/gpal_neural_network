@@ -124,11 +124,11 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=
     view_num = batch_dict['intrinsic'].shape[1]
 
     intrinsics = batch_dict['intrinsic'].view(
-        BB, 1, view_num, 3, 3).repeat(1, 2, 1, 1, 1).view(B, view_num, 3, 3)
+        BB, 1, view_num, 3, 3).repeat(1, 1, 1, 1, 1).view(B, view_num, 3, 3)
     extrinsics = batch_dict['extrinsic'].view(
-        BB, 1, view_num, 4, 4).repeat(1, 2, 1, 1, 1).view(B, view_num, 4, 4)
+        BB, 1, view_num, 4, 4).repeat(1, 1, 1, 1, 1).view(B, view_num, 4, 4)
     cam_distorts = batch_dict['cam_dist'].view(
-        BB, 1, view_num, 1, 5).repeat(1, 2, 1, 1, 1).view(B, view_num, 1, 5)
+        BB, 1, view_num, 1, 5).repeat(1, 1, 1, 1, 1).view(B, view_num, 1, 5)
 
     offset_pixel = image_crop_config['CROP_HeSai_ID4']['CROP_START']
     scale = image_crop_config['CROP_HeSai_ID4']['SCALE']
@@ -225,7 +225,7 @@ class ODViewTransformer(BaseModule):
                 image_feats_stack.append(fea)
                 B, C, H, W = fea.shape
         feats = torch.stack(image_feats_stack, dim=1)
-        feats = feats.reshape(B * 2, -1, C, H, W)
+        feats = feats.reshape(B, -1, C, H, W)
         xyz_camA = self.xyz_camA.clone()
 
         xyz_camA = xyz_camA.to(feats.device).repeat(feats.shape[0], 1, 1)

@@ -219,13 +219,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 max_objects=MAX_OBJ_NUMS,
                 TARGET_ENABLED=dict(train=True, test=False)
             ),
-            dict(
-                NAME='build_targets_former',
-                hm_size=OD_HEATMAP_OUT_HW,
-                num_classes=len(CLASS_NAMES_LIST),
-                max_objects=MAX_OBJ_NUMS,
-                TARGET_ENABLED=dict(train=True, test=False)
-            ),
+            # dict(
+            #     NAME='build_targets_former',
+            #     hm_size=OD_HEATMAP_OUT_HW,
+            #     num_classes=len(CLASS_NAMES_LIST),
+            #     max_objects=MAX_OBJ_NUMS,
+            #     TARGET_ENABLED=dict(train=True, test=False)
+            # ),
             # dict(
             #     NAME='build_occ',
             #     voxel_size=OCC_OUT_VOXEL_SIZE,
@@ -614,28 +614,28 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             time_dp.Duration("cur_json", "begin")
 
-            # === 前一帧
-            if self.have_prev_label:
-                prev_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{prev_time_stamp}.json'
-                prev_json_data = self.json_data.load(prev_json_file)
+            # # === 前一帧
+            # if self.have_prev_label:
+            #     prev_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{prev_time_stamp}.json'
+            #     prev_json_data = self.json_data.load(prev_json_file)
                 
-                try:
-                    prev_json_data = self.json_data.load(prev_json_file)
-                except:
-                    print(f'error json file: {prev_json_file}')
+            #     try:
+            #         prev_json_data = self.json_data.load(prev_json_file)
+            #     except:
+            #         print(f'error json file: {prev_json_file}')
                     
-                re_prev_infos  = self.json_data.parse_json(prev_json_data)  # 上一帧不需要真值(但模型输出的有(是连续的))
-                meta_info, cameras, bounding_boxes, special_labels = re_prev_infos
+            #     re_prev_infos  = self.json_data.parse_json(prev_json_data)  # 上一帧不需要真值(但模型输出的有(是连续的))
+            #     meta_info, cameras, bounding_boxes, special_labels = re_prev_infos
 
-                gt_boxes_, gt_names_ = self.get_box(bounding_boxes=bounding_boxes)
-                intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
-                _, _, _, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+            #     gt_boxes_, gt_names_ = self.get_box(bounding_boxes=bounding_boxes)
+            #     intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+            #     _, _, _, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
 
-                input_dict['gt_names_former'] = gt_names_
-                input_dict['gt_boxes_former'] = gt_boxes_
-            else:
-                input_dict['gt_names_former'] = gt_names
-                input_dict['gt_boxes_former'] = gt_boxes
+            #     input_dict['gt_names_former'] = gt_names_
+            #     input_dict['gt_boxes_former'] = gt_boxes_
+            # else:
+            #     input_dict['gt_names_former'] = gt_names
+            #     input_dict['gt_boxes_former'] = gt_boxes
 
 
             time_dp.Duration("prev_json", "cur_json")
@@ -680,18 +680,18 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     pass
                 input_dict[f'images_input{view_idx}'] = current_img.astype(
                     np.float32) / 255.0
-                image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
-                previous_img = self.get_image(image_file, view_idx)
+                # image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
+                # previous_img = self.get_image(image_file, view_idx)
 
-                previous_img = cv2.undistort(
-                    previous_img, calib_intrin, calib_dist, calib_intrin)
+                # previous_img = cv2.undistort(
+                #     previous_img, calib_intrin, calib_dist, calib_intrin)
 
 
-                if self.phase == const.PHASE_TRAINING:
-                    # previous_img = aug_image(previous_img)
-                    pass
-                input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
-                    np.float32) / 255.0
+                # if self.phase == const.PHASE_TRAINING:
+                #     # previous_img = aug_image(previous_img)
+                #     pass
+                # input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
+                #     np.float32) / 255.0
             time_dp.Duration("image", "prev_json")
 
             data_dict = self.prepare_data(data_dict=input_dict)
@@ -702,8 +702,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             for i in range(len(data_dict["camera_names"])):
                 data_dict_ret['image'][data_dict["camera_names"]
                                     [i]] = data_dict[f"images_input{i}"].transpose(2, 0, 1)
-                data_dict_ret['image'][data_dict["camera_names"]
-                                    [i]+"_pre"] = data_dict[f"images_input_former{i}"].transpose(2, 0, 1)
+                # data_dict_ret['image'][data_dict["camera_names"]
+                #                     [i]+"_pre"] = data_dict[f"images_input_former{i}"].transpose(2, 0, 1)
 
             for key in data_dict:
                 if "gt_curr_" in key:

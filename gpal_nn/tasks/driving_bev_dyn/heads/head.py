@@ -351,7 +351,7 @@ class CenterHead(nn.Module):
         keep = (hm == heat).float()
         hm = hm * keep
 
-        return hm.view(batch_size, 2, hm.shape[1], hm.shape[2], hm.shape[3])
+        return hm.view(batch_size, 1, hm.shape[1], hm.shape[2], hm.shape[3])
 
     def forward(self, x):
         ret = {}
@@ -400,7 +400,7 @@ class CenterHead(nn.Module):
         #         data_dict['cls_preds_normalized'] = True
 
         hm_cen_pred = self.generate_predicted_hm_cen(ret,
-                                                     batch_size=int(spatial_features_2d.shape[0]/2))
+                                                     batch_size=int(spatial_features_2d.shape[0]))
         ret["hm_cen_pred"] = hm_cen_pred
         return ret
 
