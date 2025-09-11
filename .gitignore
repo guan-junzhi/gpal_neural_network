@@ -27,3 +27,5 @@ workspace/*
 
 lightning_logs/*
 experiments/*
+*.jpg
+*.pkl

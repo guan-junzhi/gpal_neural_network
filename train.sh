@@ -6,6 +6,7 @@ sudo apt-get update
 sudo apt-get -y install procps
 pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install pandas
+pip install matplotlib
 
 echo "[NODE INFO]:"
 nvidia-smi 
@@ -21,8 +22,8 @@ export ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT='/opt/airflow/workdirs/'
 export ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT=$ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT"gpal_neural_network_group/airflow_workspace"
 export ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT
 export ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT='/opt/airflow/datasets/'
-# export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT='/opt/airflow/process-prod-bucket/data_collect'
-export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT='/opt/airflow/process-datasets-bucket/business_datasets/lane_bev_data/'
+export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT='/opt/airflow/process-prod-bucket/data_collect'
+export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_SSD_ROOT='/opt/airflow/process-datasets-bucket/business_datasets/lane_bev_data/'
 export ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT='/opt/airflow/local_datasets/'
 export ENV_GPAL_NEURAL_NETWORK_WORLD_SIZE=1
 export ENV_GPAL_NEURAL_NETWORK_WORKSPACE=$ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT/${AIRFLOW_CTX_DAG_ID}_${current_time}
@@ -34,6 +35,7 @@ export ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT=$ENV_GPAL_NEURAL_NETWORK_W
 export ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT='workspace/'
 export ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT='/data/ai_group/datasets/'
 export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT='/data/dp_group/process-prod-bucket/data_collect/'
+export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_SSD_ROOT=$ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
 export ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT='/data1/'
 export ENV_GPAL_NEURAL_NETWORK_WORLD_SIZE=1
 export ENV_GPAL_NEURAL_NETWORK_WORKSPACE=$ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT/$current_time
@@ -57,6 +59,16 @@ then
     tasks=parking_ipm_sta 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/checkpoint/epoch=4-step=1000_checkpoint_weiwei.pth
     config=configs_for_develop/parking_ipm_sta_config.yaml
+elif [[ $1 == "driving_bev_dyn" ]];
+then
+    tasks=driving_bev_dyn 
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250903_06_51_57_huiqu_ckpt/checkpoint/epoch=0-step=0_checkpoint_huiqu.pth
+    config=configs_for_develop/driving_bev_dyn_config.yaml
+elif [[ $1 == "radar4d_nn_sdk" ]];
+then
+    tasks=radar4d_nn_sdk 
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/checkpoint/epoch=4-step=1000_checkpoint_weiwei.pth
+    config=configs_for_develop/radar4d_nn_sdk_config.yaml
 else
     tasks=driving_bev_sta 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250813_09_45_53/checkpoint/ep006_wangtong.pth

@@ -463,6 +463,10 @@ class GpNet(LightningModule):
         if ((curr_iteration % self.global_config.log_every) == 0) and ("dataloader_time" in batch):
             all_rank_dataloader_time = self.all_gather(
                 batch["dataloader_time"], sync_grads=False)
+            all_rank_fast_buf_try_cnt = self.all_gather(
+                batch["fast_buf_try_cnt"] if "fast_buf_try_cnt" in batch else 0, sync_grads=False)
+            all_rank_fast_buf_sec_cnt = self.all_gather(
+                batch["fast_buf_sec_cnt"] if "fast_buf_sec_cnt" in batch else 0, sync_grads=False)
             sync_dt = self.all_gather(self.sync_dt, sync_grads=False)
             sync_dt = [float(ele) for ele in sync_dt]
             # if (self.global_rank % 8 == 0):
@@ -500,10 +504,7 @@ class GpNet(LightningModule):
                         float(ele.sum()) for ele in all_rank_dataloader_time]
                     bad_rank_idx = torch.tensor(
                         all_rank_dataloader_time_sum).argmax()
-                    # for rank_idx in range(0, len(all_rank_dataloader_time_sum), 8):
-                    #     logging.warning(
-                    #         f"{curr_task} rank{rank_idx}-{rank_idx+8} {all_rank_dataloader_time_sum[rank_idx:rank_idx+8]}")
-
+                 
                     self.log_scalar(
                         f"data_time/{curr_task}_bad_rank", int(bad_rank_idx), curr_iteration)
                     self.log_scalar(
@@ -512,6 +513,13 @@ class GpNet(LightningModule):
                         f"data_time/{curr_task}_batch_avg", all_rank_dataloader_time[bad_rank_idx].mean(), curr_iteration)
                     self.log_scalar(
                         f"data_time/{curr_task}_batch_max", all_rank_dataloader_time[bad_rank_idx].max(), curr_iteration)
+
+                    try_sum = all_rank_fast_buf_try_cnt.sum()
+                    cache_rate = all_rank_fast_buf_sec_cnt.sum() / try_sum if try_sum > 0 else 0.0
+                    self.log_scalar(
+                        f"data_time/{curr_task}_fast_buf_try_cnt", try_sum, curr_iteration)
+                    self.log_scalar(
+                        f"data_time/{curr_task}_fast_buf_cache_rate", cache_rate, curr_iteration)
 
                 for rank_idx in range(0, len(all_rank_dataloader_time_sum), 8):
                     # logging.warning(
@@ -524,9 +532,9 @@ class GpNet(LightningModule):
         #     self.scalar_log(curr_task, curr_iteration, total_loss)
 
         # image_log is used for visualizing images in tensorboard drawn by task-defined visualization functions
-        if is_logging(self.global_rank, curr_iteration, self.global_config.visualize_every) and (curr_task in ["DRIVING_BEV_STA"]):
+        if is_logging(self.global_rank, curr_iteration, self.global_config.visualize_every) and (curr_task in ["DRIVING_BEV_STA", "DRIVING_BEV_DYN"]):
             self.image_log(curr_task, curr_iteration, data,
-                           preds, masks, trues, metadata, total_loss)
+                           preds, masks, trues, metadata, calib, total_loss)
         if const.JOBNAME != -1:
             rank_zero_info(
                 f"iteration: {curr_iteration}, "
@@ -763,7 +771,6 @@ class GpNet(LightningModule):
             #     for fea in cam_feats[k]:
             #         print(k, fea.shape)
 
-            cam_feats_bkp = {k: [cam_feats_bkp[k]] for k in cam_feats_bkp}
             if curr_task in self._transformers:
                 curr_transformer = self._transformers[curr_task]
                 output = {"img_bev_feat": self.model[curr_transformer](
@@ -835,12 +842,12 @@ class GpNet(LightningModule):
         losses = self.tasks[curr_task].head.loss(preds, trues, masks, **kwargs)
         return losses
 
-    def image_log(self, curr_task, curr_iteration, data, preds, masks, trues, metadata, loss=None):
+    def image_log(self, curr_task, curr_iteration, data, preds, masks, trues, metadata, calib, loss=None):
         self.tasks[curr_task].heavy_log(
             curr_iteration,
             "training",
             self.logger.experiment,
-            data, preds, masks, trues, metadata, loss_info=loss
+            data, preds, masks, trues, metadata, calib, loss_info=loss
 
         )
 

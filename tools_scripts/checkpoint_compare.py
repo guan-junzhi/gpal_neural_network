@@ -175,6 +175,78 @@ def ParkingIpmSta():
     print(weight.min(), weight.max())
 
 
+def RemapByPair(checkpoint1_keys, checkpoint2_keys, rules):
+
+    remap_all = {}
+    others1 = checkpoint1_keys
+    others2 = checkpoint2_keys
+    for key1, key2 in rules.items():
+        ele1 = [ele for ele in checkpoint1_keys if key1 in ele]
+        ele2 = [ele for ele in checkpoint2_keys if key2 in ele]
+        remap_2_to_1 = {ele: ele.replace(key2, key1) for ele in ele2}
+        remap_all.update(remap_2_to_1)
+        print(key1, key2, len(ele1), len(ele2), sum(
+            [remap_2_to_1[ele] in ele1 for ele in ele2]))
+
+        others1 = [ele for ele in others1 if key1 not in ele]
+        others2 = [ele for ele in others2 if key2 not in ele]
+        print(key1, key2, " remain ", len(others1), len(others2))
+
+    print(others1)
+    print(others2)
+
+    return remap_all
+
+
+def DrivingBevDyn():
+    ckpt1 = "workspace/20250903_06_51_57_huiqu_ckpt/checkpoint/latest_model.pth"
+    checkpoint1 = torch.load(ckpt1, map_location="cpu")
+    checkpoint1_keys = list(checkpoint1["model_state"].keys())
+    print(checkpoint1_keys)
+
+    ckpt2 = "workspace/20250903_06_51_57_huiqu_ckpt/checkpoint/epoch=0-step=0_checkpoint.pth"
+    # ckpt2 = "workspace/20250902_11_54_57/checkpoint/epoch=1-step=500_checkpoint.pth"
+    checkpoint2 = torch.load(ckpt2, map_location="cpu")
+    checkpoint2_keys = list(checkpoint2["state_dict"].keys())
+    print(checkpoint2_keys)
+
+    print(len(checkpoint1_keys), len(checkpoint2_keys))
+
+    rules = {"backbone_img2d_module.encoder.": "model.backbone0.",
+             "backbone_2d.": "model.DRIVING_BEV_DYN.head.bev_feature_extractor.",
+             "center_head.": "model.DRIVING_BEV_DYN.head.center_head.",
+             "pointtransformer_head.": "model.DRIVING_BEV_DYN.head.point_transformer."}
+
+    remap_all = RemapByPair(checkpoint1_keys, checkpoint2_keys, rules)
+    print(len(checkpoint1_keys), len(checkpoint2_keys), len(remap_all))
+
+    # exit(1)
+    # exit(1)
+    for k in checkpoint2_keys:
+        if checkpoint2['state_dict'][k].shape != checkpoint1["model_state"][remap_all[k]].shape:
+            print(k, checkpoint2['state_dict'][k].shape, checkpoint1["model_state"][remap_all[k]].shape,
+                  checkpoint2['state_dict'][k].shape == checkpoint1["model_state"][remap_all[k]].shape)
+        checkpoint2['state_dict'][k] = checkpoint1["model_state"][remap_all[k]]
+    #                    lane_map_head.decoder.layers.0.sa.in_proj_weight
+    # model.DRIVING_BEV_STA.head.head1.decoder.layers.0.sa.in_proj_weight
+    ckpt2_edit = ckpt2.replace(".pth", "_huiqu.pth")
+    print(ckpt2_edit)
+    # torch.save(checkpoint2, ckpt2_edit)
+
+    bias = checkpoint2['state_dict']["model.DRIVING_BEV_DYN.head.center_head.shared_conv.0.bias"]
+    weight = checkpoint2['state_dict']["model.DRIVING_BEV_DYN.head.center_head.shared_conv.0.weight"]
+
+    print(bias.min(), bias.max())
+    print(weight.min(), weight.max())
+
+    bias = checkpoint1["model_state"]["center_head.shared_conv.0.bias"]
+    weight = checkpoint1["model_state"]["center_head.shared_conv.0.weight"]
+
+    print(bias.min(), bias.max())
+    print(weight.min(), weight.max())
+
+
 if __name__ == "__main__":
     # DrivingBevSta()
-    ParkingIpmSta()
+    # ParkingIpmSta()
+    DrivingBevDyn()
