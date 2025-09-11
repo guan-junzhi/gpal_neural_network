@@ -198,8 +198,20 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         self.rpy_aug_rad = np.deg2rad(np.array(rpy_aug_deg))
         self.bev_aug_rad = np.deg2rad(bev_aug_deg)
         self.lmdb_path = os.path.join(pkl_root, lmdb_path)
-        if self.lmdb_path != '':
-            self.label_buffer = FastLoaderBuffer(self.lmdb_path)
+
+        self.lmdb_path_local = self.lmdb_path.replace(
+            DATASETS_ROOT, LOCAL_DATASETS_ROOT)
+        if (self.global_rank == 0) and (not os.path.exists(self.lmdb_path_local)):
+            os.makedirs(self.lmdb_path_local, exist_ok=False)
+            cmd = f"cp -r {self.lmdb_path}/* {self.lmdb_path_local}/"
+            print(f"{self.lmdb_path_local} 不存在, {cmd}")
+            os.system(cmd)
+        else:
+            print(f"{self.lmdb_path_local} 存在")
+        distributed.barrier()
+
+        if self.lmdb_path_local != '':
+            self.label_buffer = FastLoaderBuffer(self.lmdb_path_local)
         
 
     def _build_world_data_list(self):
