@@ -335,13 +335,14 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         time_dp.Tic("begin")
         try:
             self.fast_buf_try_cnt += 1
+            database_key = "_".join(img_path.split('/')[-4:])
             image, hw_origin = self._image_buffer_access(
-                img_path)
+                database_key)
             if image is None:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
                 image = cv2.undistort(image, K, dist)
                 self._image_cache(
-                    img_path, image, pre_resize=(960, 540), quality=100)
+                    database_key, image, pre_resize=(960, 540), quality=100)
                 # print("cache")
             else:
                 self.fast_buf_sec_cnt += 1
