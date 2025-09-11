@@ -115,8 +115,8 @@ Tasks:
           camera_name: ['img_front_30', 'img_front_120'],
           gt_range: [120, 16, 0, 0.0, -16.0, 0],
           is_random_scale_and_translate: False,
-          # fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
-          fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           rpy_aug: True, 
           bev_aug: True,
           rpy_aug_deg: [3,3,3], 
