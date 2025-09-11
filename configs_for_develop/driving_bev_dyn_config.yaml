@@ -13,7 +13,7 @@ Train:
   max_visu_img_num: 10
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
-    after_scheduler: CosineAnnealingLR, T_max: 30000}
+    after_scheduler: CosineAnnealingLR, T_max: 60000}
 
 Backbones:
   backbone0:

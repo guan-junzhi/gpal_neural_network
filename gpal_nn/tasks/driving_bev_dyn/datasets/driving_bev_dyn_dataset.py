@@ -652,11 +652,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 temp[:, :3:, [3]] = self.t_vec_np
                 extrinsic = temp
 
-            input_dict['intrinsic'] = intrinsic  # np.stack([intrinsic, intrinsic])
-            input_dict['cam_dist'] = cam_dist  # np.stack([cam_dist, cam_dist])
-            input_dict['extrinsic'] = extrinsic  # np.stack([extrinsic, extrinsic])
-            input_dict['camera_names'] = self.image_view
-            input_dict['camera_sizes'] = camera_sizes
+            input_dict['intrinsic'] = copy.deepcopy(intrinsic)  # np.stack([intrinsic, intrinsic])
+            input_dict['cam_dist'] = copy.deepcopy(cam_dist)  # np.stack([cam_dist, cam_dist])
+            input_dict['extrinsic'] = copy.deepcopy(extrinsic)  # np.stack([extrinsic, extrinsic])
+            input_dict['camera_names'] = copy.deepcopy(self.image_view)
+            input_dict['camera_sizes'] = copy.deepcopy(camera_sizes)
 
             img_path = {}
             for view_idx, camera_view in enumerate(self.image_view):
