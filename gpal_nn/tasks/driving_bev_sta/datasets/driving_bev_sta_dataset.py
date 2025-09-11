@@ -322,6 +322,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         time_dp = DetailProf()
         time_dp.Tic("begin")
         try:
+            self.fast_buf_try_cnt += 1
             image, hw_origin = self._image_buffer_access(
                 img_path)
             if image is None:
@@ -331,6 +332,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                     img_path, image, pre_resize=(960, 540), quality=100)
                 # print("cache")
             else:
+                self.fast_buf_sec_cnt += 1
                 # print("fast load")
                 K[0, :] *= image.shape[1]/hw_origin[1]
                 K[1, :] *= image.shape[0]/hw_origin[0]
@@ -614,9 +616,14 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['polygon_arrows']['classes'] = polygon_classes
         data_dict['polygon_arrows']['arrow_type'] = arrow_types
 
+    def ClearFastBufCnt(self):
+        self.fast_buf_try_cnt = 0
+        self.fast_buf_sec_cnt = 0
+
     @TimeProf
     def __getitem__(self, idx):
         # idx = 0
+        self.ClearFastBufCnt()
 
         while True:
             t1 = time.time()
@@ -660,6 +667,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             time_dp.Duration("dataset_all", "begin")
 
             data['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
+
+            data['fast_buf_try_cnt'] = self.fast_buf_try_cnt
+            data['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
 
             t2 = time.time()
             # if t2-t1 > 1.0:
