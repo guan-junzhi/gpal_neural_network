@@ -111,8 +111,8 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
             [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0],
         ],
 
-        'distance_threshold_list': [1.0],
-        'restricted_ratio': [0.05, 0.005],
+        'distance_threshold_list': [0.5],
+        'restricted_ratio': [0.1, 0.05],
     }
     
     if True:
