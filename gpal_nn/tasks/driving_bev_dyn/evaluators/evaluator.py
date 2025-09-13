@@ -1,15 +1,71 @@
+# import sys;sys.path.insert(0, "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_neural_network")
 import os
-import cv2
 import copy
+
+import json
+import logging
+import datetime
+
 import numpy as np
+from tqdm import tqdm
+
+import cv2
 from gpal_lightning.neural_network.tasks.base.evaluators.evaluator import \
     BaseEvaluator
 from gpal_lightning.neural_network.tasks.builder import EVALUATORS
 # from gpal_nn.tasks.driving_bev_dyn.datasets.txtlabel_instance_p3 import TXTLabelLoader
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.evaluators.evaluation_node import ObjectDetectionEvaluator
-from tqdm import tqdm
-import json
+
+
+def get_git_hash():
+    git_hash = os.popen('git rev-parse HEAD').read().strip()
+    return git_hash
+
+def test_dynamic_thresholds(loggerinfo=print, restricted_ratio=[0.05, 0.005]):
+    """
+    测试不同距离下的动态阈值效果
+    """
+    loggerinfo("=== 动态阈值测试 ===")
+    
+    # ego_pos = np.array([0.0, 0.0])
+    longitudinal_ratio = restricted_ratio[0]  # 5%
+    lateral_ratio = restricted_ratio[1]      # 0.5%
+    
+    # 测试不同距离的GT
+    test_distances = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]  # 米
+    
+    loggerinfo("距离\t径向阈值\t横向阈值\t总阈值")
+    loggerinfo("-" * 40)
+
+    for dist in test_distances:
+        long_thr = dist * longitudinal_ratio
+        lat_thr = dist * lateral_ratio  
+        total_thr = np.sqrt(long_thr**2 + lat_thr**2)
+        
+        loggerinfo(f"{dist:<3}m\t{long_thr:.3f}m\t\t{lat_thr:.3f}m\t\t{total_thr:.3f}m")
+    
+    loggerinfo("优势:")
+    loggerinfo("- 近距离目标: 更严格的匹配要求")
+    loggerinfo("- 远距离目标: 更宽松的匹配要求") 
+    loggerinfo("- 自适应: 根据目标距离自动调整精度要求")
+
+def create_logger(log_file=None, rank=0, log_level=logging.INFO):    
+    logger = logging.getLogger(__name__)
+    logger.setLevel(log_level if rank == 0 else 'ERROR')
+    formatter = logging.Formatter('%(asctime)s  %(levelname)5s  %(message)s')
+    console = logging.StreamHandler()
+    console.setLevel(log_level if rank == 0 else 'ERROR')
+    console.setFormatter(formatter)
+    logger.addHandler(console)
+    if log_file is not None:
+        file_handler = logging.FileHandler(filename=log_file)
+        file_handler.setLevel(log_level if rank == 0 else 'ERROR')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    logger.propagate = False
+    return logger
+
 
 def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08_44_34/od_eval_result"):
     # if 'annos' not in self.infos[0].keys():
@@ -32,50 +88,143 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
             d[k] = np.array(d[k])
 
     class_names = [i[8:(8+13)] for i in class_names]
+    
+    cfgs = {
+        # ============= 固定参数 ============= # 
+        # default(无需额外传入参数进行控制)
+        'class_names': class_names,
+        'preds': preds,
+        'color_list': ['k', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'brown', 'cyan'],
+        'use_print_format': 2,
+        'find_worst': True,
+        'top_n': 100,
+        
+        # 切分评估范围
+        'det_range_list': [
+            [-30, -10, -2, 30, 10, 4],
+            [-50, -10, -2, 50, 10, 4],
+            [-30, -15, -2, 30, 15, 4],
+            [-30, -30, -2, 30, 30, 4],
+            [-50, -30, -2, 50, 30, 4],
+            [-50, -30, -2, 70, 30, 4],
+            [-50, -30, -2, 80, 30, 4],
+            [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0],
+        ],
+
+        'distance_threshold_list': [0.5],
+        'restricted_ratio': [0.1, 0.05],
+    }
+    
+    if True:
+        class_names             = cfgs['class_names']
+        preds                   = cfgs['preds']
+        color_list              = cfgs['color_list']
+        use_print_format        = cfgs['use_print_format']
+        find_worst              = cfgs['find_worst']
+        top_n                   = cfgs['top_n']
+        
+        det_range_list          = cfgs['det_range_list']
+        restricted_ratio        = cfgs['restricted_ratio']
+        distance_threshold_list = cfgs['distance_threshold_list']
+        # ============= 可变参数 ============= # 
+    
+    
+    # 结果存储位置(评测结果和badcase图片)
+    git_hash = get_git_hash()[:11]
+    dirname = f'{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}_{git_hash}_{use_print_format}_{distance_threshold_list}_{restricted_ratio}'
+    save_dir = f'./{result_dir}/{dirname}'
+    save_badcase_dir = f'{save_dir}/badcase_img' if find_worst else f'{save_dir}/goodcase_img'
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(save_badcase_dir, exist_ok=True)
+    
+    log_file = f'{save_dir}/record_logs_format_{use_print_format}_{dirname}.log'
+    logger = create_logger(log_file=log_file, rank=0, log_level=logging.INFO)
+    
+    logger.info(f'git_hash: {git_hash}')
+    logger.info(f'save_dir: {save_dir}')
+    logger.info(f'save_badcase_dir: {save_badcase_dir}')
+    logger.info(f'color_list: {color_list}')
+    logger.info(f'use_print_format: {use_print_format}')
+    logger.info(f'restricted_ratio: {restricted_ratio}')
+    logger.info(f'distance_threshold_list: {distance_threshold_list}')
+    logger.info(f'find_worst: {find_worst}')
+    logger.info(f'top_n: {top_n}')
+    logger.info(f'preds: {preds}')
+    logger.info(f'class_names: {class_names}')
+    logger.info(f'\n')
+    
     evaluator = ObjectDetectionEvaluator(
-        class_names=class_names,
-            det_range_list=[
-                [-30, -10, -2, 30, 10, 4],
-                [-50, -10, -2, 50, 10, 4],
-
-                [-30, -15, -2, 30, 15, 4],
-                [-50, -15, -2, 50, 15, 4],
-
-                [-30, -30, -2, 30, 30, 4],
-                [-50, -30, -2, 50, 30, 4],
-                [-70, -30, -2, 70, 30, 4],
-                [-75.2/1, -75.2, -2, 75.2/1, 75.2, 4],
-
-                [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0],
-            ],
+        class_names = class_names,
+        
+        det_range_list = det_range_list,
 
         # slice_line_len = 295,
         # data_print_len = 12,
         # class_name_print_len = 20,
 
-            r_at_p=0.7,
-            precision_points=[0.5, 0.6, 0.7, 0.8, 0.9],
+        r_at_p=0.7,
+        precision_points=[0.5, 0.6, 0.7, 0.8, 0.9],
 
-            distance_threshold_list=[1.0],
-            restricted_ratio=[0.05, 0.005],
+        distance_threshold_list = distance_threshold_list,
+        restricted_ratio = restricted_ratio,
     )
+    
     # exit(1)
-    save_dir = result_dir
-    use_print_format = 2
-    os.makedirs(save_dir, exist_ok=True)
-
-    log_file = f'{save_dir}/record_logs_{use_print_format}.log'
-    # logger = create_logger(log_file=log_file, rank=0, log_level=logging.INFO)
 
     det_annos = copy.deepcopy(preds)
     for i in range(len(gts)):
         det_annos[i].update(gts[i])
+    
     # det_annox = evaluator.load_det_annos(
     #     det_annos)  # 文件路径 or list[dict, dict, ...]
+    
+    distance_errors_list = evaluator.evaluate(det_annos, # list[dict, dict, ...]
+                                              loggerinfo=logger.info, 
+                                              save_dir=save_dir,
+                                              is_print_during_info=True, 
+                                              use_print_format=use_print_format
+                                              )
+    logger.info(f'\n')
+    test_dynamic_thresholds(loggerinfo=logger.info, restricted_ratio=restricted_ratio)
+    logger.info(f'\n')
 
-    evaluator.evaluate(det_annos, loggerinfo=print, save_dir=save_dir,
-                        is_print_during_info=False, use_print_format=use_print_format)
-    # test_dynamic_thresholds(loggerinfo=logger.info)
+    # badcase 展示不生成
+    if False:
+        frame_infos = evaluator.get_frame_infos_from_distance_errors(distance_errors_list=distance_errors_list,)
+    
+        # TODO 暂时调试使用，后续统一到函数接口内部
+        value_frame_infos = evaluator.query_raw_frame_info(query_frame_infos=frame_infos, key_frame_infos=det_annox)
+        parse_frame_infos = evaluator.sparse_frame_infos_for_vis(value_frame_infos)
+        
+        for worst_i, frame_info in enumerate(tqdm(parse_frame_infos)):  # 有badcase的fp fn
+            # timestamp = frame_info['timestamp']  # 是gt索引, 并不是timestamp
+            frame_id = frame_info['frame_id']
+        
+            evaluator.visualize_pred_scores_and_gt_3dbox_use_bev_and_side_box(
+                pts_range = det_range_list[-1],
+                class_colors = color_list,
+                points = None,
+                pred_boxes = frame_info['tot_dt_boxes'],
+                pred_label_ids = frame_info['tot_dt_labels'],
+                pred_scores = frame_info['tot_dt_scores'],
+                gt_boxes = frame_info['tot_gt_boxes'],
+                gt_boxes_label_ids = frame_info['tot_gt_boxes_label_ids'],
+                save_imgfile = f'{save_badcase_dir}/{worst_i:05d}_{frame_id}.png',
+                frame_id = frame_id,
+                save_dir = save_badcase_dir,
+                fnfp_info = frame_info['classes_data'],
+            )
+    
+        logger.info(f'\n')
+        logger.info(f'restricted_ratio: {restricted_ratio}')
+        logger.info(f'distance_threshold_list: {distance_threshold_list}')
+        logger.info(f'use_print_format: {use_print_format}')
+        logger.info(f'find_worst: {find_worst}')
+        logger.info(f'top_n: {top_n}')
+        logger.info(f'\n')
+        test_dynamic_thresholds(loggerinfo=logger.info, restricted_ratio=restricted_ratio)
+        logger.info(f'\n')
+        
 
     ap_result_str = ''
     ap_dict = {}
@@ -139,7 +288,7 @@ if __name__ == "__main__":
 
     print(ShowDataStruct("inputs", inputs, 2, 4))
 
-    root_dir = "workspace/20250908_11_58_09_eval_save/20250908115829/DRIVING_BEV_DYN/0"
+    root_dir = "workspace/20250912_08_03_29/20250912080337/DRIVING_BEV_DYN/0"
     meta_file_list = [os.path.join(root_dir, "metadata", ele) for ele in os.listdir(os.path.join(root_dir, "metadata"))]
     gt_file_list = [os.path.join(root_dir, "trues", ele)
                     for ele in os.listdir(os.path.join(root_dir, "trues"))]
