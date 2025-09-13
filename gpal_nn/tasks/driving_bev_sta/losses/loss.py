@@ -212,7 +212,7 @@ def loss_computation(preds, data, loss_func, output_group, centerline_dataset=No
     lane_total_dict = lane_loss_computation(
         preds, processed_gt, loss_func, centerline_dataset)
     time_dp.Duration("lane_loss_computation", "ProcessGt")
-    time_dp.Print()
+    # time_dp.Print()
 
     total_dict.update(lane_total_dict)
     return total_dict
