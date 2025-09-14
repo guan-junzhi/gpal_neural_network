@@ -71,7 +71,7 @@ then
     config=configs_for_develop/radar4d_nn_sdk_config.yaml
 else
     tasks=driving_bev_sta 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20250912_14_47_54/checkpoint/epoch=0-step=11000_checkpoint.pth
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20250913_05_48_13/checkpoint/epoch=3-step=60000_checkpoint.pth
     config=configs_for_develop/driving_bev_sta_config.yaml
 
 fi
@@ -93,4 +93,4 @@ fi
 # load_from
 # python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 
-python3 train.py --resume $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
+python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
