@@ -1,4 +1,5 @@
 # import sys;sys.path.insert(0, "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_neural_network")
+import sys;sys.path.insert(0, "/opt/GPAL_Repo_PYTHON/gpal_neural_network")
 import os
 import copy
 
@@ -50,20 +51,29 @@ def test_dynamic_thresholds(loggerinfo=print, restricted_ratio=[0.05, 0.005]):
     loggerinfo("- 远距离目标: 更宽松的匹配要求") 
     loggerinfo("- 自适应: 根据目标距离自动调整精度要求")
 
-def create_logger(log_file=None, rank=0, log_level=logging.INFO):    
+
+def create_logger(log_file=None, rank=0, log_level=logging.INFO, use_console=True):
     logger = logging.getLogger(__name__)
-    logger.setLevel(log_level if rank == 0 else 'ERROR')
+    # 根据 rank 设置日志级别（仅 rank=0 时记录指定级别，否则 ERROR）
+    logger.setLevel(log_level if rank == 0 else logging.ERROR)
+    
     formatter = logging.Formatter('%(asctime)s  %(levelname)5s  %(message)s')
-    console = logging.StreamHandler()
-    console.setLevel(log_level if rank == 0 else 'ERROR')
-    console.setFormatter(formatter)
-    logger.addHandler(console)
+    
+    # 仅在需要时添加控制台处理器
+    if use_console:
+        console = logging.StreamHandler()
+        console.setLevel(log_level if rank == 0 else logging.ERROR)
+        console.setFormatter(formatter)
+        logger.addHandler(console)
+    
+    # 添加文件处理器（若指定了 log_file）
     if log_file is not None:
         file_handler = logging.FileHandler(filename=log_file)
-        file_handler.setLevel(log_level if rank == 0 else 'ERROR')
+        file_handler.setLevel(log_level if rank == 0 else logging.ERROR)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-    logger.propagate = False
+    
+    logger.propagate = False  # 防止传播到根 logger
     return logger
 
 
@@ -138,7 +148,7 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     os.makedirs(save_badcase_dir, exist_ok=True)
     
     log_file = f'{save_dir}/record_logs_format_{use_print_format}_{dirname}.log'
-    logger = create_logger(log_file=log_file, rank=0, log_level=logging.INFO)
+    logger = create_logger(log_file=log_file, rank=0, log_level=logging.INFO, use_console=False)
     
     logger.info(f'git_hash: {git_hash}')
     logger.info(f'save_dir: {save_dir}')
@@ -288,7 +298,7 @@ if __name__ == "__main__":
 
     print(ShowDataStruct("inputs", inputs, 2, 4))
 
-    root_dir = "workspace/20250912_08_03_29/20250912080337/DRIVING_BEV_DYN/0"
+    root_dir = "20250913_06_38_02/20250913063814/DRIVING_BEV_DYN/0"
     meta_file_list = [os.path.join(root_dir, "metadata", ele) for ele in os.listdir(os.path.join(root_dir, "metadata"))]
     gt_file_list = [os.path.join(root_dir, "trues", ele)
                     for ele in os.listdir(os.path.join(root_dir, "trues"))]
