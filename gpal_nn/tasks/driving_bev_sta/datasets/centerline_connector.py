@@ -266,7 +266,5 @@ def merge_connected_centerlines(centerlines_list):
                 merged_centerlines[merged_idx]['keypoint'] = \
                     np.array(id_to_centerline[merged_centerlines[merged_idx]['path'][centerline_idx]]['points'][-1])
                 break
-
-    centerlines_dict = get_centerline_dict(merged_centerlines)
-    return centerlines_dict
+    return merged_centerlines
 

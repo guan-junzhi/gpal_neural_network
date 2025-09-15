@@ -17,7 +17,7 @@ from gpal_lightning.utils.data_buffer import FastLoaderBuffer
 from gpal_nn.tasks.driving_bev_sta.datasets.transform import *
 from gpal_nn.tasks.driving_bev_sta.datasets.letter_box import letterbox_image, random_scale_and_translate
 from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
-from gpal_nn.tasks.driving_bev_sta.datasets.centerline_connector import merge_connected_centerlines
+from gpal_nn.tasks.driving_bev_sta.datasets.centerline_connector import merge_connected_centerlines, get_centerline_dict
 from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
 from gpal_lightning.utils.profiling import TimeProf
 import random
@@ -404,12 +404,33 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
     def parse_annotations(self, data_info, data_dict, bev_real2aug):
         annot = data_info['annotation']
-
-        self.process_polylines(annot['polylines'], data_dict, bev_real2aug)
         self.process_edges(annot['edges'], data_dict, bev_real2aug)
+        self.process_polylines(annot['polylines'], data_dict, bev_real2aug)
         self.process_polygons_arrow(annot['polygons'], data_dict, bev_real2aug)
         if 'centerlines' in annot:
             self.process_centerline(annot['centerlines'], data_dict, bev_real2aug)
+        if 'points' in data_dict['edges']:
+            edges_visible_dict = {}
+            edges_visible_mask = np.ones(len(data_dict['edges']['points']), dtype=bool)
+            for idx1, edge1 in enumerate(data_dict['edges']['points']):
+                num_cross_edge = 0
+                for edge1_pt in edge1:
+                    ego_ls = LineString(np.stack([edge1_pt[:2], np.array([0,0])], axis=0))
+                    for idx2, edge2 in enumerate(data_dict['edges']['points']):
+                        if idx1 == idx2:
+                            continue
+                        edge_ls = LineString(edge2[:,:2])
+                        if ego_ls.intersects(edge_ls):
+                            num_cross_edge += 1
+                            break
+                if num_cross_edge > self.pts_per_vector - 4:
+                    edges_visible_mask[idx1] = False
+
+            if edges_visible_mask.sum() > 0:
+                edges_visible_dict['points'] = data_dict['edges']['points'][edges_visible_mask]
+                edges_visible_dict['classes'] = np.array(data_dict['edges']['classes'])[edges_visible_mask]
+            data_dict['edges'] = edges_visible_dict
+
         data_dict["calib_type"] = data_info['sensor']['calib_type']
 
     def reorder_points(self, points):
@@ -446,13 +467,25 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
                 # print("continue", self.gt_range)
                 continue
+            lane = _fix_pts_interpolate(lane, self.pts_per_vector)
+            if 'points' in data_dict['edges']:
+                num_cross_edge = 0
+                edges_points = data_dict['edges']['points']
+                for lane_pt in lane:
+                    ego_ls = LineString(np.stack([lane_pt[:2], np.array([0,0])], axis=0))
+                    for edge in edges_points:
+                        edge_ls = LineString(edge[:,:2])
+                        if ego_ls.intersects(edge_ls):
+                            num_cross_edge += 1
+                            break
+                if num_cross_edge > self.pts_per_vector - 4:
+                    continue
             line_mask[idx] = True
             lane = self.reorder_points(lane)
             lanes.append(lane)
 
         if len(lanes) > 0:
-            points = np.array([_fix_pts_interpolate(
-                item, self.pts_per_vector) for item in lanes])
+            points = np.array(lanes, dtype=np.float32)
             assert points.shape[
                 1] == self.pts_per_vector, f'gp_points shape:{points.shape} is not {self.pts_per_vector}!'
             data_dict['polylines']['points'] = points
@@ -576,7 +609,27 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 }
                 centerline_list.append(cur_dict)
                 centerline_pts_idx += 1
-        centerline_dict = merge_connected_centerlines(centerline_list)
+        merged_centerlines = merge_connected_centerlines(centerline_list)
+        if 'points' in data_dict['edges']:
+            merged_centerlines_visible = []
+            edges_points = data_dict['edges']['points']
+            for centerline in merged_centerlines:
+                centerline['points'] = _fix_pts_interpolate(centerline['points'], self.pts_per_vector)
+                num_cross_edge = 0
+                for centerline_pt in centerline['points']:
+                    ego_ls = LineString(np.stack([centerline_pt[:2], np.array([0,0])], axis=0))
+                    for edge in edges_points:
+                        edge_ls = LineString(edge[:,:2])
+                        if ego_ls.intersects(edge_ls):
+                            num_cross_edge += 1
+                            break
+                if num_cross_edge > self.pts_per_vector - 4:
+                    continue
+                merged_centerlines_visible.append(centerline)
+
+            centerline_dict = get_centerline_dict(merged_centerlines_visible)
+        else:
+            centerline_dict = get_centerline_dict(merged_centerlines)
         if len(centerline_dict["points"]) <= 0:
             return
         data_dict['centerlines'] = centerline_dict
