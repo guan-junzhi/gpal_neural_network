@@ -36,7 +36,15 @@ class DRIVING_BEV_STATask(BaseTask):
                 vis1.DrawPolyline(l, [0, 255, 255], 2, 'solid')
             for i,l in enumerate(gts[idx]['polylines']['points']):
                 shape_type = gts[idx]['polylines']['shape_type'][i]
-                vis1.DrawPolyline(l, [0, 255, 0], 2, linetype_list[shape_type])
+                if shape_type == 0 or shape_type == 1:
+                    vis1.DrawPolyline(l, [0, 255, 0], 2, linetype_list[shape_type])
+                elif shape_type == 2:
+                    vis1.DrawPolyline(l, [250, 51, 153], 2, 'dashed', 20)
+                elif shape_type == 3:
+                    vis1.DrawPolyline(l, [203, 192, 255], 2, 'dashed', 20)
+                else:
+                    print("shape_type error:", shape_type)
+                    vis1.DrawPolyline(l, [192, 192, 192], 2, 'solid')
             if 'centerlines' in gts[idx]:
                 for i,l in enumerate(gts[idx]['centerlines']['points']):
                 # for l in gts[idx]['centerlines']['points']:
@@ -67,7 +75,16 @@ class DRIVING_BEV_STATask(BaseTask):
                 #     0, 255), random.randint(0, 255)]
                 try:
                     _, shape_type = shape_type.max(-1)
-                    vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                    # vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                    if shape_type == 0 or shape_type == 1:
+                        vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                    elif shape_type == 2:
+                        vis2.DrawPolyline(l.detach().cpu().numpy(), [250, 51, 153], 2, 'dashed', 20)
+                    elif shape_type == 3:
+                        vis2.DrawPolyline(l.detach().cpu().numpy(), [203, 192, 255], 2, 'dashed', 20)
+                    else:
+                        print("shape_type error:", shape_type)
+                        vis2.DrawPolyline(l.detach().cpu().numpy(), [192, 192, 192], 2, 'solid')
                     if is_split_merge_pred.values > 0.5:
                         split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
                         vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
