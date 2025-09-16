@@ -41,7 +41,7 @@ class DRIVING_BEV_DYNLoss(BaseLoss):
         hm_gt = trues["gt_curr_hm_cen"].view(B, C, -1)
         score_gt = hm_gt
 
-        hm_pred = preds['hm_cen_pred'][:, 0].view(
+        hm_pred = preds['hm_cen'].view(
             B, C, -1)  # 经过 maxpool 和 == [1, 4, 23040]
 
         score, _ = hm_pred.max(dim=1)  # 帧预测的热力图的通道最大值

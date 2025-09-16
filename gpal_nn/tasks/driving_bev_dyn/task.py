@@ -148,8 +148,8 @@ class DRIVING_BEV_DYNTask(BaseTask):
                 vis_imgs.append(img)
             vis_imgs = np.concatenate(vis_imgs, axis=0)
 
-        except:
-            print("DRIVING_BEV_DYNTask GetVis faild")
+        except ValueError as e:
+            print(f"DRIVING_BEV_DYNTask GetVis faild {e}")
             pass
         
         vis_draw1 = vis1.Draw()
@@ -158,8 +158,8 @@ class DRIVING_BEV_DYNTask(BaseTask):
             vis_imgs = cv2.resize(vis_imgs, (int(vis_imgs.shape[1] / vis_imgs.shape[0] * vis_draw1.shape[0]), vis_draw1.shape[0]))
             vis_draw1 = np.concatenate([vis_draw1, vis_imgs], axis=1)
 
-        except:
-            print("DRIVING_BEV_DYNTask GetVis faild")
+        except ValueError as e:
+            print(f"DRIVING_BEV_DYNTask GetVis faild {e}")
             pass
 
         

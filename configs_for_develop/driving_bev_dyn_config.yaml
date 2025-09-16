@@ -27,8 +27,16 @@ Backbones:
 Groups:
   group0: {load: all, freeze: all, type: DummyBackbone, input_source: backbone0}
 Necks:
-  neck0: {load: all, type: DummyNeck, input_source: group0}
-
+  neck0: 
+    type: Simple_FPN
+    input_source: group0
+    load: all
+    # freeze: all
+    layers_config:
+      conv_channels: [512, 1024, 2048]
+      out_channel: 64
+      use_relu: true
+      drop_smooth_conv: true
 
 Transformer:
   type: ODViewTransformer

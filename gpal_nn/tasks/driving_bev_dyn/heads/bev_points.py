@@ -5,6 +5,7 @@ import torch.nn as nn
 import random
 # from ....ops.pointnet2.pointnet2_stack import pointnet2_utils as pointnet2_stack_utils
 import time
+from tools_scripts.data_format_cvt import ShowDataStruct
 
 
 def get_feature_of_key_points_indice(im, x, y):
@@ -45,7 +46,7 @@ class Bev_To_Points(nn.Module):
 
     def get_sampled_points_and_gather_matched_features(self, batch_dict, batch_size, mode_gt, mode_pred, features):
 
-        B, _, C, H, W = batch_dict['hm_cen_pred'].shape
+        B, C, H, W = batch_dict['hm_cen'].shape
 
         # 为了不让hm空
         # if self.training:
@@ -64,7 +65,7 @@ class Bev_To_Points(nn.Module):
             hm_pred = batch_dict['hm_cen_pred'][:, 1].view(
                 batch_size, C, -1)  # 经过 maxpool 和 == [1, 4, 23040]
         elif "curr" in mode_pred:
-            hm_pred = batch_dict['hm_cen_pred'][:, 0].view(batch_size, C, -1)
+            hm_pred = batch_dict['hm_cen'].view(batch_size, C, -1)
         else:
             raise NotImplementedError
 
@@ -100,19 +101,19 @@ class Bev_To_Points(nn.Module):
 
         # 置信度得分
         if "curr" in mode_pred:
-            batch_dict['pred_curr_track_score'] = score_topk.view(
+            batch_dict['pred_curr_track_score'] = score_topk.reshape(
                 batch_size, self.num_key_points, 1)
             batch_dict['pred_curr_track_point_features'] = features_topk.permute(
-                0, 2, 1).view(batch_size, -1, 64)  # -> N, 256, 64
+                0, 2, 1).reshape(batch_size, -1, 15)  # -> N, 256, 64
             batch_dict['pred_curr_track_point_coords'] = xys_topk.permute(
-                0, 2, 1).view(batch_size, self.num_key_points, -1)  # (BxN, 4)
+                0, 2, 1).reshape(batch_size, self.num_key_points, -1)  # (BxN, 4)
 
-            hm = batch_dict['hm_cen_pred'][:, 0].view(batch_size, C, -1)
+            hm = batch_dict['hm_cen'].reshape(batch_size, C, -1)
             score_gt_topk = hm[torch.arange(B)[:, None, None],
                                torch.arange(hm.shape[1])[
                 None, :, None],
                 indice_topk.reshape(B, 1, -1).repeat(1, hm.shape[1], 1)]
-            batch_dict['score'] = score_gt_topk.view(
+            batch_dict['score'] = score_gt_topk.reshape(
                 batch_size, -1, 1, self.num_key_points)  # -> [1, 4, 1, 256]  # 只是用当前帧的
 
         elif "prev" in mode_pred:
@@ -151,26 +152,60 @@ class Bev_To_Points(nn.Module):
 
         batch_size = int(batch_dict['head_conv'].shape[0])
 
-        spatial_features_2d_size = batch_dict['head_conv'].size()
-        spatial_features_2d = batch_dict['head_conv'].view(batch_size, 1,
-                                                           spatial_features_2d_size[1],
-                                                           spatial_features_2d_size[2],
-                                                           spatial_features_2d_size[3]
-                                                           )
+        # spatial_features_2d_size = batch_dict['head_conv'].size()
+        # spatial_features_2d = batch_dict['head_conv'].view(batch_size,
+        #                                                    spatial_features_2d_size[1],
+        #                                                    spatial_features_2d_size[2],
+        #                                                    spatial_features_2d_size[3]
+        #                                                    )
 
-        spatial_features_2d_curr = spatial_features_2d[:, 0]
+        # spatial_features_2d_curr = spatial_features_2d[:, 0]
         # spatial_features_2d_prev = spatial_features_2d[:, 1]
 
         batch_dict = self.get_sampled_points_and_gather_matched_features(batch_dict,
                                                                          batch_size,
                                                                          mode_gt="gt_curr_",
                                                                          mode_pred="pred_curr_",
-                                                                         features=spatial_features_2d_curr)
+                                                                         features=batch_dict['head_conv'])
 
         # batch_dict = self.get_sampled_points_and_gather_matched_features(batch_dict,
         #                                                                  batch_size,
         #                                                                  mode_gt="gt_prev_",
         #                                                                  mode_pred="pred_prev_",
         #                                                                  features=spatial_features_2d_prev)
+
+
+        pred_curr_track_point_features = batch_dict['pred_curr_track_point_features'].permute(0, 2, 1)
+        pred_curr_track_score = batch_dict['pred_curr_track_score'].permute(0, 2, 1)
+
+        estimation_cen = pred_curr_track_point_features[:,:2,:]
+        estimation_z = pred_curr_track_point_features[:,2:3,:]
+        estimation_dim = pred_curr_track_point_features[:,3:6,:]
+        estimation_dir = pred_curr_track_point_features[:,6:8,:]
+        estimation_vel = pred_curr_track_point_features[:,8:10,:]
+        estimation_score = pred_curr_track_point_features[:,10:11,:]
+
+        template_xyz = torch.cat([batch_dict['pred_curr_track_point_coords'][:, :, :2],
+                                 batch_dict['pred_curr_track_score']], dim=-1)  # -> [1, 256, 3]
+        
+        _, label = batch_dict['score'].max(dim=1)  # 原始的score含通道
+        batch_dict['batch_pred_labels'] = label.view(
+            batch_dict['score'].shape[0], -1) + 1
+
+        
+        # estimation_dim[:, 0, :] = estimation_dim[:, 0, :] * 0.0 + 2.0
+        # estimation_dim[:, 1, :] = estimation_dim[:, 1, :] * 0.0 + 2.0
+        # estimation_dim[:, 2, :] = estimation_dim[:, 2, :] * 0.0 + 2.0
+        # exit(1)
+        batch_dict['Points_Loss'] = {
+            'estimation_cen': estimation_cen + template_xyz.permute(0, 2, 1)[:,0:2,:].flip(1),
+            'estimation_z': estimation_z,
+            'estimation_dim': estimation_dim,
+            'estimation_dir': estimation_dir,
+            'estimation_vel': estimation_vel,
+            'estimation_score': pred_curr_track_score,
+            'template_xyz': template_xyz,  # xy实际位置和上一帧得分
+        }
+
 
         return batch_dict

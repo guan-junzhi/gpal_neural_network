@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.heads.bev_points import Bev_To_Points
 from gpal_nn.tasks.driving_bev_dyn.heads.pointtransformersiamese import PointnetTransformerSiamese
-
+from gpal_nn.tasks.driving_bev_dyn.heads.fast_decoder_head import FastDecoderHead
 BN_MOMENTUM = 0.1
 
 
@@ -412,28 +412,32 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.is_track_task = True  # 区分当前是否是Track任务
         self.head_conv = 64
 
-        self.neck_cfg = dict(
-            NAME="ImageNeck",
-            # NAME="FusionOccSim",
-            Fusion_Sptial=True,
-            CROP_AREA=[[8, 88], [16, 208]],
-            LAYER_NUMS=[2, 2, 2, 2],
-            LAYER_STRIDES=[1, 2, 2, 2],
-            DOWN_FILTERS=[64, 128, 256, 512],
-            CAT_FILTERS=[768, 256, 384, 64],
-            UPSAMPLE_FILTERS=[128, 64, 64, 64],
-            num_bev_features=[64, 64, 128, 64, 128, 128, 128]
-        )
+        # self.neck_cfg = dict(
+        #     NAME="ImageNeck",
+        #     # NAME="FusionOccSim",
+        #     Fusion_Sptial=True,
+        #     CROP_AREA=[[8, 88], [16, 208]],
+        #     LAYER_NUMS=[2, 2, 2, 2],
+        #     LAYER_STRIDES=[1, 2, 2, 2],
+        #     DOWN_FILTERS=[64, 128, 256, 512],
+        #     CAT_FILTERS=[768, 256, 384, 64],
+        #     UPSAMPLE_FILTERS=[128, 64, 64, 64],
+        #     num_bev_features=[64, 64, 128, 64, 128, 128, 128]
+        # )
+        self.head_config = {"in_channels": 256, "num_stages": 6, "out_channels": 21}
+
         super(DRIVING_BEV_DYNHead, self).__init__(
             global_config, task_config, loss_func)
 
     def _setup(self):
         self.head = nn.ModuleDict()
-        self.head["bev_feature_extractor"] = ImageNeck(self.neck_cfg,
-                                                       self.task_config.bev_channels)
+        # self.head["bev_feature_extractor"] = ImageNeck(self.neck_cfg,
+        #                                                self.task_config.bev_channels)
 
-        self.head["center_head"] = CenterHead(
-            self.head_conv, self.neck_cfg["num_bev_features"][3])
+        # self.head["center_head"] = CenterHead(
+        #     self.head_conv, self.neck_cfg["num_bev_features"][3])
+
+        self.head["center_head"] = FastDecoderHead(self.head_config)
 
         BEV_TO_POINTS = dict(
             NAME="Bev_To_Points",
@@ -477,8 +481,35 @@ class DRIVING_BEV_DYNHead(BaseHead):
             head.load_state_dict(state_dict_sub, strict)
 
     def forward(self, x: torch.Tensor, calib=None) -> torch.Tensor:
-        _, spatial_features_2d = self.head["bev_feature_extractor"](x)
-        x = self.head["center_head"](spatial_features_2d[0])
-        x = self.head["bev_2_points"].forward(x)
-        x = self.head["point_transformer"].forward(x)
+
+        # import pickle as pkl
+        # pkl.dump(x, open("head_x.pkl", 'wb'))
+        # exit(1)
+
+        # _, spatial_features_2d = self.head["bev_feature_extractor"](x)
+        x = self.head["center_head"](x)
+        batch_dict = {'head_conv': x[:, 6:], "hm_cen": x[:, :6]}
+        x = self.head["bev_2_points"].forward(batch_dict)
+        # print(ShowDataStruct("x head 2", x))
+
+        # x = self.head["point_transformer"].forward(x)
+        # print(ShowDataStruct("x head 3", x))
         return [x]
+# preds<class 'list'> len = 1
+#     0<class 'dict'>
+#         head_conv<class 'torch.Tensor'> : torch.Size([4, 64, 96, 240]) torch.float32
+#         hm_cen<class 'torch.Tensor'> : torch.Size([4, 6, 96, 240]) torch.float32
+#         hm_cen_pred<class 'torch.Tensor'> : torch.Size([4, 1, 6, 96, 240]) torch.float32
+#         pred_curr_track_score<class 'torch.Tensor'> : torch.Size([4, 256, 1]) torch.float32
+#         pred_curr_track_point_features<class 'torch.Tensor'> : torch.Size([4, 256, 64]) torch.float32
+#         pred_curr_track_point_coords<class 'torch.Tensor'> : torch.Size([4, 256, 2]) torch.float32
+#         score<class 'torch.Tensor'> : torch.Size([4, 6, 1, 256]) torch.float32
+#         batch_pred_labels<class 'torch.Tensor'> : torch.Size([4, 256]) torch.int64
+#         Points_Loss<class 'dict'>
+#             estimation_cen<class 'torch.Tensor'> : torch.Size([4, 2, 256]) torch.float32
+#             estimation_z<class 'torch.Tensor'> : torch.Size([4, 1, 256]) torch.float32
+#             estimation_dim<class 'torch.Tensor'> : torch.Size([4, 3, 256]) torch.float32
+#             estimation_dir<class 'torch.Tensor'> : torch.Size([4, 2, 256]) torch.float32
+#             estimation_vel<class 'torch.Tensor'> : torch.Size([4, 2, 256]) torch.float32
+#             estimation_score<class 'torch.Tensor'> : torch.Size([4, 1, 256]) torch.float32
+#             template_xyz<class 'torch.Tensor'> : torch.Size([4, 256, 3]) torch.float32

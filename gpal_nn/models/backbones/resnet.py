@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from gpal_lightning.neural_network.network_modules.backbones.builder import BACKBONES
 from gpal_lightning.neural_network.network_modules.base_module import BaseModule
+from tools_scripts.data_format_cvt import ShowDataStruct
 
 
 @BACKBONES.register_module()
@@ -113,23 +114,77 @@ class EncoderRes50(BaseModule):
     def __init__(self, global_config, out_channels):
         super(EncoderRes50, self).__init__(global_config)
 
+        # import pickle as pkl
+        # pkl.dump((global_config, out_channels), open("EncoderRes50.pkl", 'wb'))
+        # exit(1)
         self.C = out_channels
         resnet = models.resnet50(pretrained=True)
         self.backbone = nn.Sequential(*list(resnet.children())[:-4])
         self.layer3 = resnet.layer3
-        self.depth_layer = nn.Conv2d(128, self.C, kernel_size=1, padding=0)
-        self.upsampling_layer = UpsamplingConcat(0, 0)
+        self.layer4 = resnet.layer4
+        # self.depth_layer = nn.Conv2d(128, self.C, kernel_size=1, padding=0)
+        # self.upsampling_layer = UpsamplingConcat(0, 0)
 
     def forward(self, x):
         x1 = self.backbone(x)
         x2 = self.layer3(x1)
-        x = self.upsampling_layer(x2, x1)
-        x = self.depth_layer(x)
-        return [x]
+        x3 = self.layer4(x2)
+        # x = self.upsampling_layer(x2, x1)
+        # x = self.depth_layer(x)
+
+    # 0<class 'torch.Tensor'> : torch.Size([4, 512, 40, 96]) torch.float32
+    # 1<class 'torch.Tensor'> : torch.Size([4, 1024, 20, 48]) torch.float32
+    # 2<class 'torch.Tensor'> : torch.Size([4, 2048, 10, 24]) torch.float32
+        return [x1,x2,x3]
+
+
+@BACKBONES.register_module()
+class EncoderRes34(BaseModule):
+    def __init__(self, global_config, out_channels):
+        super(EncoderRes34, self).__init__(global_config)
+
+        # import pickle as pkl
+        # pkl.dump((global_config, out_channels), open("EncoderRes50.pkl", 'wb'))
+        # exit(1)
+        self.C = out_channels
+        resnet = models.resnet34(pretrained=True)
+        print(resnet.children())
+        self.backbone = nn.Sequential(*list(resnet.children())[:-4])
+        print(list(resnet.children()))
+        self.layer3 = resnet.layer3
+        self.layer4 = resnet.layer4
+        # self.depth_layer = nn.Conv2d(128, self.C, kernel_size=1, padding=0)
+        # self.upsampling_layer = UpsamplingConcat(0, 0)
+
+    def forward(self, x):
+        x1 = self.backbone(x)
+        x2 = self.layer3(x1)
+        x3 = self.layer4(x2)
+        # x = self.upsampling_layer(x2, x1)
+    #     # x = self.depth_layer(x)
+    # 0<class 'torch.Tensor'> : torch.Size([4, 128, 40, 96]) torch.float32
+    # 1<class 'torch.Tensor'> : torch.Size([4, 256, 20, 48]) torch.float32
+    # 2<class 'torch.Tensor'> : torch.Size([4, 512, 10, 24]) torch.float32
+        return [x1,x2,x3]
 
 
 if __name__ == "__main__":
-    x = torch.randn((4, 3, 640, 640)).cuda()
-    bb = ResNet(34).cuda()
-    y = bb(x)
-    print(y.shape)
+    # x = torch.randn((4, 3, 640, 640)).cuda()
+    # bb = ResNet(34).cuda()
+    # y = bb(x)
+    # print(y.shape)
+
+    import pickle as pkl
+    inputs = pkl.load(open("EncoderRes50.pkl", 'rb'))
+    print("hello")
+    # r50 = EncoderRes50(*inputs)
+    r50 = EncoderRes34(*inputs)
+    r50 = r50.cuda()
+    x = torch.randn((20, 3, 320, 768)).cuda()
+    while True:
+        y = r50(x)
+
+        print("hello")
+        print(ShowDataStruct("y", y))
+
+    #     0<class 'torch.Tensor'> : torch.Size([4, 64, 40, 96]) torch.float32
