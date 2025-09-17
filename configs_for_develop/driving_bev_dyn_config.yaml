@@ -1,4 +1,4 @@
-image_per_gpu: 36
+image_per_gpu: 32
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 30000
