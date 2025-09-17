@@ -424,7 +424,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
         #     UPSAMPLE_FILTERS=[128, 64, 64, 64],
         #     num_bev_features=[64, 64, 128, 64, 128, 128, 128]
         # )
-        self.head_config = {"in_channels": 256, "num_stages": 6, "out_channels": 21}
+        self.head_config = {"in_channels": 1024, "num_stages": 6, "out_channels": 21}
 
         super(DRIVING_BEV_DYNHead, self).__init__(
             global_config, task_config, loss_func)

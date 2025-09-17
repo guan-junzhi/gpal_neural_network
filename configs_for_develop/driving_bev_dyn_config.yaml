@@ -1,4 +1,4 @@
-image_per_gpu: 20
+image_per_gpu: 36
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 30000
@@ -17,7 +17,7 @@ Train:
 
 Backbones:
   backbone0:
-    type: EncoderRes50
+    type: EncoderRes34
     ampfp16: true
     load: all
     # freeze: all
@@ -33,8 +33,8 @@ Necks:
     load: all
     # freeze: all
     layers_config:
-      conv_channels: [512, 1024, 2048]
-      out_channel: 64
+      conv_channels: [128, 256, 512]
+      out_channel: 256
       use_relu: true
       drop_smooth_conv: true
 
@@ -68,7 +68,7 @@ Tasks:
     backbone: backbone0
     group: group0
     neck: neck0
-    bev_channels: 64
+    bev_channels: 256
     # PreProcessing:
     class_dict:
         1: [vehicle_car]
