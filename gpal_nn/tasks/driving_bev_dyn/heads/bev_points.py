@@ -107,6 +107,7 @@ class Bev_To_Points(nn.Module):
                 0, 2, 1).reshape(batch_size, -1, 15)  # -> N, 256, 64
             batch_dict['pred_curr_track_point_coords'] = xys_topk.permute(
                 0, 2, 1).reshape(batch_size, self.num_key_points, -1)  # (BxN, 4)
+            batch_dict['pred_curr_track_point_idx'] = indice_topk
 
             hm = batch_dict['hm_cen'].reshape(batch_size, C, -1)
             score_gt_topk = hm[torch.arange(B)[:, None, None],

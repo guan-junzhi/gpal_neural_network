@@ -786,6 +786,7 @@ class DataProcessor(object):
                 bbox_l = l / bound_size_x * hm_l
                 bbox_w = w / bound_size_y * hm_w
                 radius = compute_radius((math.ceil(bbox_l), math.ceil(bbox_w)))
+                radius = 0
                 radius = max(0, int(radius))
                 # x --> y (invert to 2D image space)
                 center_x = (x - minX) / bound_size_x * hm_l
