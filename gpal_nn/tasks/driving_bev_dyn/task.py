@@ -171,6 +171,10 @@ class DRIVING_BEV_DYNTask(BaseTask):
             vis = self.GetVis(data, preds, trues, metadata, calib, idx)
             imgs.append(vis)
         imgs = np.concatenate(imgs, axis=1)
+
+        # import cv2
+        # cv2.imwrite(f"eval_vis_single2/{iteration}.jpg", imgs)
+
         self.logger.image_log(iteration, phase, log_writer,
                               0, torch.from_numpy(imgs).permute(2, 0, 1).flip(0))
 
