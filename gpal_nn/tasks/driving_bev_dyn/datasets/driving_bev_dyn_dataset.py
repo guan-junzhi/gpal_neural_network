@@ -535,7 +535,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             if not_selected != []:
                 print(len(data_dict['gt_names'][selected]),
                       data_dict['gt_names'][not_selected])
-                exit(1)
+                # exit(1)
             data_dict['gt_boxes'] = data_dict['gt_boxes'][selected]
             data_dict['gt_names'] = data_dict['gt_names'][selected]
             gt_classes = np.array([self.type_to_id[n]
