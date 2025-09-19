@@ -758,25 +758,24 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 current_img = cv2.undistort(
                     current_img, calib_intrin, calib_dist, calib_intrin)
 
-                current_img = torch.from_numpy(current_img).unsqueeze(
-                    0).to("cpu").permute(0, 3, 1, 2).float()
+                if self.phase == const.PHASE_TRAINING:
+                    current_img = torch.from_numpy(current_img).unsqueeze(
+                        0).to("cpu").permute(0, 3, 1, 2).float()
+                    cam_to_vehicle = np.linalg.inv(calib_extrin)
+                    rot_temp = scipy.spatial.transform.Rotation.from_matrix(
+                        cam_to_vehicle[:3, :3]).as_quat()
+                    rot_temp = Quaternion(rot_temp[3], rot_temp[0], rot_temp[1], rot_temp[2])
 
+                    # print("calib_extrin\n", calib_extrin)
+                    current_img, trans_cv, rots_cv = self.img_aug_cuda(
+                        current_img, None, rot_temp, calib_intrin, device="cpu")
 
-                cam_to_vehicle = np.linalg.inv(calib_extrin)
-                rot_temp = scipy.spatial.transform.Rotation.from_matrix(
-                    cam_to_vehicle[:3, :3]).as_quat()
-                rot_temp = Quaternion(rot_temp[3], rot_temp[0], rot_temp[1], rot_temp[2])
+                    # print(current_img.shape, rots_cv, rots_cv.rotation_matrix)
+                    cam_to_vehicle[:3, :3] = rots_cv.rotation_matrix
 
-                # print("calib_extrin\n", calib_extrin)
-                current_img, trans_cv, rots_cv = self.img_aug_cuda(
-                    current_img, None, rot_temp, calib_intrin, device="cpu")
-
-                # print(current_img.shape, rots_cv, rots_cv.rotation_matrix)
-                cam_to_vehicle[:3, :3] = rots_cv.rotation_matrix
-
-                input_dict["extrinsic"][view_idx] = np.linalg.inv(cam_to_vehicle)
-                current_img = current_img.squeeze(
-                    0).permute(1, 2, 0).cpu().numpy()
+                    input_dict["extrinsic"][view_idx] = np.linalg.inv(cam_to_vehicle)
+                    current_img = current_img.squeeze(
+                        0).permute(1, 2, 0).cpu().numpy()
 
                 if self.phase == const.PHASE_TRAINING:
                     # current_img = aug_image(current_img)
