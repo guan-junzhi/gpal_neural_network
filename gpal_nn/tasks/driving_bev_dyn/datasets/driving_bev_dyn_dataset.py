@@ -30,7 +30,9 @@ from gpal_nn.tasks.driving_bev_dyn.utils import common_utils
 
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.datasets.data_processor import DataProcessor
-
+from pyquaternion import Quaternion
+import torch.nn.functional as F
+import scipy
 
 def read_img(files_img, image_resize=[360, 640, 3]):
     # try:
@@ -574,6 +576,87 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.fast_buf_try_cnt = 0
         self.fast_buf_sec_cnt = 0
 
+
+    def img_aug_cuda(self, img_tensor, trans_cv, rots_cv, intrin, device = "cuda:0"):
+        noise_rot_mat = None
+        # if self.task_config.ext_aug_conf and random.random() < 0.25:
+        if random.random() < 0.5:
+            trans_cv, rots_cv, noise_rot_mat = self.ext_augmentation(trans_cv, rots_cv)
+            # print(trans_cv, rots_cv, noise_rot_mat)
+        if noise_rot_mat is not None:
+            img_tensor = self.remap_rotate_aug2_cuda(img_tensor, noise_rot_mat, intrin, device)
+        # if self.jitter and random.random() < 0.25:
+        #     for i in range(img_tensor.shape[0]):
+        #         img_tensor[i] = self.jitter(img_tensor[i]/255.0) * 255.0
+
+        return img_tensor, trans_cv, rots_cv
+
+    def ext_augmentation(self, trans_cv, rots_cv):
+        max_noise_angle = [3, 3, 3]
+        select = list(np.linspace(-max_noise_angle[0], max_noise_angle[0], 11))
+        noise_angle = np.array([random.sample(select, 1)[0],
+                                random.sample(select, 1)[0],
+                                random.sample(select, 1)[0]])
+        noise_angle = noise_angle * (np.pi / 180.)
+        cos_noise_angle = np.cos(noise_angle)
+        sin_noise_angle = np.sin(noise_angle)
+        noise_rot_mat = np.array([1.0, 0.0, 0.0,
+                                  0.0, cos_noise_angle[0], -sin_noise_angle[0],
+                                  0.0, sin_noise_angle[0], cos_noise_angle[0]]).reshape(3, 3) @ \
+                        np.array([cos_noise_angle[1], 0.0, -sin_noise_angle[1],
+                                  0.0, 1.0, 0.0,
+                                  sin_noise_angle[1], 0.0, cos_noise_angle[1]]).reshape(3, 3) @ \
+                        np.array([cos_noise_angle[2], -sin_noise_angle[2], 0.0,
+                                  sin_noise_angle[2], cos_noise_angle[2], 0.0,
+                                  0.0, 0.0, 1.0]).reshape(3, 3)
+        # print(rots_cv)
+        # print(noise_rot_mat)
+        rots_cv = rots_cv * Quaternion._from_matrix(noise_rot_mat)
+        # print(rots_cv)
+        # No noise for translation for now
+        return trans_cv, rots_cv, noise_rot_mat
+    
+    def generate_homo_grid(self, homo, size, device = "cuda:0"):
+        #assert type(size) == torch.Size
+        N, C, H, W = size
+
+        base_grid = homo.new(1, H, W, 3).to(device)
+        linear_points = torch.linspace(-1, 1, W, device=device) if W > 1 else torch.Tensor([-1], device=device)
+        base_grid[:, :, :, 0] = torch.ger(torch.ones(H, device=device), linear_points).expand_as(base_grid[:, :, :, 0])
+        linear_points = torch.linspace(-1, 1, H, device=device) if H > 1 else torch.Tensor([-1], device=device)
+        base_grid[:, :, :, 1] = torch.ger(linear_points, torch.ones(W, device=device)).expand_as(base_grid[:, :, :, 1])
+        base_grid[:, :, :, 2] = 1
+        grid = torch.bmm(base_grid.view(1, H * W, 3), homo.transpose(1, 2))
+        grid = grid.view(1, H, W, 3)
+        grid[:, :, :, 0] = grid[:, :, :, 0] / grid[:, :, :, 2]
+        grid[:, :, :, 1] = grid[:, :, :, 1] / grid[:, :, :, 2]
+
+        grid = grid[:, :, :, :2].float()
+        return grid.repeat(N, 1, 1, 1)
+
+    def remap_rotate_aug2_cuda(self, img, noise_rot_mat, intrin, device = "cuda:0"):
+        N, C, H, W = img.shape
+
+        transformation_matrix = np.dot(noise_rot_mat, np.linalg.inv(intrin))
+        pts_src = np.array([[0, 0], [0, H-1], [W-1, 0], [W-1, H-1]])
+        x_flat = pts_src[:,0]
+        y_flat = pts_src[:,1]
+        ones = np.ones_like(x_flat)
+        camera_coords = np.dot(intrin, transformation_matrix) @ np.vstack((x_flat, y_flat, ones))    
+        pts_dst = np.round(camera_coords[:2] / camera_coords[2]).T
+
+        pts_dst[:, 0] = pts_dst[:, 0]  / (W-1) * 2.0 - 1.0
+        pts_src[:, 0] = pts_src[:, 0]  / (W-1) * 2.0 - 1.0
+
+        pts_dst[:, 1] = pts_dst[:, 1]  / (H-1) * 2.0 - 1.0
+        pts_src[:, 1] = pts_src[:, 1]  / (H-1) * 2.0 - 1.0
+        h, status = cv2.findHomography(pts_src, pts_dst)
+        
+        homo = torch.from_numpy(h).unsqueeze(0).to(device)
+        homo_grid = self.generate_homo_grid(homo, img.shape, device)
+        out = F.grid_sample(img, homo_grid).float()
+
+        return out 
     @TimeProf
     def __getitem__(self, idx):
         """
@@ -675,6 +758,26 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 current_img = cv2.undistort(
                     current_img, calib_intrin, calib_dist, calib_intrin)
 
+                current_img = torch.from_numpy(current_img).unsqueeze(
+                    0).to("cpu").permute(0, 3, 1, 2).float()
+
+
+                cam_to_vehicle = np.linalg.inv(calib_extrin)
+                rot_temp = scipy.spatial.transform.Rotation.from_matrix(
+                    cam_to_vehicle[:3, :3]).as_quat()
+                rot_temp = Quaternion(rot_temp[3], rot_temp[0], rot_temp[1], rot_temp[2])
+
+                # print("calib_extrin\n", calib_extrin)
+                current_img, trans_cv, rots_cv = self.img_aug_cuda(
+                    current_img, None, rot_temp, calib_intrin, device="cpu")
+
+                # print(current_img.shape, rots_cv, rots_cv.rotation_matrix)
+                cam_to_vehicle[:3, :3] = rots_cv.rotation_matrix
+
+                input_dict["extrinsic"][view_idx] = np.linalg.inv(cam_to_vehicle)
+                current_img = current_img.squeeze(
+                    0).permute(1, 2, 0).cpu().numpy()
+
                 if self.phase == const.PHASE_TRAINING:
                     # current_img = aug_image(current_img)
                     pass
@@ -727,7 +830,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
             data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
             data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
-            
+
         except:
 
             if self.phase == const.PHASE_TRAINING:
@@ -775,6 +878,7 @@ if __name__ == "__main__":
     d = train_dataset[0]
     
     # exit(1)
+    print(ShowDataStruct("d", d))
 
     for d in train_dataset:
         # print(d["frame_id"])
