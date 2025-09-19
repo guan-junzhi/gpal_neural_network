@@ -7,6 +7,7 @@ sudo apt-get -y install procps
 pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install pandas
 pip install matplotlib
+pip install pyquaternion
 
 echo "[NODE INFO]:"
 nvidia-smi 
