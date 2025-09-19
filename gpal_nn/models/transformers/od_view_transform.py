@@ -58,7 +58,6 @@ def project_radar_to_image_now(radar, distort_coeffa, rmata, tveca, intrinsica):
     reference_points = torch.cat(
         (radar, torch.ones_like(radar[..., :1])), -1).unsqueeze(-1)  # b,n,4，1
     lidar2cam = rmata.unsqueeze(1).repeat(1, N, 1, 1)  # b,n,4，4
-    distortions = distort_coeffa.unsqueeze(1).repeat(1, N, 1, 1)  # b,n,1,5
     cam_intrinsics = intrinsica.unsqueeze(1).repeat(1, N, 1, 1)  # b,n,3,3
     eps = 1e-5  # 创建体素遮罩
 
@@ -73,23 +72,6 @@ def project_radar_to_image_now(radar, distort_coeffa, rmata, tveca, intrinsica):
     z = reference_points_cam[..., 2:3].clone()
     x = reference_points_cam_t2[..., [0]]  # B,N,1,1
     y = reference_points_cam_t2[..., [1]]  # B,N,1,1
-    # 畸变校正
-    x2 = x ** 2
-    y2 = y ** 2
-    xy = x * y
-    x2y2 = reference_points_cam_t2[..., :2] ** 2  #
-    r2 = x2y2[..., [0]] + x2y2[..., [1]]
-    d0 = distortions[..., [0]]
-    d1 = distortions[..., [1]]
-    d2 = distortions[..., [2]]
-    d3 = distortions[..., [3]]
-    d4 = distortions[..., [4]]
-
-    x_new = x * (1 + d0 * r2 + d1 * r2 * r2 + d4 * r2 *
-                 r2 * r2) + 2 * d2 * xy + d3 * (r2 + 2 * x2)
-    y_new = y * (1 + d0 * r2 + d1 * r2 * r2 + d4 * r2 *
-                 r2 * r2) + 2 * d3 * xy + d2 * (r2 + 2 * y2)
-    x, y = x_new, y_new
 
     # x = x * cam_intrinsics[..., 0:1, 0:1] + y * cam_intrinsics[..., 0:1, 1:2] + cam_intrinsics[..., 0:1, 2:3]
     # y = x * cam_intrinsics[..., 1:2, 0:1] + y * cam_intrinsics[..., 1:2, 1:2] + cam_intrinsics[..., 1:2, 2:3]
@@ -133,8 +115,8 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=
     offset_pixel = image_crop_config['CROP_HeSai_ID4']['CROP_START']
     scale = image_crop_config['CROP_HeSai_ID4']['SCALE']
     div = 8
-    a = torch.zeros(B, C, Z, Y, X).float().to(rgb_camBX)
-    count_mask = torch.zeros_like(a)
+    a = torch.zeros([B, C, Z, Y, X], dtype = torch.float, device = rgb_camBX.device)
+
     for i in range(intrinsics.shape[1]):
 
         intrinsic = intrinsics[:, i]
@@ -146,20 +128,6 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=
         tvec = extrinsic[:, :3, 3].view(B, 1, 1, 3)
         xy_pixB1, z = project_radar_to_image_now(
             xyz_camA, cam_distort, extrinsic, tvec, intrinsic)
-        # if i==0 :
-        #     x, y = xy_pixB1[:,:,0]/48, xy_pixB1[:,:,1]/48 - offset_pixel[i]/8
-        # elif i==1:
-        #     x, y = xy_pixB1[:,:,0]/24, xy_pixB1[:,:,1]/24 - offset_pixel[i]/8
-        # elif i==2:
-        #     x, y = xy_pixB1[:,:,0]/24, xy_pixB1[:,:,1]/24 - offset_pixel[i]/8
-        # elif i==3:
-        #     x, y = xy_pixB1[:,:,0]/24, xy_pixB1[:,:,1]/24 - offset_pixel[i]/8
-        # elif i==4:
-        #     x, y = xy_pixB1[:,:,0]/24, xy_pixB1[:,:,1]/24 - offset_pixel[i]/8
-        # elif i==5:
-        #     x, y = xy_pixB1[:,:,0]/24, xy_pixB1[:,:,1]/24 - offset_pixel[i]/8
-        # elif i==6:
-        #     x, y = xy_pixB1[:,:,0]/48, xy_pixB1[:,:,1]/48 - offset_pixel[i]/8
 
         x, y = xy_pixB1[:, :, 0]/scale[i][0]/div, xy_pixB1[:,
                                                            :, 1]/scale[i][0]/div - offset_pixel[i][0]/div
@@ -177,9 +145,6 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=
         # values = values.view(B, C, -1) + scale_tensor[i][...,0]
         values = values.view(B, C, Z, Y, X)
         a += values * valid_mem
-        # count_mask += valid_mem
-    # count_mask = torch.clamp(count_mask, min=1)
-    # a = a / count_mask  # 平均化特征
 
     return a
 
@@ -247,3 +212,25 @@ class ODViewTransformer(BaseModule):
 
         # exit(1)
         return feat_bev
+
+
+if __name__ == "__main__":
+    import pickle as pkl
+    inputs = pkl.load(open("ODViewTransformer.pkl", 'rb'))
+    vt = ODViewTransformer(*inputs)
+    inputs = pkl.load(open("ODViewTransformer_inputs.pkl", 'rb'))
+
+    print(ShowDataStruct("inputs", inputs))
+
+    time_dp = DetailProf()
+    time_dp.Tic("begin")
+            
+    y = vt(*inputs)
+    time_dp.Duration("vt", "begin")
+
+    time_dp.Print()
+
+
+    print(ShowDataStruct("y", y))
+    
+    
