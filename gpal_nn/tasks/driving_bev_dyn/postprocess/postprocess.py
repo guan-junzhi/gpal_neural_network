@@ -7,6 +7,7 @@ from tools_scripts.data_format_cvt import ShowDataStruct
 import numpy as np
 import torch
 from gpal_nn.tasks.driving_bev_dyn.postprocess import model_nms_utils
+from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
 
 @POSTPROCESSES.register_module()
 class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
@@ -33,6 +34,23 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
         )
         self.num_class = len(task_config.class_dict)
         self.class_name = list(task_config.class_dict.values())
+        BEV_TO_POINTS = dict(
+            NAME="Bev_To_Points",
+            NUM_BEV_FEATURES=64,
+            VOXEL_SIZE=[0.64, 0.64],
+            SCORE_THRESH=0.3,
+            DOWN_RATIO=2,
+            NUM_KEYPOINTS=256,
+            TRAIN=True,
+            NUM_OUTPUT_FEATURES=64
+        )
+        self.bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,
+                                                  grid_size=[480, 192,  12],
+                                                  voxel_size=[0.32, 0.32, 0.5],
+                                                  point_cloud_range=[-51.2, -
+                                                                     30.72, -1., 102.4, 30.72, 5.],
+                                                  num_bev_features=[64, 64, 128, 64, 128, 128, 128])
+
 
 
     @staticmethod
@@ -273,6 +291,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             return gt_list
         else:
             #   if not self.training or self.predict_boxes_when_training:
+            vectors[0] = self.bev_2_points(vectors[0])
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(vectors[0]['Points_Loss'],
                                                                              batch_size=vectors[0]['score'].shape[0])
             vectors[0]['batch_cls_preds'] = batch_cls_preds

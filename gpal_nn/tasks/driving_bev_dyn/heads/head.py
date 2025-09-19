@@ -5,9 +5,11 @@ from gpal_lightning.neural_network.tasks.base.heads.head import BaseHead
 from gpal_nn.tasks.driving_bev_dyn.losses.loss import DRIVING_BEV_DYNLoss
 import torch.nn.functional as F
 from tools_scripts.data_format_cvt import ShowDataStruct
-from gpal_nn.tasks.driving_bev_dyn.heads.bev_points import Bev_To_Points
 from gpal_nn.tasks.driving_bev_dyn.heads.pointtransformersiamese import PointnetTransformerSiamese
 from gpal_nn.tasks.driving_bev_dyn.heads.fast_decoder_head import FastDecoderHead
+from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
+
+
 BN_MOMENTUM = 0.1
 
 
@@ -439,16 +441,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
         self.head["center_head"] = FastDecoderHead(self.head_config)
 
-        BEV_TO_POINTS = dict(
-            NAME="Bev_To_Points",
-            NUM_BEV_FEATURES=64,
-            VOXEL_SIZE=[0.64, 0.64],
-            SCORE_THRESH=0.3,
-            DOWN_RATIO=2,
-            NUM_KEYPOINTS=256,
-            TRAIN=True,
-            NUM_OUTPUT_FEATURES=64
-        )
+        
 
         POINTTRANSFORMER_HEAD = dict(
             NAME="PointnetTransformerSiamese",
@@ -456,13 +449,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
             HEAD_CONV=64
         )
 
-        self.head["bev_2_points"] = Bev_To_Points(model_cfg=BEV_TO_POINTS,
-                                                  grid_size=[480, 192,  12],
-                                                  voxel_size=[0.32, 0.32, 0.5],
-                                                  point_cloud_range=[-51.2, -
-                                                                     30.72, -1., 102.4, 30.72, 5.],
-                                                  num_bev_features=[64, 64, 128, 64, 128, 128, 128])
-
+        
         self.head["point_transformer"] = PointnetTransformerSiamese(
             model_cfg=POINTTRANSFORMER_HEAD,
             input_channels=[64, 64, 128, 64, 128, 128, 128],
@@ -481,35 +468,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
             head.load_state_dict(state_dict_sub, strict)
 
     def forward(self, x: torch.Tensor, calib=None) -> torch.Tensor:
-
-        # import pickle as pkl
-        # pkl.dump(x, open("head_x.pkl", 'wb'))
-        # exit(1)
-
-        # _, spatial_features_2d = self.head["bev_feature_extractor"](x)
+           
         x = self.head["center_head"](x)
         batch_dict = {'head_conv': x[:, 6:], "hm_cen": x[:, :6]}
-        x = self.head["bev_2_points"].forward(batch_dict)
-        # print(ShowDataStruct("x head 2", x))
-
-        # x = self.head["point_transformer"].forward(x)
-        # print(ShowDataStruct("x head 3", x))
-        return [x]
-# preds<class 'list'> len = 1
-#     0<class 'dict'>
-#         head_conv<class 'torch.Tensor'> : torch.Size([4, 64, 96, 240]) torch.float32
-#         hm_cen<class 'torch.Tensor'> : torch.Size([4, 6, 96, 240]) torch.float32
-#         hm_cen_pred<class 'torch.Tensor'> : torch.Size([4, 1, 6, 96, 240]) torch.float32
-#         pred_curr_track_score<class 'torch.Tensor'> : torch.Size([4, 256, 1]) torch.float32
-#         pred_curr_track_point_features<class 'torch.Tensor'> : torch.Size([4, 256, 64]) torch.float32
-#         pred_curr_track_point_coords<class 'torch.Tensor'> : torch.Size([4, 256, 2]) torch.float32
-#         score<class 'torch.Tensor'> : torch.Size([4, 6, 1, 256]) torch.float32
-#         batch_pred_labels<class 'torch.Tensor'> : torch.Size([4, 256]) torch.int64
-#         Points_Loss<class 'dict'>
-#             estimation_cen<class 'torch.Tensor'> : torch.Size([4, 2, 256]) torch.float32
-#             estimation_z<class 'torch.Tensor'> : torch.Size([4, 1, 256]) torch.float32
-#             estimation_dim<class 'torch.Tensor'> : torch.Size([4, 3, 256]) torch.float32
-#             estimation_dir<class 'torch.Tensor'> : torch.Size([4, 2, 256]) torch.float32
-#             estimation_vel<class 'torch.Tensor'> : torch.Size([4, 2, 256]) torch.float32
-#             estimation_score<class 'torch.Tensor'> : torch.Size([4, 1, 256]) torch.float32
-#             template_xyz<class 'torch.Tensor'> : torch.Size([4, 256, 3]) torch.float32
+        return [batch_dict]

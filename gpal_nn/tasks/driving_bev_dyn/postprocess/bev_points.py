@@ -153,28 +153,11 @@ class Bev_To_Points(nn.Module):
 
         batch_size = int(batch_dict['head_conv'].shape[0])
 
-        # spatial_features_2d_size = batch_dict['head_conv'].size()
-        # spatial_features_2d = batch_dict['head_conv'].view(batch_size,
-        #                                                    spatial_features_2d_size[1],
-        #                                                    spatial_features_2d_size[2],
-        #                                                    spatial_features_2d_size[3]
-        #                                                    )
-
-        # spatial_features_2d_curr = spatial_features_2d[:, 0]
-        # spatial_features_2d_prev = spatial_features_2d[:, 1]
-
         batch_dict = self.get_sampled_points_and_gather_matched_features(batch_dict,
                                                                          batch_size,
                                                                          mode_gt="gt_curr_",
                                                                          mode_pred="pred_curr_",
                                                                          features=batch_dict['head_conv'])
-
-        # batch_dict = self.get_sampled_points_and_gather_matched_features(batch_dict,
-        #                                                                  batch_size,
-        #                                                                  mode_gt="gt_prev_",
-        #                                                                  mode_pred="pred_prev_",
-        #                                                                  features=spatial_features_2d_prev)
-
 
         pred_curr_track_point_features = batch_dict['pred_curr_track_point_features'].permute(0, 2, 1)
         pred_curr_track_score = batch_dict['pred_curr_track_score'].permute(0, 2, 1)
