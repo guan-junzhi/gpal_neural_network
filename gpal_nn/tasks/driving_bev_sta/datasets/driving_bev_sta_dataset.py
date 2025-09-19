@@ -95,7 +95,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                  bev_aug=False,
                  rpy_aug_deg=[3,3,3], 
                  bev_aug_deg=3,
-                 lmdb_path='static_data_lmdb'
+                 lmdb_path='static_data_lmdb',
+                 cut_start_h=0,
                  ):
         '''
         :param root_dict:
@@ -177,7 +178,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                              LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf",
                              )
                          )
-        cut_start_h = 112
+        self.cut_start_h = cut_start_h
         mean = (0., 0., 0.)
         std = (255., 255., 255.)
         if phase == const.PHASE_TRAINING:
@@ -720,7 +721,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 [[0, 0, 0, 1]])], axis=0) for ele in data['calib']["ego2imgs"]], axis=0)
 
             ists_wt = copy.deepcopy(data['calib']['ists'])
-            ists_wt[:, 1, 2] += 112
+            ists_wt[:, 1, 2] += self.cut_start_h
             data['calib']["ego2imgs_wt"] = np.stack(
                 [i@e for e, i in zip(data['calib']['exts'], ists_wt)], axis=0)
             data['calib']["ego2imgs_wt"] = np.stack([np.concatenate([ele, np.array(

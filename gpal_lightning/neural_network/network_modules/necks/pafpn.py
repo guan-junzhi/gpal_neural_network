@@ -31,7 +31,7 @@ class FPN(nn.Module):
         for i in range(len(laterals) - 1, 0, -1):
             laterals[i - 1] += F.interpolate(
                 laterals[i],
-                scale_factor=2,
+                size=laterals[i - 1].shape[-2:],
                 mode='bilinear'
             )
             # upsampled = self.upsample_convs[i - 1](laterals[i])
@@ -105,7 +105,7 @@ class PAN_UpMerge(nn.Module):
             else:
                 upsampled = F.interpolate(
                     pan_features[0],
-                    scale_factor=2,
+                    size=features[i].shape[-2:],
                     mode='nearest'
                 )
                 # upsampled = self.upsample_convs[i](pan_features[0])

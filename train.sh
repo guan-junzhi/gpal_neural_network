@@ -71,7 +71,7 @@ then
     config=configs_for_develop/radar4d_nn_sdk_config.yaml
 else
     tasks=driving_bev_sta 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250916_09_07_03/checkpoint/epoch=1-step=30000_checkpoint.pth
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250918_02_45_04/checkpoint/epoch=1-step=30000_checkpoint.pth
     config=configs_for_develop/driving_bev_sta_config.yaml
 
 fi
