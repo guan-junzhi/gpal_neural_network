@@ -91,6 +91,6 @@ if [[ -n "${TRAIN_ARGS:-}" ]]; then
     exit $?
 fi
 
-# python3 train.py --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
+python3 train.py --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 # load_from
-python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
+# python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
