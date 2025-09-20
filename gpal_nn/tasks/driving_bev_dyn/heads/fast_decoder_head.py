@@ -31,22 +31,25 @@ class FastDecoderHead(nn.Module):
         while upsample_ratio > 1:
             upsample_layers.append(
                 nn.ConvTranspose2d(
-                    self.layers_config["in_channels"],
-                    128 if upsample_ratio == 2 else self.layers_config["in_channels"],
+                    # self.layers_config["in_channels"],
+                    256,
+                    # 128 if upsample_ratio == 2 else self.layers_config["in_channels"],
+                    256,
                     4,
                     2,
                     1,
                     bias=False,
                 )
             )
-            upsample_layers.append(nn.BatchNorm2d(128 if upsample_ratio == 2 else self.layers_config["in_channels"]))
+            # upsample_layers.append(nn.BatchNorm2d(128 if upsample_ratio == 2 else self.layers_config["in_channels"]))
+            upsample_layers.append(nn.BatchNorm2d(256))
             upsample_layers.append(nn.ReLU(True))
             upsample_ratio /= 2
 
         self.upsample = nn.Sequential(*upsample_layers)
 
         self.out = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(256, 128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
@@ -93,7 +96,7 @@ class FastDecoderHead(nn.Module):
 
 
         # Apply upsampling
-        x = self.upsample(x)
+        x = self.upsample(x3)
         # Apply out
         x = self.out(x)
         return x

@@ -426,7 +426,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
         #     UPSAMPLE_FILTERS=[128, 64, 64, 64],
         #     num_bev_features=[64, 64, 128, 64, 128, 128, 128]
         # )
-        self.head_config = {"in_channels": 1024, "num_stages": 6, "out_channels": 21}
+        self.head_config = {"in_channels": 1024,
+                            "num_stages": 6, "out_channels": 21, "upsample": 4}
 
         super(DRIVING_BEV_DYNHead, self).__init__(
             global_config, task_config, loss_func)
@@ -468,7 +469,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
             head.load_state_dict(state_dict_sub, strict)
 
     def forward(self, x: torch.Tensor, calib=None) -> torch.Tensor:
-           
+        # B,HW,C = x.shape
+        # x = x.permute(0,2,1).reshape(B,C,96,240)
         x = self.head["center_head"](x)
         batch_dict = {'head_conv': x[:, 6:], "hm_cen": x[:, :6]}
         return [batch_dict]
