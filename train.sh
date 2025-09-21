@@ -64,7 +64,7 @@ elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
     # load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250911_12_22_22/checkpoint/epoch=16-step=30000_checkpoint.pth
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20250919_02_18_35/checkpoint/epoch=9-step=10000_checkpoint.pth
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20250920_17_16_39/checkpoint/epoch=33-step=37500_checkpoint.pth
     config=configs_for_develop/driving_bev_dyn_config.yaml
 elif [[ $1 == "radar4d_nn_sdk" ]];
 then
@@ -91,6 +91,6 @@ if [[ -n "${TRAIN_ARGS:-}" ]]; then
     exit $?
 fi
 
-python3 train.py --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
+# python3 train.py --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 # load_from
-# python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
+python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed 304 --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks

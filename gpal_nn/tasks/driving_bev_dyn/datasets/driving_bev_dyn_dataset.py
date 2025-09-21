@@ -33,6 +33,8 @@ from gpal_nn.tasks.driving_bev_dyn.datasets.data_processor import DataProcessor
 from pyquaternion import Quaternion
 import torch.nn.functional as F
 import scipy
+from torchvision import transforms as T
+
 
 def read_img(files_img, image_resize=[360, 640, 3]):
     # try:
@@ -287,6 +289,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             self.cam_dist = distort_coeff_np
             self.r_mat_np = r_mat_np
             self.t_vec_np = t_vec_np
+
+        self.jitter = T.ColorJitter(0.7, 0.3, 0.3, 0.2)
 
         self.ClearFastBufCnt()
 
@@ -585,9 +589,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # print(trans_cv, rots_cv, noise_rot_mat)
         if noise_rot_mat is not None:
             img_tensor = self.remap_rotate_aug2_cuda(img_tensor, noise_rot_mat, intrin, device)
-        # if self.jitter and random.random() < 0.25:
-        #     for i in range(img_tensor.shape[0]):
-        #         img_tensor[i] = self.jitter(img_tensor[i]/255.0) * 255.0
+        if self.jitter and random.random() < 0.7:
+            for i in range(img_tensor.shape[0]):
+                img_tensor[i] = self.jitter(img_tensor[i]/255.0) * 255.0
 
         return img_tensor, trans_cv, rots_cv
 
@@ -820,6 +824,23 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret["calib"]["cam_dist"] *= 0.0
             
             data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
+            data_dict_ret['calib']["img_shapes"] = np.stack(
+                [np.array(list(img.shape)) for img in data_dict_ret["image"].values()], axis=0)
+            data_dict_ret['calib']["bev_real2aug"] = np.eye(4, dtype=np.float32)
+
+            intrinsics = copy.deepcopy(data_dict_ret['calib']["intrinsic"])
+            # print("intrinsics", intrinsics.shape)
+            # print("self.img_crop_dict", self.img_crop_dict)
+            for i in range(intrinsics.shape[0]):
+                intrinsics[i, :2] /= self.img_crop_dict["CROP_HeSai_ID4"]['SCALE'][i]
+                intrinsics[i, 1,
+                           2] -= self.img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][i]
+            
+            data_dict_ret['calib']["ego2imgs"] = np.stack(
+                [i@e for e, i in zip(data_dict_ret['calib']['extrinsic'][:,:3], intrinsics)], axis=0)
+            data_dict_ret['calib']["ego2imgs"] = np.stack([np.concatenate([ele, np.array(
+                [[0, 0, 0, 1]])], axis=0) for ele in data_dict_ret['calib']["ego2imgs"]], axis=0)
+
 
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
