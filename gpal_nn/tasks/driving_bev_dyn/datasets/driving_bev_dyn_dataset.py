@@ -290,7 +290,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             self.r_mat_np = r_mat_np
             self.t_vec_np = t_vec_np
 
-        self.jitter = T.ColorJitter(0.7, 0.3, 0.3, 0.2)
+        self.jitter = T.ColorJitter([0.2, 1.2], 0.3, 0.3, 0.2)
 
         self.ClearFastBufCnt()
 
