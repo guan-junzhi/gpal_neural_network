@@ -92,13 +92,24 @@ class DRIVING_BEV_STATask(BaseTask):
                     pass
         # exit()
         vis_draw2 = vis2.Draw()
+        vis_draw = np.concatenate([vis_draw1, vis_draw2], axis=1)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        vis_draw = cv2.putText(vis_draw, clips[idx], (0, 20), font, 0.6, [255, 255, 255], 1)
+        vis_draw = cv2.putText(vis_draw, timestamps[idx], (0, 70), font, 1.0, [255, 255, 255], 1)
 
-        return np.concatenate([vis_draw1, vis_draw2], axis=1)
+        return vis_draw
 
     def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, calib, loss_info=None):
         imgs = []
         for idx in range(4):
-            vis = self.GetVis(preds[0], trues, idx)
+            clips = [item['clip_id'] for item in metadata[:4]]
+            timestamps = []
+            for item in metadata[:4]:
+                img_path = item['last_img_path']
+                filename = img_path.split('/')[-1]
+                timestamp = filename.split('.jpg')[0]
+                timestamps.append(timestamp)
+            vis = self.GetVis(preds[0], trues, idx, clips, timestamps)
             imgs.append(vis)
 
         imgs = np.concatenate(imgs, axis=1)
@@ -264,7 +275,14 @@ class DRIVING_BEV_STATask(BaseTask):
             os.makedirs(save_root, exist_ok=True)
         bev_real2aug = batch["bev_real2aug"]
         for i in range(len(metadata)):
-            bev_vis = self.GetVis(preds[0][0], trues, i)
+            clips = [item['clip_id'] for item in metadata]
+            timestamps = []
+            for item in metadata:
+                img_path = item['last_img_path']
+                filename = img_path.split('/')[-1]
+                timestamp = filename.split('.jpg')[0]
+                timestamps.append(timestamp)
+            bev_vis = self.GetVis(preds[0][0], trues, i, clips, timestamps)
             true_json_list, metadata_list = self.vectors_to_json(
         metadata, data, dataloader_idx, trues, True)
             img_vis = self.GetImgVis(data, metadata, calib, bev_real2aug, json_list[0], true_json_list[0], i)
