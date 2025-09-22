@@ -153,7 +153,7 @@ class BevFormerViewTransformer(BaseModule):
                         num_levels=1,
                         grid_align_num=20,
                         # feats_size=[[48, 20]],  # [768, 320]输入
-                        feats_size=[[60, 34]],  # [960, 540]输入
+                        feats_size=[[60, 32]],  # [960, 540]输入
                     )
                 ),
             )
