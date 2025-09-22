@@ -50,6 +50,25 @@ camera_shape_ = [
 ]
 
 
+def encode_multibin(alpha):
+    v = np.zeros(6)
+    alpha = np.remainder(alpha, np.pi * 2)
+    if alpha < np.pi / 2 + np.pi / 6.0 or alpha > np.pi / 2 * 3 - np.pi / 6:
+        if alpha < np.pi / 2 + np.pi / 6:
+            alpha = alpha
+        else:
+            alpha = alpha - np.pi * 2
+        v[0] = 1
+        v[2] = np.sin(alpha)
+        v[3] = np.cos(alpha)
+    if np.pi / 2 - np.pi / 6.0 < alpha < np.pi / 2 * 3 + np.pi / 6:
+        alpha = alpha - np.pi
+        v[1] = 1
+        v[4] = np.sin(alpha)
+        v[5] = np.cos(alpha)
+    return v
+
+
 class VoxelGeneratorWrapper():
     def __init__(self, vsize_xyz, coors_range_xyz, num_point_features, max_num_points_per_voxel, max_num_voxels):
         try:
@@ -765,6 +784,7 @@ class DataProcessor(object):
                 (config['num_classes'], hm_w, hm_l), dtype=np.float32)
             cen_offset = np.zeros((config['max_objects'], 2), dtype=np.float32)
             direction = np.zeros((config['max_objects'], 2), dtype=np.float32)
+            multibin_direction = np.zeros((config['max_objects'], 6), dtype=np.float32)
             z_coor = np.zeros((config['max_objects'], 1), dtype=np.float32)
             dimension = np.zeros((config['max_objects'], 3), dtype=np.float32)
             vel = np.zeros((config['max_objects'], 2), dtype=np.float32)
@@ -804,6 +824,7 @@ class DataProcessor(object):
                 dimension[k, 2] = h
                 direction[k, 0] = math.sin(float(yaw))  # rad -> -1~1
                 direction[k, 1] = math.cos(float(yaw))  # rad -> -1~1
+                multibin_direction[k] = encode_multibin(float(yaw))
                 z_coor[k, 0] = z
                 vel[k, 0] = car_v
                 vel[k, 1] = target_v
@@ -814,6 +835,7 @@ class DataProcessor(object):
             data_dict['gt_curr_hm_cen'] = hm_main_center
             data_dict['gt_curr_cen_offset'] = cen_offset
             data_dict['gt_curr_direction'] = direction
+            data_dict['gt_curr_multibin_direction'] = multibin_direction
             data_dict['gt_curr_z_coor'] = z_coor
             data_dict['gt_curr_dim'] = dimension
             data_dict['gt_curr_indices_center'] = indices_center

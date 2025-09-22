@@ -165,9 +165,9 @@ class Bev_To_Points(nn.Module):
         estimation_cen = pred_curr_track_point_features[:,:2,:]
         estimation_z = pred_curr_track_point_features[:,2:3,:]
         estimation_dim = pred_curr_track_point_features[:,3:6,:]
-        estimation_dir = pred_curr_track_point_features[:,6:8,:]
-        estimation_vel = pred_curr_track_point_features[:,8:10,:]
-        estimation_score = pred_curr_track_point_features[:,10:11,:]
+        estimation_dir = pred_curr_track_point_features[:,6:12,:]
+        estimation_vel = pred_curr_track_point_features[:,12:14,:]
+        # estimation_score = pred_curr_track_point_features[:,10:11,:]
 
         template_xyz = torch.cat([batch_dict['pred_curr_track_point_coords'][:, :, :2],
                                  batch_dict['pred_curr_track_score']], dim=-1)  # -> [1, 256, 3]

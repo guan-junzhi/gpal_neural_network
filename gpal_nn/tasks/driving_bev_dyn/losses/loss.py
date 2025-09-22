@@ -79,6 +79,7 @@ class DRIVING_BEV_DYNLoss(BaseLoss):
         processed_gt['track_cen_offset'] = trues['gt_curr_cen_offset']
         processed_gt['track_dim'] = trues['gt_curr_dim']
         processed_gt['track_direction'] = trues['gt_curr_direction']
+        processed_gt['track_multibin_direction'] = trues['gt_curr_multibin_direction']
         processed_gt['track_z_coor'] = trues['gt_curr_z_coor']
         processed_gt['track_vel'] = trues['gt_curr_vel']
         processed_gt['track_obj_mask'] = trues['gt_curr_obj_mask']
