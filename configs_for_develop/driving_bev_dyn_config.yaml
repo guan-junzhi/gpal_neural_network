@@ -40,7 +40,7 @@ Necks:
 
 Transformer:
   type: ODViewTransformer
-  # load: all
+  load: all
   # freeze: all
   transformer_config:
     task_name: DRIVING_BEV_DYN
@@ -54,7 +54,7 @@ Tasks:
     # batch_size: 12
     # num_worker_limit: 2
     use_concat_dataset: true
-    # load: all
+    load: all
     # freeze: all
     amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
     cam_used: ['ipm']
