@@ -158,6 +158,15 @@ class DRIVING_BEV_DYNTask(BaseTask):
             vis_imgs = cv2.resize(vis_imgs, (int(vis_imgs.shape[1] / vis_imgs.shape[0] * vis_draw1.shape[0]), vis_draw1.shape[0]))
             vis_draw1 = np.concatenate([vis_draw1, vis_imgs], axis=1)
 
+            cv2.putText(vis_draw1, metadata[idx]['frame_num'], (50, 30),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
+            cv2.putText(vis_draw1, metadata[idx]['clip_id'], (50, 60),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
+            cv2.putText(vis_draw1, '/'.join(metadata[idx]['img_path']['img_front_120'].split('/')[-4:]), (50, 90),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
+
+
+
         except ValueError as e:
             print(f"DRIVING_BEV_DYNTask GetVis faild {e}")
             pass
