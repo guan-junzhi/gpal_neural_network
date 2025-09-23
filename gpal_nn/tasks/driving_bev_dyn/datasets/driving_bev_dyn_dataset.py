@@ -379,15 +379,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             fusion_infos = fusion_infos_new
             self.fusion_infos = []
         # fusion_infos = [fusion_infos[100]] * 6
-        if phase == const.PHASE_TRAINING:
-            fusion_infos_ext = []
-            for ele in fusion_infos:
-                fusion_infos_ext.append(copy.deepcopy(ele))
-                ele["curr_index"], ele["next_index"] = ele["next_index"], ele["curr_index"]
-                ele["curr_timestamp"], ele["next_timestamp"] = ele["next_timestamp"], ele["curr_timestamp"]
-                ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
-                fusion_infos_ext.append(copy.deepcopy(ele))
-            fusion_infos = fusion_infos_ext
+        # if phase == const.PHASE_TRAINING:
+        #     fusion_infos_ext = []
+        #     for ele in fusion_infos:
+        #         fusion_infos_ext.append(copy.deepcopy(ele))
+        #         ele["curr_index"], ele["next_index"] = ele["next_index"], ele["curr_index"]
+        #         ele["curr_timestamp"], ele["next_timestamp"] = ele["next_timestamp"], ele["curr_timestamp"]
+        #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
+        #         fusion_infos_ext.append(copy.deepcopy(ele))
+        #     fusion_infos = fusion_infos_ext
         print('Total samples for HeSai dataset: %d' %
               (len(fusion_infos)))
         return fusion_infos
