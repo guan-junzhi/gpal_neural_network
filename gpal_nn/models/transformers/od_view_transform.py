@@ -167,7 +167,7 @@ class ODViewTransformer(BaseModule):
                           int((self.point_cloud_range[5]-self.point_cloud_range[2])/self.voxel_size[2])]
 
         xyz_camA = gridcloud3d(
-            1, self.grid_size[2], self.grid_size[1], self.grid_size[0], norm=False)
+            1, self.grid_size[2], self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
         xyz_camA[:, :, 0] = xyz_camA[:, :, 0] * self.voxel_size[0] + \
             self.voxel_size[0]/2 + self.point_cloud_range[0]
         xyz_camA[:, :, 1] = xyz_camA[:, :, 1] * self.voxel_size[1] + \
