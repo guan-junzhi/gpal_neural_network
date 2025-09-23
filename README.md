@@ -36,10 +36,14 @@
    -  [ ] deploy
 
 ## 2. Train
-
-    车道线训练: bash train.sh 为了兼容正在迁移的工程,先不改
-    APA训练: bash train.sh parking_ipm_sta
-
+云端训练 选择 **Trigger DAG w/ config** 配置模板如下
+   
+    {
+    "branch": "feature/multitask_airflow",
+    "tasks": "driving_bev_dyn",
+    "config": "configs_for_develop/driving_bev_dyn_config.yaml",
+    "load_from": "/opt/airflow/workdirs/gpal_neural_network_group/airflow_workspace/lane_detection_one_node_traning_job_on_airflow_20250922_15_55_28/checkpoint/epoch=9-step=11000_checkpoint.pth"
+    }
 
 tensorboard
 
@@ -118,4 +122,3 @@ tensorboard
 ## 5. Refrence
 
 [pytorch lightning](https://lightning.ai/docs/pytorch/latest/versioning.html#pytorch-support)
-    
