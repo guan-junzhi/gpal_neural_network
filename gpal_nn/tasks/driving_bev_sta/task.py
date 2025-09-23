@@ -50,7 +50,6 @@ class DRIVING_BEV_STATask(BaseTask):
             if 'centerlines' in gts[idx]:
                 for i,l in enumerate(gts[idx]['centerlines']['points']):
                 # for l in gts[idx]['centerlines']['points']:
-                    vis1.DrawKeypoint(l[i], 5, [0, 165, 255])
                     vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
                     vis1.DrawPolyline(l, [0, 165, 255], 2, 'solid')
                     if gts[idx]['centerlines']['is_split_merge'][i]:
@@ -78,9 +77,6 @@ class DRIVING_BEV_STATask(BaseTask):
                 # color = [random.randint(0, 255), random.randint(
                 #     0, 255), random.randint(0, 255)]
                 try:
-                    if cls_pred == 2:
-                        for keypoint in l:
-                            vis2.DrawKeypoint(keypoint.detach().cpu().numpy(), 5, color_list[cls_pred])
                     #画起始点（亮蓝色）
                     vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
                     _, shape_type = shape_type.max(-1)
@@ -297,6 +293,8 @@ class DRIVING_BEV_STATask(BaseTask):
             bev_vis = self.GetVis(preds[0][0], trues, i, clips, timestamps)
             true_json_list, metadata_list = self.vectors_to_json(
         metadata, data, dataloader_idx, trues, True)
+            print("calib", calib)
+            exit()
             img_vis = self.GetImgVis(data, metadata, calib, bev_real2aug, json_list[0], true_json_list[0], i)
             concat_vis = self.concat_imgvis_and_bevvis(img_vis, bev_vis)
         name = metadata[i]['last_img_path'].split('/')[-1]
