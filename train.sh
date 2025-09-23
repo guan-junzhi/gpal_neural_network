@@ -2,11 +2,11 @@ current_time=$(date +%Y%m%d_%H_%M_%S)
 echo $current_time
 
 echo "[INSTALL ENVS]:"
-# sudo apt-get update
-# sudo apt-get -y install procps
-# pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
-# pip install pandas
-# pip install matplotlib
+sudo apt-get update
+sudo apt-get -y install procps
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install pandas
+pip install matplotlib
 
 echo "[NODE INFO]:"
 nvidia-smi 
@@ -90,9 +90,7 @@ echo seed=$seed
 
 if [[ "$load_from" == "None" ]];
 then
-echo not load
 python3 train.py --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed $seed --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 else
-echo load
 python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed $seed --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 fi
