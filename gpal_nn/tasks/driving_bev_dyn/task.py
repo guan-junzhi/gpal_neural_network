@@ -176,9 +176,12 @@ class DRIVING_BEV_DYNTask(BaseTask):
 
     def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, calib, loss_info=None):
         imgs = []
-        for idx in range(4):
+        for idx in range(min(4,len(metadata))):
             vis = self.GetVis(data, preds, trues, metadata, calib, idx)
             imgs.append(vis)
+            # import cv2
+            # cv2.imwrite(f"eval_vis_online/{metadata[idx]['frame_id'].split('/')[0]}.jpg", vis)
+
         imgs = np.concatenate(imgs, axis=1)
 
         # import cv2
