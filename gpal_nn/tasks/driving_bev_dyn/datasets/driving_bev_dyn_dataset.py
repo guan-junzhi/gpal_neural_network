@@ -113,6 +113,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.json_dir = os.path.join(WORKDIRS_ROOT, json_dir)
         self.image_dir = os.path.join(
             WORKDIRS_ROOT if is_manual_label else DATA_COLLECT_ROOT, image_dir)
+        # self.image_dir = "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/2025-09-23_16-40-52-312.4"
         self.middle_json_str = middle_json_str
 
         self.id_to_type = task_config.class_dict
@@ -273,6 +274,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # breakpoint()
             for curr_view in self.image_view:
                 curr_view_yaml_file = f"{WORKDIRS_ROOT}/gpal_neural_network_group/sikong/temp_dir_for_od/{cam_calib_dir}/{curr_view.replace('img_', '')}.yaml"
+                # curr_view_yaml_file = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/tools_own/read_update_cam_yaml_and_save_grid_valid/calibration-dev@1ac5e4038a8/JX_C5_1/vehicle_config/calibration/camera/{curr_view.replace('img_', '')}.yaml"
                 yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
                 intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
                 distort_coeff.append(
@@ -697,6 +699,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             # === 当前帧 格式必须统一
             curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
+            # curr_json_file = "/data/ai_group/workdirs/od_occ_group/huiquyang/data/Obstacle_3DModelResult_/EKART_ID4001_2025-08-15-18-20-39/2025-08-15_18-34-44-232/3d_detection_json/1755254118.200182.json"
             curr_json_data = self.json_data.load(curr_json_file)
             re_curr_infos = self.json_data.parse_json(curr_json_data)
             meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
