@@ -17,7 +17,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
 
         self.POST_PROCESSING = dict(
             RECALL_THRESH_LIST=[0.3, 0.5, 0.7],
-            SCORE_THRESH=0.3,
+            SCORE_THRESH=0.28,
             OUTPUT_RAW_SCORE=False,
             EVAL_METRIC="kitti",
             NMS_CONFIG=dict(
@@ -38,7 +38,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             NAME="Bev_To_Points",
             NUM_BEV_FEATURES=64,
             VOXEL_SIZE=[0.64, 0.64],
-            SCORE_THRESH=0.3,
+            SCORE_THRESH=0.28,
             DOWN_RATIO=2,
             NUM_KEYPOINTS=256,
             TRAIN=True,
