@@ -434,34 +434,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
     def _setup(self):
         self.head = nn.ModuleDict()
-        # self.head["bev_feature_extractor"] = ImageNeck(self.neck_cfg,
-        #                                                self.task_config.bev_channels)
-
-        # self.head["center_head"] = CenterHead(
-        #     self.head_conv, self.neck_cfg["num_bev_features"][3])
-
         self.head["center_head"] = FastDecoderHead(self.head_config)
-
-        
-
-        POINTTRANSFORMER_HEAD = dict(
-            NAME="PointnetTransformerSiamese",
-            CLASS_AGNOSTIC=False,
-            HEAD_CONV=64
-        )
-
-        
-        self.head["point_transformer"] = PointnetTransformerSiamese(
-            model_cfg=POINTTRANSFORMER_HEAD,
-            input_channels=[64, 64, 128, 64, 128, 128, 128],
-            num_class=6,
-            class_names=['vehicle_car', 'vehicle_truck', 'vehicle_construction_vehicle',
-                         'vehicle_cyclist', 'vehicle_tricycle', 'human_pedestrian'],
-            grid_size=[480, 192,  12],
-            point_cloud_range=[-51.2, -30.72, -1.,   102.4,   30.72,   5.],
-            predict_boxes_when_training=False,
-            voxel_size=[0.32, 0.32, 0.5])
-
     def load_state_dict(self, state_dict, strict=True):
         for head_name, head in self.head.items():
             state_dict_sub = {k.replace(f"{head_name}.", ""): state_dict[k]
