@@ -163,7 +163,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                          worker=worker,
                          pseudo_labels_path=pseudo_labels_path,
                          fast_buffer_path="" if fast_buffer_path == "" else os.path.join(
-                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf")
+                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf_by_slice")
                          )
 
         self.img_crop_size = self.task_config.image_crop_config['IMAGE_CROP_SIZE']
@@ -506,6 +506,24 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         return image
 
+    def get_image_by_slice(self, filepath, slice_timestamp, view_key, view_idx):
+        """统一处理不同视角的图像"""
+        img_file = filepath
+        self.fast_buf_try_cnt += 1
+        database_slice_key = "_".join(img_file.split('/')[-4:-2]+[slice_timestamp])
+        image, hw_origin = self._slice_image_buffer_access(
+            database_slice_key, view_key)
+        if image is None:
+            image = read_img(str(img_file), self.image_resize + [3])
+            image = cv2.resize(image, self.image_resize[::-1])
+            image = image[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+            self._slice_image_cache(
+                database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=95)
+        else:
+            self.fast_buf_sec_cnt += 1
+
+        return image
+
     def prepare_data(self, data_dict):
         """
         Args:
@@ -737,7 +755,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             for view_idx, camera_view in enumerate(self.image_view):
                 image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
                 img_path[camera_view] = image_file
-                current_img = self.get_image(image_file, view_idx)  # cv2: BGR
+                # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
+                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx)
 
                 calib_intrin = copy.deepcopy(input_dict['intrinsic'][view_idx])
                 calib_extrin = copy.deepcopy(input_dict["extrinsic"][view_idx])
@@ -819,14 +838,14 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
             data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
 
-        except:
+        except Exception as e:
 
             if self.phase == const.PHASE_TRAINING:
                 new_index = np.random.randint(self.__len__())
-                print(f"PHASE_TRAINING {idx} load faild, resample trig {new_index}")
+                print(f"PHASE_TRAINING {idx} load faild {e}, resample trig {new_index}")
                 return self.__getitem__(new_index)
             else:
-                print(f"PHASE_TRAINING {idx} load faild, faild exit(1)")
+                print(f"PHASE_TRAINING {idx} load faild {e}, faild exit(1)")
                 exit(1)
 
         time_dp.Duration("move_data", "prepare_data")
@@ -843,7 +862,7 @@ def Get(dataset_temp, i, j):
 
 if __name__ == "__main__":
     import pickle as pkl
-    inputs = pkl.load(open("inputs.pkl", 'rb'))
+    inputs = pkl.load(open("ssd/inputs.pkl", 'rb'))
 
     random.seed(555)
     os.environ['MASTER_ADDR'] = '127.0.0.1'
@@ -864,17 +883,20 @@ if __name__ == "__main__":
     print(len(train_dataset))
 
     d = train_dataset[0]
-    
-    # exit(1)
     print(ShowDataStruct("d", d))
 
-    for d in train_dataset:
-        # print(d["frame_id"])
-        print(d["meta"]["fast_try_sum"], d["meta"]["fast_sec_sum"])
-        pass
-
+    import time
+    t1 = time.time()
+    for i in range(0, 10):
+        print(i)
+        d = train_dataset[i]
+        print(d["fast_buf_sec_cnt"], d["fast_buf_try_cnt"] )
+    t2 = time.time()
+    d = train_dataset[0]
+    print(t2-t1)
+    # 无缓存 7.560542583465576
+    # 帧缓存 5.709890842437744
     exit(1)
-    # print(d)
 
     from tools_scripts.data_format_cvt import ShowDataStruct
     from tools_scripts.vis_2d import Vis2D
