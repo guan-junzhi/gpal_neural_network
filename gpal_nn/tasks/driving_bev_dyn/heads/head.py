@@ -436,10 +436,13 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.head = nn.ModuleDict()
         self.head["center_head"] = FastDecoderHead(self.head_config)
     def load_state_dict(self, state_dict, strict=True):
-        for head_name, head in self.head.items():
-            state_dict_sub = {k.replace(f"{head_name}.", ""): state_dict[k]
-                              for k in state_dict if head_name in k}
-            head.load_state_dict(state_dict_sub, strict)
+        if len(self.head) == 1:
+            self.head["center_head"].load_state_dict(state_dict, strict)
+        else:
+            for head_name, head in self.head.items():
+                state_dict_sub = {k.replace(f"{head_name}.", ""): state_dict[k]
+                                for k in state_dict if head_name in k}
+                head.load_state_dict(state_dict_sub, strict)
 
     def forward(self, x: torch.Tensor, calib=None) -> torch.Tensor:
         # B,HW,C = x.shape
