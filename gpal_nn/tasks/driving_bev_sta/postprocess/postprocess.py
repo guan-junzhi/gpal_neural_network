@@ -36,6 +36,7 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
                         vectors['all_cls_scores'],
                         vectors['all_pts_preds'],
                         vectors['all_shape_types_preds'],
+                        vectors['all_centerline_types_preds'],
                         vectors['all_keypoint_classes_preds'],
                         vectors['all_keypoint_regs_preds']
                     ]
@@ -44,13 +45,13 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
         # print(ShowDataStruct("_vectors", _vectors))
         outputs = {}
         if 'lane_3d_output' in _vectors:
-            outputs_classes, intermediate_reference_points, shape_types, keypoint_classes, keypoint_regs = _vectors['lane_3d_output']
-            cls_pred, points_pred, shape_type_pred, keypoint_cls_pred, keypoint_reg_pred = outputs_classes[self.num_decode_layer - 1], \
+            outputs_classes, intermediate_reference_points, shape_types, centerline_types, keypoint_classes, keypoint_regs = _vectors['lane_3d_output']
+            cls_pred, points_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred = outputs_classes[self.num_decode_layer - 1], \
                                      intermediate_reference_points[self.num_decode_layer - 1], \
-                                     shape_types[self.num_decode_layer - 1], keypoint_classes[self.num_decode_layer - 1], \
+                                     shape_types[self.num_decode_layer - 1], centerline_types[self.num_decode_layer - 1], keypoint_classes[self.num_decode_layer - 1], \
                                      keypoint_regs[self.num_decode_layer - 1]
             # bbox_pred, points_pred = self.lane_map_head.transform_box(points_pred)
-            outputs['lane_3d_output'] = cls_pred, points_pred, shape_type_pred, keypoint_cls_pred, keypoint_reg_pred
+            outputs['lane_3d_output'] = cls_pred, points_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred
 
         outputs2 = {}
         outputs2['static_3d_pred'] = outputs
@@ -60,8 +61,8 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
 
         outputs2["static_3d_pred"]["lane_3d_output"] = (
             outputs2["static_3d_pred"]["lane_3d_output"][0], None, outputs2["static_3d_pred"]["lane_3d_output"][1], outputs2["static_3d_pred"]["lane_3d_output"][2],
-              outputs2["static_3d_pred"]["lane_3d_output"][3], outputs2["static_3d_pred"]["lane_3d_output"][4])
-        cls_pred, bbox_pred, points_pred, shape_types_pred, keypoint_cls_pred, keypoint_reg_pred = outputs2['static_3d_pred']['lane_3d_output']
+              outputs2["static_3d_pred"]["lane_3d_output"][3], outputs2["static_3d_pred"]["lane_3d_output"][4], outputs2["static_3d_pred"]["lane_3d_output"][5])
+        cls_pred, bbox_pred, points_pred, shape_types_pred, centerline_types_pred, keypoint_cls_pred, keypoint_reg_pred = outputs2['static_3d_pred']['lane_3d_output']
 
         for idx in range(len(points_pred)):
             result = dict()
@@ -71,14 +72,15 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
             point_per_pred = points_pred[idx]
             cls_per_pred = cls_pred[idx]
             shape_types_per_pred = shape_types_pred[idx]
+            centerline_types_per_pred = centerline_types_pred[idx]
             # keypoint_cls_per_pred = keypoint_cls_pred[idx]
             # keypoint_reg_per_pred =keypoint_reg_pred[idx]
 
             # print(self.pc_range)
             # print(point_per_pred)
             cls_per_pred = cls_pred[idx]
-            bbox_per_pred, point_per_pred, score_per_pred, type_per_pred, shape_type_per_pred,_,_ = decode_pred_with_score(cls_per_pred, bbox_per_pred,
-                                                                                   point_per_pred, shape_types_per_pred,
+            bbox_per_pred, point_per_pred, score_per_pred, type_per_pred, shape_type_per_pred, centerline_type_per_pred, _,_ = decode_pred_with_score(cls_per_pred, bbox_per_pred,
+                                                                                   point_per_pred, shape_types_per_pred, centerline_types_per_pred, 
                                                                                    pc_range=self.pc_range,
                                                                                    num_query=self.num_vec)
             point_per_pred = coordinate_transport_local(
@@ -88,13 +90,14 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
             # exit(1)
             score_per_pred = score_per_pred.cpu().numpy()
 
-            for idx, item in enumerate(zip(point_per_pred, type_per_pred, shape_type_per_pred)):
+            for idx, item in enumerate(zip(point_per_pred, type_per_pred, shape_type_per_pred, centerline_type_per_pred)):
                 static_target = {
                     'pts': item[0][..., :2].tolist(),
                     'confidence_level': score_per_pred[idx],
                     'type': item[1].item(),
                     'cls_name': main_class_name_map[item[1].item()],
-                    'shape_type': item[2].item(),    
+                    'shape_type': item[2].item(),   
+                    'centerline_type': item[3].item(), 
                 }
 
                 result['vectors'].append(static_target)
@@ -107,18 +110,19 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
         for idx, data in enumerate(vectors):
             result = dict()
             result['gt_vectors'] = []
-            points, cls, shape_types, is_split_merges, keypoint_norms = pack_polyline_gt_points(data)
+            points, cls, shape_types, centerline_types, is_split_merges, keypoint_norms = pack_polyline_gt_points(data)
 
             # points = shift_lane_points(points, self.pts_per_vector)
             if self.is_set_gt_z_as_zero == True and isinstance(points, np.ndarray):
                 points[..., 2] = 0.0
 
-            for index, item in enumerate(zip(points, cls, shape_types)):
+            for index, item in enumerate(zip(points, cls, shape_types, centerline_types)):
                 static_target = {
                     'pts': item[0].tolist(),
                     'type': item[1],
                     'cls_name': main_class_name_map[item[1]],
                     'shape_type': item[2], 
+                    'centerline_type': item[3],
                 }
                 result['gt_vectors'].append(static_target)
             results.append(result)

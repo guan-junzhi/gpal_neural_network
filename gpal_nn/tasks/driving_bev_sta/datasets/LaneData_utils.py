@@ -80,7 +80,7 @@ edge_type_map = {
 # --------------------------- centerline --------------------------------------------------------------
 centerline_type_map = {
     "normal_lane": 0,
-    "emergency_lane": 0,
+    "emergency_lane": 1,
     "non_motorized_lane": 0,
     "turn_waiting_lane": 0,
     "intersection_lane": 0,

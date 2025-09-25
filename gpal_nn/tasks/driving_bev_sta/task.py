@@ -51,7 +51,10 @@ class DRIVING_BEV_STATask(BaseTask):
                 for i,l in enumerate(gts[idx]['centerlines']['points']):
                 # for l in gts[idx]['centerlines']['points']:
                     vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
-                    vis1.DrawPolyline(l, [0, 165, 255], 2, 'solid')
+                    if gts[idx]['centerlines']['classes'][i] == 1:
+                        vis1.DrawPolyline(l, [158, 168, 3], 2, 'solid') #应急车道：青色
+                    else:
+                        vis1.DrawPolyline(l, [0, 165, 255], 2, 'solid')
                     if gts[idx]['centerlines']['is_split_merge'][i]:
                         # print(ShowDataStruct("gts keypoint", gts[idx]['centerlines']['keypoint']))
                         vis1.DrawKeypoint(gts[idx]['centerlines']['keypoint'][i], 5, [135, 138, 128])
@@ -65,8 +68,8 @@ class DRIVING_BEV_STATask(BaseTask):
             [(1-pre_pts[..., 1]) * 120, ((1-pre_pts[..., 0])-0.5) * 32], dim=-1)
 
         vis2 = Vis2D([-30, 130], [-20, 20], 0.1)
-        for l, ln, s, shape_type,is_split_merge,split_keypoint in zip(pre_pts_denorm[-1, idx], pre_pts[-1, idx], preds['all_cls_scores'][-1, idx], preds['all_shape_types_preds'][-1, idx],
-                                        preds['all_keypoint_classes_preds'][-1, idx], preds['all_keypoint_regs_preds'][-1, idx]):
+        for l, ln, s, shape_type, centerline_type, is_split_merge,split_keypoint in zip(pre_pts_denorm[-1, idx], pre_pts[-1, idx], preds['all_cls_scores'][-1, idx], preds['all_shape_types_preds'][-1, idx],
+                                        preds['all_centerline_types_preds'][-1, idx], preds['all_keypoint_classes_preds'][-1, idx], preds['all_keypoint_regs_preds'][-1, idx]):
             # if s[1:].sigmoid().max() > 0.3:
             cls_score_pred = s.squeeze().sigmoid()
             value, cls_pred = cls_score_pred.max(-1)
@@ -80,9 +83,13 @@ class DRIVING_BEV_STATask(BaseTask):
                     #画起始点（亮蓝色）
                     vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
                     _, shape_type = shape_type.max(-1)
+                    _, centerline_type = centerline_type.max(-1)
                     # vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
                     if cls_pred != 0:
-                        vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, 'solid')
+                        if cls_pred == 2 and centerline_type == 1:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), [158, 168, 3], 2, 'solid') #应急车道：青色
+                        else:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, 'solid')
                         if is_split_merge_pred.values > 0.5:
                             split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
                             vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
@@ -293,11 +300,10 @@ class DRIVING_BEV_STATask(BaseTask):
             bev_vis = self.GetVis(preds[0][0], trues, i, clips, timestamps)
             true_json_list, metadata_list = self.vectors_to_json(
         metadata, data, dataloader_idx, trues, True)
-            print("calib", calib)
-            exit()
             img_vis = self.GetImgVis(data, metadata, calib, bev_real2aug, json_list[0], true_json_list[0], i)
             concat_vis = self.concat_imgvis_and_bevvis(img_vis, bev_vis)
         name = metadata[i]['last_img_path'].split('/')[-1]
+        print("name", name)
         cv2.imwrite(osp.join(save_root, name), concat_vis)
 
     def get_point_from_normalized_position(self, points, normalized_pos):
