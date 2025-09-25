@@ -9,7 +9,7 @@ import lmdb
 class FastLoaderBuffer():
     def __init__(self, filename) -> None:
         self.lmdb_path = filename
-        self.map_size = 1099511627776 * 2
+        self.map_size = 1099511627776 * 4
         self.lmdb = None
 
     def Cache(self, key, data):
