@@ -20,9 +20,8 @@ class FastLoaderBuffer():
                     ret = txn.put(str(key).encode(), data)
                     # print(f"cache {key} success")
                     return True
-        except:
-            pass
-        print(f"cache {key} faild")
+        except Exception as e:
+            print(f"cache {key} faild {e}")
         return False
 
     def __getitem__(self, key):
