@@ -358,6 +358,8 @@ class Compute_Loss(nn.Module):
         #     l_z_coor * self.weight_z_coor + l_vel
         # total_loss += box_loss
 
+        l_vel = self.l1_loss(estimation_vel, gt_mask, None, trues['track_vel'])
+
         if gt_mask.sum() > 0:
             gt_masked = trues['track_multibin_direction'][gt_mask.squeeze(
                 -1).bool(), :]
@@ -395,7 +397,7 @@ class Compute_Loss(nn.Module):
         tb_dict['track_loss_z'] = l_z_coor
         tb_dict['track_loss_dim'] = l_dim
         tb_dict['track_loss_dir'] = l_direction
-        tb_dict['track_loss_vel'] = torch.tensor(0.0).to(head_conv_sel.device)
+        tb_dict['track_loss_vel'] = l_vel
 
         # print(gt_mask.shape, trues['track_z_coor'].shape, trues['track_cen_offset'].shape, trues['track_direction'].shape)
 

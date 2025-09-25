@@ -473,7 +473,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             heading = bbox.rotation[2]
             object_type = bbox.object_type
             trackid = bbox.track_id
-            vx, vy = 0.0, 0.0
+            # vx, vy = 0.0, 0.0
+            vx, vy = bbox.velocity[0], bbox.velocity[1]
             is_visible = bbox.image_visible
 
             obj = [x, y, z, l, w, h, heading, 0.0, vx, vy]

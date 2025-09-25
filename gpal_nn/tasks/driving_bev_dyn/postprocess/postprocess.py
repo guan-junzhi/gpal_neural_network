@@ -270,7 +270,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
         pred_yaw =( torch.atan2(pred_dir[:, :, 2], pred_dir[:, :, 3]) * bin_flag.float() + \
             torch.atan2(pred_dir[:, :, 4], pred_dir[:, :, 5]) * (1.0-bin_flag.float())).unsqueeze(-1)
 
-        pred_vel = outputs['estimation_vel'].sigmoid().permute(0, 2, 1)
+        pred_vel = outputs['estimation_vel'].permute(0, 2, 1)
         pred_score = outputs['estimation_score'].sigmoid().permute(
             0, 2, 1)  # 得分，时序特征融合后的得分
 
@@ -280,7 +280,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
                                 pred_z,
                                 pred_dim,
                                 pred_yaw,
-                                pred_vel*40,
+                                pred_vel*80,
                                 template_xyz.view(-1, 256, 2),
                                 #   indicee
                                 ], dim=-1

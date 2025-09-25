@@ -796,8 +796,8 @@ class DataProcessor(object):
             idd = []
             for k in range(num_objects):
                 x, y, z, l, w, h, yaw, track_id, car_v, target_v, cls_id = gt_boxes[k]
-                target_v = np.min([target_v, 40])/40
-                car_v = np.min([car_v, 40])/40
+                target_v = np.min([target_v, 80])/80
+                car_v = np.min([car_v, 80])/80
                 cls_id = int(cls_id)
                 if not ((minX < x < maxX) and (minY < y < maxY)):
                     continue

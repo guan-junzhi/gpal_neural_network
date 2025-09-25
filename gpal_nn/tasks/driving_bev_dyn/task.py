@@ -115,10 +115,10 @@ class DRIVING_BEV_DYNTask(BaseTask):
             pred_objs = self.vector_to_json(preds, metadata, False)
             for box in gts[idx]['gt_boxes']:
                 #  [x, y, z, dx, dy, dz, heading]
-                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], None, [0, 255, 0],
+                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], [box[8], box[9]], [0, 255, 0],
                             [255, 255, 255], line_width=1)
             for box, score in zip(pred_objs[idx]['boxes_lidar'], pred_objs[idx]['score']):
-                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], None, [0, 0, 255],
+                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], [box[7], box[8]], [0, 0, 255],
                             [255, 255, 255], line_width=1)
 
 
