@@ -713,30 +713,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             time_dp.Duration("cur_json", "begin")
 
-            # # === 前一帧
-            # if self.have_prev_label:
-            #     prev_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{prev_time_stamp}.json'
-            #     prev_json_data = self.json_data.load(prev_json_file)
-                
-            #     try:
-            #         prev_json_data = self.json_data.load(prev_json_file)
-            #     except:
-            #         print(f'error json file: {prev_json_file}')
-                    
-            #     re_prev_infos  = self.json_data.parse_json(prev_json_data)  # 上一帧不需要真值(但模型输出的有(是连续的))
-            #     meta_info, cameras, bounding_boxes, special_labels = re_prev_infos
-
-            #     gt_boxes_, gt_names_ = self.get_box(bounding_boxes=bounding_boxes)
-            #     intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
-            #     _, _, _, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
-
-            #     input_dict['gt_names_former'] = gt_names_
-            #     input_dict['gt_boxes_former'] = gt_boxes_
-            # else:
-            #     input_dict['gt_names_former'] = gt_names
-            #     input_dict['gt_boxes_former'] = gt_boxes
-
-
             time_dp.Duration("prev_json", "cur_json")
 
             # === 共同信息
@@ -781,35 +757,17 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     rot_temp = scipy.spatial.transform.Rotation.from_matrix(
                         cam_to_vehicle[:3, :3]).as_quat()
                     rot_temp = Quaternion(rot_temp[3], rot_temp[0], rot_temp[1], rot_temp[2])
-
-                    # print("calib_extrin\n", calib_extrin)
                     current_img, trans_cv, rots_cv = self.img_aug_cuda(
                         current_img, None, rot_temp, calib_intrin, device="cpu")
-
-                    # print(current_img.shape, rots_cv, rots_cv.rotation_matrix)
                     cam_to_vehicle[:3, :3] = rots_cv.rotation_matrix
 
                     input_dict["extrinsic"][view_idx] = np.linalg.inv(cam_to_vehicle)
                     current_img = current_img.squeeze(
                         0).permute(1, 2, 0).cpu().numpy()
-
-                if self.phase == const.PHASE_TRAINING:
-                    # current_img = aug_image(current_img)
-                    pass
+    
                 input_dict[f'images_input{view_idx}'] = current_img.astype(
                     np.float32) / 255.0
-                # image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
-                # previous_img = self.get_image(image_file, view_idx)
 
-                # previous_img = cv2.undistort(
-                #     previous_img, calib_intrin, calib_dist, calib_intrin)
-
-
-                # if self.phase == const.PHASE_TRAINING:
-                #     # previous_img = aug_image(previous_img)
-                #     pass
-                # input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
-                #     np.float32) / 255.0
             time_dp.Duration("image", "prev_json")
 
             data_dict = self.prepare_data(data_dict=input_dict)
@@ -841,8 +799,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['calib']["bev_real2aug"] = np.eye(4, dtype=np.float32)
 
             intrinsics = copy.deepcopy(data_dict_ret['calib']["intrinsic"])
-            # print("intrinsics", intrinsics.shape)
-            # print("self.img_crop_dict", self.img_crop_dict)
             for i in range(intrinsics.shape[0]):
                 intrinsics[i, :2] /= self.img_crop_dict["CROP_HeSai_ID4"]['SCALE'][i]
                 intrinsics[i, 1,
