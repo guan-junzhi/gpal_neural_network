@@ -26,20 +26,31 @@ class DRIVING_BEV_STATask(BaseTask):
         super().__init__(global_config, task_config, name, None)
         pass
 
-    def GetVis(self, preds, gts, idx):
+    def GetVis(self, preds, gts, idx, clips, timestamps):
 
         from tools_scripts.vis_2d import Vis2D
         linetype_list = ['solid', 'dashed']
         vis1 = Vis2D([-30, 130], [-20, 20], 0.1)
         try:
             for l in gts[idx]['edges']['points']:
+                vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
                 vis1.DrawPolyline(l, [0, 255, 255], 2, 'solid')
             for i,l in enumerate(gts[idx]['polylines']['points']):
+                vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
                 shape_type = gts[idx]['polylines']['shape_type'][i]
-                vis1.DrawPolyline(l, [0, 255, 0], 2, linetype_list[shape_type])
+                if shape_type == 0 or shape_type == 1:
+                    vis1.DrawPolyline(l, [0, 255, 0], 2, linetype_list[shape_type])
+                elif shape_type == 2:
+                    vis1.DrawPolyline(l, [250, 51, 153], 2, 'dashed', 20)
+                elif shape_type == 3:
+                    vis1.DrawPolyline(l, [203, 192, 255], 2, 'dashed', 20)
+                else:
+                    print("shape_type error:", shape_type)
+                    vis1.DrawPolyline(l, [192, 192, 192], 2, 'solid')
             if 'centerlines' in gts[idx]:
                 for i,l in enumerate(gts[idx]['centerlines']['points']):
                 # for l in gts[idx]['centerlines']['points']:
+                    vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
                     vis1.DrawPolyline(l, [0, 165, 255], 2, 'solid')
                     if gts[idx]['centerlines']['is_split_merge'][i]:
                         # print(ShowDataStruct("gts keypoint", gts[idx]['centerlines']['keypoint']))
@@ -66,22 +77,47 @@ class DRIVING_BEV_STATask(BaseTask):
                 # color = [random.randint(0, 255), random.randint(
                 #     0, 255), random.randint(0, 255)]
                 try:
+                    #画起始点（亮蓝色）
+                    vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
                     _, shape_type = shape_type.max(-1)
-                    vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
-                    if is_split_merge_pred.values > 0.5:
-                        split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
-                        vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
+                    # vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                    if cls_pred != 0:
+                        vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, 'solid')
+                        if is_split_merge_pred.values > 0.5:
+                            split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
+                            vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
+                    else:
+                        if shape_type == 0 or shape_type == 1:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                        elif shape_type == 2:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), [250, 51, 153], 2, 'dashed', 20)
+                        elif shape_type == 3:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), [203, 192, 255], 2, 'dashed', 20)
+                        else:
+                            print("shape_type error:", shape_type)
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), [192, 192, 192], 2, 'solid')
                 except:
                     pass
         # exit()
         vis_draw2 = vis2.Draw()
+        vis_draw = np.concatenate([vis_draw1, vis_draw2], axis=1)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        vis_draw = cv2.putText(vis_draw, clips[idx], (0, 20), font, 0.6, [255, 255, 255], 1)
+        vis_draw = cv2.putText(vis_draw, timestamps[idx], (0, 70), font, 1.0, [255, 255, 255], 1)
 
-        return np.concatenate([vis_draw1, vis_draw2], axis=1)
+        return vis_draw
 
     def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, calib, loss_info=None):
         imgs = []
         for idx in range(4):
-            vis = self.GetVis(preds[0], trues, idx)
+            clips = [item['clip_id'] for item in metadata[:4]]
+            timestamps = []
+            for item in metadata[:4]:
+                img_path = item['last_img_path']
+                filename = img_path.split('/')[-1]
+                timestamp = filename.split('.jpg')[0]
+                timestamps.append(timestamp)
+            vis = self.GetVis(preds[0], trues, idx, clips, timestamps)
             imgs.append(vis)
 
         imgs = np.concatenate(imgs, axis=1)
@@ -247,7 +283,14 @@ class DRIVING_BEV_STATask(BaseTask):
             os.makedirs(save_root, exist_ok=True)
         bev_real2aug = batch["bev_real2aug"]
         for i in range(len(metadata)):
-            bev_vis = self.GetVis(preds[0][0], trues, i)
+            clips = [item['clip_id'] for item in metadata]
+            timestamps = []
+            for item in metadata:
+                img_path = item['last_img_path']
+                filename = img_path.split('/')[-1]
+                timestamp = filename.split('.jpg')[0]
+                timestamps.append(timestamp)
+            bev_vis = self.GetVis(preds[0][0], trues, i, clips, timestamps)
             true_json_list, metadata_list = self.vectors_to_json(
         metadata, data, dataloader_idx, trues, True)
             img_vis = self.GetImgVis(data, metadata, calib, bev_real2aug, json_list[0], true_json_list[0], i)

@@ -17,7 +17,7 @@ from gpal_lightning.utils.data_buffer import FastLoaderBuffer
 from gpal_nn.tasks.driving_bev_sta.datasets.transform import *
 from gpal_nn.tasks.driving_bev_sta.datasets.letter_box import letterbox_image, random_scale_and_translate
 from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
-from gpal_nn.tasks.driving_bev_sta.datasets.centerline_connector import merge_connected_centerlines
+from gpal_nn.tasks.driving_bev_sta.datasets.centerline_connector import merge_connected_centerlines, get_centerline_dict
 from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
 from gpal_lightning.utils.profiling import TimeProf
 import random
@@ -95,7 +95,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                  bev_aug=False,
                  rpy_aug_deg=[3,3,3], 
                  bev_aug_deg=3,
-                 lmdb_path='static_data_lmdb'
+                 lmdb_path='static_data_lmdb',
+                 cut_start_h=0,
                  ):
         '''
         :param root_dict:
@@ -177,7 +178,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                              LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf",
                              )
                          )
-        cut_start_h = 112
+        self.cut_start_h = cut_start_h
         mean = (0., 0., 0.)
         std = (255., 255., 255.)
         if phase == const.PHASE_TRAINING:
@@ -198,8 +199,20 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         self.rpy_aug_rad = np.deg2rad(np.array(rpy_aug_deg))
         self.bev_aug_rad = np.deg2rad(bev_aug_deg)
         self.lmdb_path = os.path.join(pkl_root, lmdb_path)
-        if self.lmdb_path != '':
-            self.label_buffer = FastLoaderBuffer(self.lmdb_path)
+
+        self.lmdb_path_local = self.lmdb_path.replace(
+            DATASETS_ROOT, LOCAL_DATASETS_ROOT)
+        if (self.global_rank == 0) and (not os.path.exists(self.lmdb_path_local)):
+            os.makedirs(self.lmdb_path_local, exist_ok=False)
+            cmd = f"cp -r {self.lmdb_path}/* {self.lmdb_path_local}/"
+            print(f"{self.lmdb_path_local} 不存在, {cmd}")
+            os.system(cmd)
+        else:
+            print(f"{self.lmdb_path_local} 存在")
+        distributed.barrier()
+
+        if self.lmdb_path_local != '':
+            self.label_buffer = FastLoaderBuffer(self.lmdb_path_local)
         
 
     def _build_world_data_list(self):
@@ -322,15 +335,18 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         time_dp = DetailProf()
         time_dp.Tic("begin")
         try:
+            self.fast_buf_try_cnt += 1
+            database_key = "_".join(img_path.split('/')[-4:])
             image, hw_origin = self._image_buffer_access(
-                img_path)
+                database_key)
             if image is None:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
                 image = cv2.undistort(image, K, dist)
                 self._image_cache(
-                    img_path, image, pre_resize=(960, 540), quality=100)
+                    database_key, image, pre_resize=(960, 540), quality=95)
                 # print("cache")
             else:
+                self.fast_buf_sec_cnt += 1
                 # print("fast load")
                 K[0, :] *= image.shape[1]/hw_origin[1]
                 K[1, :] *= image.shape[0]/hw_origin[0]
@@ -389,12 +405,33 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
     def parse_annotations(self, data_info, data_dict, bev_real2aug):
         annot = data_info['annotation']
-
-        self.process_polylines(annot['polylines'], data_dict, bev_real2aug)
         self.process_edges(annot['edges'], data_dict, bev_real2aug)
+        self.process_polylines(annot['polylines'], data_dict, bev_real2aug)
         self.process_polygons_arrow(annot['polygons'], data_dict, bev_real2aug)
         if 'centerlines' in annot:
             self.process_centerline(annot['centerlines'], data_dict, bev_real2aug)
+        if 'points' in data_dict['edges']:
+            edges_visible_dict = {}
+            edges_visible_mask = np.ones(len(data_dict['edges']['points']), dtype=bool)
+            for idx1, edge1 in enumerate(data_dict['edges']['points']):
+                num_cross_edge = 0
+                for edge1_pt in edge1:
+                    ego_ls = LineString(np.stack([edge1_pt[:2], np.array([0,0])], axis=0))
+                    for idx2, edge2 in enumerate(data_dict['edges']['points']):
+                        if idx1 == idx2:
+                            continue
+                        edge_ls = LineString(edge2[:,:2])
+                        if ego_ls.intersects(edge_ls):
+                            num_cross_edge += 1
+                            break
+                if num_cross_edge > self.pts_per_vector - 4:
+                    edges_visible_mask[idx1] = False
+
+            if edges_visible_mask.sum() > 0:
+                edges_visible_dict['points'] = data_dict['edges']['points'][edges_visible_mask]
+                edges_visible_dict['classes'] = np.array(data_dict['edges']['classes'])[edges_visible_mask]
+            data_dict['edges'] = edges_visible_dict
+
         data_dict["calib_type"] = data_info['sensor']['calib_type']
 
     def reorder_points(self, points):
@@ -431,13 +468,25 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
                 # print("continue", self.gt_range)
                 continue
+            lane = _fix_pts_interpolate(lane, self.pts_per_vector)
+            if 'points' in data_dict['edges']:
+                num_cross_edge = 0
+                edges_points = data_dict['edges']['points']
+                for lane_pt in lane:
+                    ego_ls = LineString(np.stack([lane_pt[:2], np.array([0,0])], axis=0))
+                    for edge in edges_points:
+                        edge_ls = LineString(edge[:,:2])
+                        if ego_ls.intersects(edge_ls):
+                            num_cross_edge += 1
+                            break
+                if num_cross_edge > self.pts_per_vector - 4:
+                    continue
             line_mask[idx] = True
             lane = self.reorder_points(lane)
             lanes.append(lane)
 
         if len(lanes) > 0:
-            points = np.array([_fix_pts_interpolate(
-                item, self.pts_per_vector) for item in lanes])
+            points = np.array(lanes, dtype=np.float32)
             assert points.shape[
                 1] == self.pts_per_vector, f'gp_points shape:{points.shape} is not {self.pts_per_vector}!'
             data_dict['polylines']['points'] = points
@@ -561,7 +610,27 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 }
                 centerline_list.append(cur_dict)
                 centerline_pts_idx += 1
-        centerline_dict = merge_connected_centerlines(centerline_list)
+        merged_centerlines = merge_connected_centerlines(centerline_list)
+        if 'points' in data_dict['edges']:
+            merged_centerlines_visible = []
+            edges_points = data_dict['edges']['points']
+            for centerline in merged_centerlines:
+                centerline['points'] = _fix_pts_interpolate(centerline['points'], self.pts_per_vector)
+                num_cross_edge = 0
+                for centerline_pt in centerline['points']:
+                    ego_ls = LineString(np.stack([centerline_pt[:2], np.array([0,0])], axis=0))
+                    for edge in edges_points:
+                        edge_ls = LineString(edge[:,:2])
+                        if ego_ls.intersects(edge_ls):
+                            num_cross_edge += 1
+                            break
+                if num_cross_edge > self.pts_per_vector - 4:
+                    continue
+                merged_centerlines_visible.append(centerline)
+
+            centerline_dict = get_centerline_dict(merged_centerlines_visible)
+        else:
+            centerline_dict = get_centerline_dict(merged_centerlines)
         if len(centerline_dict["points"]) <= 0:
             return
         data_dict['centerlines'] = centerline_dict
@@ -614,9 +683,14 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['polygon_arrows']['classes'] = polygon_classes
         data_dict['polygon_arrows']['arrow_type'] = arrow_types
 
+    def ClearFastBufCnt(self):
+        self.fast_buf_try_cnt = 0
+        self.fast_buf_sec_cnt = 0
+
     @TimeProf
     def __getitem__(self, idx):
         # idx = 0
+        self.ClearFastBufCnt()
 
         while True:
             t1 = time.time()
@@ -647,7 +721,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 [[0, 0, 0, 1]])], axis=0) for ele in data['calib']["ego2imgs"]], axis=0)
 
             ists_wt = copy.deepcopy(data['calib']['ists'])
-            ists_wt[:, 1, 2] += 112
+            ists_wt[:, 1, 2] += self.cut_start_h
             data['calib']["ego2imgs_wt"] = np.stack(
                 [i@e for e, i in zip(data['calib']['exts'], ists_wt)], axis=0)
             data['calib']["ego2imgs_wt"] = np.stack([np.concatenate([ele, np.array(
@@ -660,6 +734,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             time_dp.Duration("dataset_all", "begin")
 
             data['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
+
+            data['fast_buf_try_cnt'] = self.fast_buf_try_cnt
+            data['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
 
             t2 = time.time()
             # if t2-t1 > 1.0:

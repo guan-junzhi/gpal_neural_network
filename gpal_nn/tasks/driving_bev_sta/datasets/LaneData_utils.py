@@ -32,10 +32,10 @@ shape_type_map = {
     "double_soild": 0,  # 兼容标注规范拼写错误
     "double_solid": 0,
     "double_dashed": 1,
-    "double_left_soild": 0,  # 兼容标注规范拼写错误
-    "double_left_solid": 0,
-    "double_right_soild": 0,  # 兼容标注规范拼写错误
-    "double_right_solid": 0,
+    "double_left_soild": 2,  # 兼容标注规范拼写错误
+    "double_left_solid": 2,
+    "double_right_soild": 3,  # 兼容标注规范拼写错误
+    "double_right_solid": 3,
     "thick_dashed": 1,
     "wide_solid": 0,
     "colored_three_line": 0,

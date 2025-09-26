@@ -1,7 +1,7 @@
 image_per_gpu: 32
 workers_per_gpu: 8
 skip_sanity_check: true
-max_iterations: 60000
+max_iterations: 30000
 save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
@@ -12,7 +12,7 @@ Train:
   visualize_every: 200
   max_visu_img_num: 10
   optimizer: {type: AdamW, lr: 3.0e-04, weight_decay: 1.0e-06}
-  lr_scheduler: {type: CosineAnnealingLR, T_max: 60000}
+  lr_scheduler: {type: CosineAnnealingLR, T_max: 100000}
   # optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   # lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
   #   after_scheduler: CosineAnnealingLR, T_max: 30000}
@@ -103,25 +103,116 @@ Tasks:
     Evaluator: {}
     datasets:
       training:
-      - { dataset_name: 'gpal', 
+      - { dataset_name: 'gpal_normal', 
           # root_dir:  "../lane_data",
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["0908_train_keys"],
+          pkl_infos: ["0911_normal_train_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
-          in_shape: [432, 768],
+          # in_shape: [432, 768],
+          in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
           camera_name: ['img_front_30', 'img_front_120'],
           gt_range: [120, 16, 0, 0.0, -16.0, 0],
           is_random_scale_and_translate: False,
-          # fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
-          fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           rpy_aug: True, 
           bev_aug: True,
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
-          lmdb_path: 'static_data_lmdb'
+          cut_start_h: 28,
+          lmdb_path: 'static_data_lmdb_0911',
+          ratio: 200
+        }
+      - { dataset_name: 'gpal_large_kappa', 
+          # root_dir:  "../lane_data",
+          root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
+          # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
+          #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
+          pkl_infos: ["0911_large_kappa_train_keys"],
+          pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
+          in_shape: [540, 960],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: False,
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          rpy_aug: True, 
+          bev_aug: True,
+          rpy_aug_deg: [3,3,3], 
+          bev_aug_deg: 1,
+          cut_start_h: 28,
+          lmdb_path: 'static_data_lmdb_0911',
+          ratio: 50
+        }
+      - { dataset_name: 'gpal_split_merge', 
+          # root_dir:  "../lane_data",
+          root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
+          # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
+          #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
+          pkl_infos: ["0911_split_marge_train_keys"],
+          pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
+          in_shape: [540, 960],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: False,
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          rpy_aug: True, 
+          bev_aug: True,
+          rpy_aug_deg: [3,3,3], 
+          bev_aug_deg: 1,
+          cut_start_h: 28,
+          lmdb_path: 'static_data_lmdb_0911',
+          ratio: 30
+        }
+      - { dataset_name: 'gpal_ego_merge', 
+          # root_dir:  "../lane_data",
+          root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
+          # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
+          #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
+          pkl_infos: ["0911_ego_merge_train_keys"],
+          pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
+          in_shape: [540, 960],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: False,
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          rpy_aug: True, 
+          bev_aug: True,
+          rpy_aug_deg: [3,3,3], 
+          bev_aug_deg: 1,
+          cut_start_h: 28,
+          lmdb_path: 'static_data_lmdb_0911',
+          ratio: 50
+        }
+      - { dataset_name: 'gpal_ego_split', 
+          # root_dir:  "../lane_data",
+          root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
+          # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
+          #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
+          pkl_infos: ["0911_ego_split_train_keys"],
+          pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
+          in_shape: [540, 960],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: False,
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          rpy_aug: True, 
+          bev_aug: True,
+          rpy_aug_deg: [3,3,3], 
+          bev_aug_deg: 1,
+          cut_start_h: 28,
+          lmdb_path: 'static_data_lmdb_0911',
+          ratio: 50,
         }
       validation:
       - { dataset_name: 'gpal', 
@@ -130,7 +221,8 @@ Tasks:
           # pkl_infos: ["gpal_songbiao_no_stop_20250604_tiny_test"],
           pkl_infos: ["20250906_split_merge_val"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
-          in_shape: [432, 768],
+          # in_shape: [432, 768],
+          in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
           camera_name: ['img_front_30', 'img_front_120'],
           gt_range: [120, 16, 0, 0.0, -16.0, 0],
@@ -140,5 +232,6 @@ Tasks:
           rpy_aug: False, 
           bev_aug: False,
           rpy_aug_deg: [3,3,3], 
-          bev_aug_deg: 1
+          bev_aug_deg: 1,
+          cut_start_h: 28,
         }

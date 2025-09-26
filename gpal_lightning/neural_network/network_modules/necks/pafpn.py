@@ -14,10 +14,16 @@ class FPN(nn.Module):
 
         for in_channels in in_channels_list:
             self.lateral_convs.append(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1)
+                nn.Sequential(
+                    nn.Conv2d(in_channels, out_channels, kernel_size=1),
+                    nn.ReLU6(inplace=True)
+                )
             )
             self.output_convs.append(
-                nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
+                nn.Sequential(
+                    nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+                    nn.ReLU6(inplace=True)
+                )
             )
 
             # self.upsample_convs.append(
@@ -85,7 +91,10 @@ class PAN_UpMerge(nn.Module):
         # 为每个层级创建卷积(包括最高层)
         for _ in range(num_levels):
             self.convs.append(
-                nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+                nn.Sequential(
+                    nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+                    nn.ReLU6(inplace=True)
+                )
             )
             # self.upsample_convs.append(
             #     nn.ConvTranspose2d(in_channels, in_channels, kernel_size=2, stride=2)

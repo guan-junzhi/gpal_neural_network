@@ -88,90 +88,37 @@ def pack_polyline_gt_points(data):
         keypoint_norms = np.concatenate(keypoint_norms, axis=0)
     return annos, classes, shape_types, is_split_merges, keypoint_norms
 
-def lane_loss_computation(preds, data, loss_func, centerline_dataset):
-
-    # print(data[0])
-
-    # print(ShowDataStruct("preds", preds))
-    # print(ShowDataStruct("data", data))
-    # preds1, data1 = pkl.load(open("../wangtong_loss.pkl", 'rb'))
-    # print(ShowDataStruct("preds", preds))
-    # print(ShowDataStruct("data", data))
-    # bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred = \
-    #     preds['bev_embed'], preds['all_cls_scores'], preds['all_bbox_pred'], preds['all_pts_pred']
-    bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred, \
+def lane_loss_computation(preds, trues, loss_func, centerline_dataset):
+    all_cls_scores, all_bbox_pred, all_pts_pred, \
         all_shape_types_pred, all_keypoint_classes_preds, all_keypoint_regs_pred = \
-            None, preds['all_cls_scores'], preds['all_bbox_preds'], preds['all_pts_preds'], \
-                preds['all_shape_types_preds'], preds['all_keypoint_classes_preds'], preds['all_keypoint_regs_preds']
-    # num_iter_layer, bs, num_query, score shape
+        preds['all_cls_scores'], preds['all_bbox_preds'], preds['all_pts_preds'], \
+        preds['all_shape_types_preds'], preds['all_keypoint_classes_preds'], preds['all_keypoint_regs_preds']
     num_iter, bs, _, pts_per_vector, _ = all_pts_pred.shape
-
-    # print(data['annot'][0])
-
     loss_list = list()
     for k in range(num_iter):
         loss_dict = dict()
-        for j in range(bs):
+        time_dp = DetailProf()
+        time_dp.Tic("begin")
 
-            time_dp = DetailProf()
-            time_dp.Tic("begin")
+        score_pred, bbox_pred, pts_pred, shape_type_pred, \
+            keypoint_cls_pred, keypoint_reg_pred = all_cls_scores[k], all_bbox_pred[k], all_pts_pred[k], all_shape_types_pred[k], \
+            all_keypoint_classes_preds[k], all_keypoint_regs_pred[k]
+        time_dp.Duration("lane_loss_computation_all_1", "begin")
+        
+        stage_pred = [score_pred, bbox_pred, pts_pred, shape_type_pred, keypoint_cls_pred, keypoint_reg_pred]
+        single_loss_dict = loss_func(stage_pred, trues)
 
-            score_pred, bbox_pred, pts_pred, shape_type_pred, \
-                keypoint_cls_pred, keypoint_reg_pred = all_cls_scores[k, j], all_bbox_pred[k, j], all_pts_pred[k, j], all_shape_types_pred[k, j], \
-                    all_keypoint_classes_preds[k, j], all_keypoint_regs_pred[k, j]
-            #  [n, 2], [n, 4], [n, 20, 2]
-            subdata = data[j]
-            # subdata = data['annot'][j]
-            annos, classes, shape_types, is_split_merges, keypoint_norms = pack_polyline_gt_points(subdata)
-            calib_type = subdata['calib_type']
-            # print("calib_type:", calib_type)
-            time_dp.Duration("lane_loss_computation_all_1", "begin")
+        time_dp.Duration("lane_loss_computation_all_4",
+                            "lane_loss_computation_all_1")
+        
+        single_loss_dict = {k: single_loss_dict[k] / bs for k in single_loss_dict}
+        time_dp.Duration("lane_loss_computation_all_5",
+                            "lane_loss_computation_all_4")
 
-            start_x = 120
-            start_y = 16
-            # gt ploylines to gt bboxes  [n, 4], [n, 20, 2]
-            bboxes_gt, points_gt = transform_gt_box(annos, start_x, start_y,
-                                                    num_pts_per_vec=pts_per_vector, y_first=False, device=pts_pred.device)
+        time_dp.Duration("lane_loss_computation_all", "begin")
+        # time_dp.Print()
 
-            time_dp.Duration("lane_loss_computation_all_2",
-                             "lane_loss_computation_all_1")
-
-            # [n,20, 2]->[n, 2, 20, 2]  矢量线翻转建模
-            points_gt = shift_polyline_points(points_gt, pts_per_vector)
-
-            keypoint_cls_gt = is_split_merges
-            if len(keypoint_norms) > 0:
-                keypoint_norms_filp = 1 - keypoint_norms
-                keypoint_norms_filp *= is_split_merges
-                keypoint_reg_gt = np.stack([keypoint_norms, keypoint_norms_filp], axis=0).transpose(1, 0)
-            else:
-                keypoint_reg_gt = np.zeros((0, 2), dtype=np.float32)
-
-            time_dp.Duration("lane_loss_computation_all_3",
-                             "lane_loss_computation_all_2")
-            single_loss_dict = loss_func(
-                (score_pred, bbox_pred, pts_pred, shape_type_pred, keypoint_cls_pred, keypoint_reg_pred), 
-                (classes, bboxes_gt, points_gt, shape_types, keypoint_cls_gt, keypoint_reg_gt),
-                calib_type in centerline_dataset
-            )
-
-            time_dp.Duration("lane_loss_computation_all_4",
-                             "lane_loss_computation_all_3")
-            for key in single_loss_dict.keys():
-                if key in loss_dict.keys():
-                    loss_dict[key] += single_loss_dict[key]
-                else:
-                    loss_dict[key] = single_loss_dict[key]
-            time_dp.Duration("lane_loss_computation_all_5",
-                             "lane_loss_computation_all_4")
-
-            time_dp.Duration("lane_loss_computation_all", "begin")
-            # time_dp.Print()
-
-        for key in loss_dict.keys():
-            loss_dict[key] /= bs
-
-        loss_list.append(loss_dict)
+        loss_list.append(single_loss_dict)
     total_dict = {}
     final_total_loss = 0.0
     for k in range(num_iter):
@@ -186,93 +133,88 @@ def lane_loss_computation(preds, data, loss_func, centerline_dataset):
     return total_dict
 
 
-def lane_loss_computation2(preds, data, loss_func):
-    # bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred = \
-    #     preds['bev_embed'], preds['all_cls_scores'], preds['all_bbox_pred'], preds['all_pts_pred']
-    bev_embed, all_cls_scores, all_bbox_pred, all_pts_pred = \
-        None, preds['all_cls_scores'], preds['all_bbox_preds'], preds['all_pts_preds']
-    # num_iter_layer, bs, num_query, score shape
-    num_iter, bs, _, pts_per_vector, _ = all_pts_pred.shape
+def ExpandTensor(data_tensor, default_len = 256):
+    if data_tensor.shape[0] >= default_len:
+        print(f"warning default_len = {default_len} data_tensor.shape[0] = {data_tensor.shape[0]}")
+        return data_tensor[:default_len]
+    tensor_size = list(data_tensor.shape)
+    tensor_size[0] = default_len - tensor_size[0]
+    return torch.cat([data_tensor, torch.zeros(tensor_size, device = data_tensor.device, dtype = data_tensor.dtype)], dim = 0)
 
-    loss_list = [dict() for k in range(num_iter)]
-    # loss_dict = dict()
-    for j in range(bs):
-        annos = pack_polyline_gt_points(data[j])
-        start_x = 120
-        start_y = 16
+def ProcessGt(trues, preds, centerline_dataset, output_group, max_ele_num=256):
+    processed_gt = {"batchsize": len(trues)}
+    start_x = 120
+    start_y = 16
+    all_pts_pred = preds['all_pts_preds']
+    num_iter, bs, _, pts_per_vector, _ = all_pts_pred.shape
+    gt_batched = {f"group_{idx}": {"valid_mask":[], "valid_len": [], "classes": [], "bboxes": [], "points": [], "types": [], "keyp_cls": [], "keyp_reg": [], "center_line_flag": []} for idx in range(len(output_group))}
+    for gt in trues:
+        annos, classes, shape_types, is_split_merges, keypoint_norms = pack_polyline_gt_points(gt)
         # gt ploylines to gt bboxes  [n, 4], [n, 20, 2]
-        bboxes_gt, points_gt = transform_gt_box(
-            annos, start_x, start_y, num_pts_per_vec=pts_per_vector, y_first=False, device=all_cls_scores.device)
+        bboxes_gt, points_gt = transform_gt_box(annos, start_x, start_y,
+                                                num_pts_per_vec=pts_per_vector, y_first=False, device=all_pts_pred.device)
+
         # [n,20, 2]->[n, 2, 20, 2]  矢量线翻转建模
         points_gt = shift_polyline_points(points_gt, pts_per_vector)
 
-        for k in range(num_iter):
-            loss_dict = loss_list[k]
+        keypoint_cls_gt = is_split_merges
+        if len(keypoint_norms) > 0:
+            keypoint_norms_filp = 1 - keypoint_norms
+            keypoint_norms_filp *= is_split_merges
+            keypoint_reg_gt = np.stack(
+                [keypoint_norms, keypoint_norms_filp], axis=0).transpose(1, 0)
+        else:
+            keypoint_reg_gt = np.zeros((0, 2), dtype=np.float32)
 
-            time_dp = DetailProf()
-            time_dp.Tic("begin")
+        if len(shape_types) == 0:
+            shape_types = torch.zeros(0).to(all_pts_pred.device).long()
+            keypoint_cls_gt = torch.zeros(0).to(all_pts_pred.device).long()
+            keypoint_reg_gt = torch.zeros([0, 2]).to(
+                all_pts_pred.device).float()
+            classes = torch.zeros(0).to(all_pts_pred.device).long()
+        else:
+            shape_types = torch.from_numpy(shape_types).to(all_pts_pred.device).long()
+            keypoint_cls_gt = torch.from_numpy(keypoint_cls_gt).to(all_pts_pred.device).long()
+            keypoint_reg_gt = torch.from_numpy(keypoint_reg_gt).to(all_pts_pred.device).float()
+            classes = torch.from_numpy(classes).to(all_pts_pred.device).long()
+        for group_idx, group in enumerate(output_group):
+            type_mask = torch.zeros_like(classes)
+            for target_cls in group[0]:
+                type_mask += (target_cls == classes)
+            type_mask = type_mask > 0
+            
+            group_flag = f"group_{group_idx}"
+            valid_mask = torch.zeros(max_ele_num).to(all_pts_pred.device).long()
+            valid_mask[:len(classes[type_mask])] = 1
+            gt_batched[group_flag]["valid_mask"].append(valid_mask)
+            gt_batched[group_flag]["valid_len"].append(torch.tensor(len(classes[type_mask])).to(all_pts_pred.device).long())
+            gt_batched[group_flag]["classes"].append(ExpandTensor(classes[type_mask], max_ele_num))
+            gt_batched[group_flag]["bboxes"].append(ExpandTensor(bboxes_gt[type_mask], max_ele_num))
+            gt_batched[group_flag]["points"].append(ExpandTensor(points_gt[type_mask], max_ele_num))
+            gt_batched[group_flag]["types"].append(ExpandTensor(shape_types[type_mask], max_ele_num))
+            gt_batched[group_flag]["keyp_cls"].append(ExpandTensor(keypoint_cls_gt[type_mask], max_ele_num))
+            gt_batched[group_flag]["keyp_reg"].append(ExpandTensor(keypoint_reg_gt[type_mask], max_ele_num))
+            gt_batched[group_flag]["center_line_flag"].append(torch.tensor(gt['calib_type'] in centerline_dataset).to(all_pts_pred.device).long())
 
-            score_pred, bbox_pred, pts_pred = all_cls_scores[k,
-                                                             j], all_bbox_pred[k, j], all_pts_pred[k, j]
+    for group_flag in gt_batched:
+        gt_batched[group_flag] = {k: torch.stack(gt_batched[group_flag][k], dim = 0) for k in gt_batched[group_flag]}
 
-            time_dp.Duration("lane_loss_computation_all_2",
-                             "begin")
-
-            # here to loss
-            single_loss_dict = loss_func(
-                (score_pred, bbox_pred, pts_pred), (bboxes_gt, points_gt))
-
-            time_dp.Duration("lane_loss_computation_all_4",
-                             "lane_loss_computation_all_2")
-            for key in single_loss_dict.keys():
-                if key in loss_dict.keys():
-                    loss_dict[key] += single_loss_dict[key] / bs
-                else:
-                    loss_dict[key] = single_loss_dict[key] / bs
-            time_dp.Duration("lane_loss_computation_all_5",
-                             "lane_loss_computation_all_4")
-
-            time_dp.Duration("lane_loss_computation_all", "begin")
-            # time_dp.Print()
-
-        # for key in loss_dict.keys():
-        #     loss_dict[key] /= bs
-
-        # loss_list.append(loss_dict)
-    total_dict = {}
-    final_total_loss = 0.0
-    for k in range(num_iter):
-        d_loss_dict = loss_list[k]
-        for key in d_loss_dict.keys():
-            total_dict[f"lane_d{k}.{key}"] = d_loss_dict[key]
-
-    for key in total_dict.keys():
-        if "loss" in key:
-            final_total_loss += total_dict[key]
-    total_dict['total_loss'] = final_total_loss
-    return total_dict
+    return gt_batched
 
 
-def loss_computation(preds, data, loss_func, centerline_dataset=None):
-
+def loss_computation(preds, data, loss_func, output_group, centerline_dataset=None):
     total_dict = {}
     time_dp = DetailProf()
     time_dp.Tic("begin")
-    lane_total_dict1 = lane_loss_computation(preds, data, loss_func, centerline_dataset)
-    time_dp.Duration("lane_loss_computation1", "begin")
-    # lane_total_dict2 = lane_loss_computation2(preds, data, loss_func)
-    time_dp.Duration("lane_loss_computation2", "lane_loss_computation1")
+    processed_gt = ProcessGt(
+        data, preds, centerline_dataset, output_group, max_ele_num=128)
+    time_dp.Duration("ProcessGt", "begin")
+    lane_total_dict = lane_loss_computation(
+        preds, processed_gt, loss_func, centerline_dataset)
+    time_dp.Duration("lane_loss_computation", "ProcessGt")
     # time_dp.Print()
-    # print(preds['all_cls_scores'].device)
 
-    total_dict.update(lane_total_dict1)
-
-    # print(lane_total_dict1)
-    # print(lane_total_dict2)
-
-    # # for k in lane_total_dict1:
-    # for k in ['total_loss']:
-    #     print(k, float(lane_total_dict1[k] - lane_total_dict2[k]))
+    total_dict.update(lane_total_dict)
     return total_dict
 
 
@@ -284,9 +226,9 @@ class DRIVING_BEV_STALoss(BaseLoss):
         pc_range = [0, 0, 0, 32.0, 120.0, 0]
         self.centerline_dataset = task_config.centerline_dataset
         super(DRIVING_BEV_STALoss, self).__init__(pc_range, task_config)
-        output_group = [([main_class_type_map[name] for name in group[0]], group[1]) for group in task_config.output_name_group.values()]
+        self.output_group = [([main_class_type_map[name] for name in group[0]], group[1]) for group in task_config.output_name_group.values()]
         self.polyline_loss = BaseMapLossCost(pc_range, cls_loss_weight=1.0, l1_loss_weight=4.0,
-                                             giou_loss_weight=0.01, pts_l1_loss_weight=5.0, pts_dir_loss_weight=0.005, output_group=output_group)
+                                             giou_loss_weight=0.01, pts_l1_loss_weight=5.0, pts_dir_loss_weight=0.005, output_group=self.output_group)
 
     def forward(self, preds: torch.Tensor, trues: torch.Tensor, masks: torch.Tensor) -> dict:
         """
@@ -300,5 +242,12 @@ class DRIVING_BEV_STALoss(BaseLoss):
 
         """
 
-        loss = loss_computation(preds[0], trues, self.polyline_loss, self.centerline_dataset)
+        loss = loss_computation(
+            preds[0], trues, self.polyline_loss, self.output_group, self.centerline_dataset)
         return loss
+
+if __name__ == "__main__":
+    import pickle as pkl
+    inputs = pkl.load(open("loss_computation.pkl", 'rb'))
+
+    loss_computation(*inputs)
