@@ -7,6 +7,7 @@ from tools_scripts.data_format_cvt import ShowDataStruct
 import numpy as np
 import torch
 from gpal_nn.tasks.driving_bev_dyn.postprocess import model_nms_utils
+from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
 
 @POSTPROCESSES.register_module()
 class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
@@ -16,7 +17,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
 
         self.POST_PROCESSING = dict(
             RECALL_THRESH_LIST=[0.3, 0.5, 0.7],
-            SCORE_THRESH=0.3,
+            SCORE_THRESH=0.28,
             OUTPUT_RAW_SCORE=False,
             EVAL_METRIC="kitti",
             NMS_CONFIG=dict(
@@ -33,6 +34,23 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
         )
         self.num_class = len(task_config.class_dict)
         self.class_name = list(task_config.class_dict.values())
+        BEV_TO_POINTS = dict(
+            NAME="Bev_To_Points",
+            NUM_BEV_FEATURES=64,
+            VOXEL_SIZE=[0.64, 0.64],
+            SCORE_THRESH=0.28,
+            DOWN_RATIO=2,
+            NUM_KEYPOINTS=256,
+            TRAIN=True,
+            NUM_OUTPUT_FEATURES=64
+        )
+        self.bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,
+                                                  grid_size=[480, 192,  12],
+                                                  voxel_size=[0.32, 0.32, 0.5],
+                                                  point_cloud_range=[-51.2, -
+                                                                     30.72, -1., 102.4, 30.72, 5.],
+                                                  num_bev_features=[64, 64, 128, 64, 128, 128, 128])
+
 
 
     @staticmethod
@@ -106,9 +124,9 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             return ret_dict
 
         def generate_single_sample_dict(batch_index, box_dict):
-            pred_scores = box_dict['pred_scores'].cpu().numpy()
-            pred_boxes = box_dict['pred_boxes'].cpu().numpy()
-            pred_labels = box_dict['pred_labels'].cpu().numpy()
+            pred_scores = box_dict['pred_scores'].detach().cpu().numpy()
+            pred_boxes = box_dict['pred_boxes'].detach().cpu().numpy()
+            pred_labels = box_dict['pred_labels'].detach().cpu().numpy()
             pred_dict = get_template_prediction(pred_scores.shape[0])
             if pred_scores.shape[0] == 0:
                 return pred_dict
@@ -247,8 +265,12 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
         pred_z = outputs['estimation_z'].permute(0, 2, 1)
         pred_dim = outputs['estimation_dim'].permute(0, 2, 1)
         pred_dir = outputs['estimation_dir'].permute(0, 2, 1)
-        pred_yaw = torch.atan2(pred_dir[:, :, :1], pred_dir[:, :, 1:])  # y/x
-        pred_vel = outputs['estimation_vel'].sigmoid().permute(0, 2, 1)
+        
+        bin_flag = (pred_dir[:, :, 0] < pred_dir[:, :, 1])
+        pred_yaw =( torch.atan2(pred_dir[:, :, 2], pred_dir[:, :, 3]) * bin_flag.float() + \
+            torch.atan2(pred_dir[:, :, 4], pred_dir[:, :, 5]) * (1.0-bin_flag.float())).unsqueeze(-1)
+
+        pred_vel = outputs['estimation_vel'].permute(0, 2, 1)
         pred_score = outputs['estimation_score'].sigmoid().permute(
             0, 2, 1)  # 得分，时序特征融合后的得分
 
@@ -258,8 +280,8 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
                                 pred_z,
                                 pred_dim,
                                 pred_yaw,
-                                pred_vel*40,
-                                #   template_xyz.view(-1, 256, 2),
+                                pred_vel*80,
+                                template_xyz.view(-1, 256, 2),
                                 #   indicee
                                 ], dim=-1
                                 )
@@ -273,6 +295,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             return gt_list
         else:
             #   if not self.training or self.predict_boxes_when_training:
+            vectors[0] = self.bev_2_points(vectors[0])
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(vectors[0]['Points_Loss'],
                                                                              batch_size=vectors[0]['score'].shape[0])
             vectors[0]['batch_cls_preds'] = batch_cls_preds

@@ -144,9 +144,9 @@ class PointnetTransformerSiamese(nn.Module):
     def forward(self, batch_dict):
 
         # former_point_coords中第一个维度是bs维度 2+1=>3, former_score是从centerhead出来的得分
-        template_xyz = torch.cat([batch_dict['pred_prev_point_coords'][:, :, :2],
-                                 batch_dict['pred_prev_score']], dim=-1)  # -> [1, 256, 3]
-        template_feature = batch_dict['pred_prev_point_features'].permute(
+        template_xyz = torch.cat([batch_dict['pred_curr_track_point_coords'][:, :, :2],
+                                 batch_dict['pred_curr_track_score']], dim=-1)  # -> [1, 256, 3]
+        template_feature = batch_dict['pred_curr_track_point_features'].permute(
             0, 2, 1)  # -> [1, 64, 256]
 
         search_xyz = torch.cat([batch_dict['pred_curr_track_point_coords'][:, :, :2],

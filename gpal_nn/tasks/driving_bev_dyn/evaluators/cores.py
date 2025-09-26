@@ -44,6 +44,9 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
     
     loggerinfo=None,
     is_print_during_info: bool = False,
+    
+    class_names:list = None,
+    
     *args,
     **kwargs,
     ):
@@ -72,6 +75,17 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
     range_mask_dt = np.ones(shape=((pred_boxes.shape[0]), len(det_range_list))).astype(np.float32) * -1
     range_mask_gt = np.ones(shape=((gt_boxes.shape[0]), len(det_range_list))).astype(np.float32) * -1
 
+    # === 新增：初始化帧级别的bad case记录 ===
+    frame_bad_cases = {
+        'frame_idx': frame_idx,
+        'pred_empty': pred_boxes.shape[0] == 0,
+        'gt_empty': gt_boxes.shape[0] == 0,
+        'total_pred_count': pred_boxes.shape[0],
+        'total_gt_count': gt_boxes.shape[0],
+        'fn_cases': [],
+        'fp_cases': [],
+        'hard_cases': []
+    }
 
     # === 边界检查 ===
     pred_empty = pred_boxes.shape[0] == 0
@@ -85,6 +99,17 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
         true_positives = np.zeros((0,)).astype(np.bool_)
         range_mask_dt = np.full((0, len(det_range_list)), -1, dtype=np.int32)
         range_mask_gt = np.full((0, len(det_range_list)), -1, dtype=np.int32)
+        
+        # === 记录帧级别的empty case ===
+        if is_record_bad_cases:
+            frame_bad_cases['case_type'] = 'both_empty'
+
+            record_frame_bad_case(frame_bad_cases, distance_errors_list)
+
+        if is_print_during_info:
+            print_frame_statistics(frame_idx, gt_boxes, pred_boxes, pred_labels, np.array([]), 
+                                   class_names, {}, loggerinfo)
+        
         batch_metrics.append([true_positives, pred_scores, pred_labels, range_mask_dt, range_mask_gt])
         return batch_metrics, distance_errors_list
 
@@ -104,6 +129,33 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
                 range_mask_gt[curr_range_mask_gt, range_i] = range_i
             else:
                 raise NotImplementedError(f'Not implemented for {use_theory_to_mask_range}')
+        
+        # === 记录所有GT框为FN cases ===
+        if is_record_bad_cases:
+            frame_bad_cases['case_type'] = 'pred_empty'
+            gt_label_ids = gt_boxes[:, -1].astype(np.int32)
+            
+            for gt_idx, gt_box in enumerate(gt_boxes):
+                fn_case = {
+                    'gt_idx': gt_idx,
+                    'gt_box': gt_box.copy(),
+                    'gt_label': gt_label_ids[gt_idx],
+                    'reason': 'pred_empty',
+                    'ego_distance': np.linalg.norm(gt_box[:2] - ego_pos) if ego_pos is not None else None,
+                }
+                
+                cls_seq = np.int_(gt_label_ids[gt_idx]) - 1
+                if 0 <= cls_seq < len(distance_errors_list):
+                    record_bad_case('fn', fn_case, distance_errors_list, cls_seq)
+                    
+                frame_bad_cases['fn_cases'].append(fn_case)
+            
+            record_frame_bad_case(frame_bad_cases, distance_errors_list)
+
+        if is_print_during_info:
+            print_frame_statistics(frame_idx, gt_boxes, pred_boxes, pred_labels, gt_label_ids, 
+                                   class_names, {}, loggerinfo)
+                    
         batch_metrics.append([true_positives, pred_scores, pred_labels, range_mask_dt, range_mask_gt])
         return batch_metrics, distance_errors_list
 
@@ -121,10 +173,45 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
                 range_mask_dt[curr_range_mask_dt, range_i] = range_i
             else:
                 raise NotImplementedError(f'Not implemented for {use_theory_to_mask_range}')
+        
+        # === 记录所有预测框为FP cases ===
+        if is_record_bad_cases:
+            frame_bad_cases['case_type'] = 'gt_empty'
+            
+            sort_idx = np.argsort(-pred_scores)
+            pred_boxes = pred_boxes[sort_idx]
+            pred_scores = pred_scores[sort_idx]
+            pred_label_ids = pred_labels[sort_idx].astype(np.int32)
+            
+            for pred_i, pred_box in enumerate(pred_boxes):
+                fp_case = {
+                    'pred_idx': pred_i,
+                    'pred_box': pred_box.copy(),
+                    'pred_label': pred_label_ids[pred_i],
+                    'pred_score': pred_scores[pred_i],
+                    'reason': 'gt_empty',
+                    'ego_distance': np.linalg.norm(pred_box[:2] - ego_pos) if ego_pos is not None else None,
+                }
+                
+                cls_seq = np.int_(pred_label_ids[pred_i]) - 1
+                if 0 <= cls_seq < len(distance_errors_list):
+                    record_bad_case('fp', fp_case, distance_errors_list, cls_seq)
+                
+                frame_bad_cases['fp_cases'].append(fp_case)
+            
+            record_frame_bad_case(frame_bad_cases, distance_errors_list)
+        
+        if is_print_during_info:
+            print_frame_statistics(frame_idx, gt_boxes, pred_boxes, pred_labels, np.array([]), 
+                                   class_names, {}, loggerinfo)
+            
         batch_metrics.append([true_positives, pred_scores, pred_labels, range_mask_dt, range_mask_gt])
         return batch_metrics, distance_errors_list
-    # === 边界检查 ===
+    # === 边界检查结束 ===
     else:
+        # 情况4: 预测和GT都不为空，继续正常匹配逻辑
+        frame_bad_cases['case_type'] = 'normal_matching'
+        
         for range_i, curr_range in enumerate(det_range_list):
             if use_theory_to_mask_range == 'cuboid':
                 curr_range_mask_dt = mask_boxes_outside_range_numpy(pred_boxes, curr_range, min_num_corners=1, use_center_to_filter=True)
@@ -179,12 +266,13 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
     
     
     # 临时 | (配合单帧统计信息)|统计每个类别的预测框数量
-    pred_counts_per_class = {}
-    for gt_label_id in unique_label_ids:
-        pred_counts_per_class[gt_label_id] = np.sum(pred_label_ids == gt_label_id)
+    # pred_counts_per_class = {}
+    # for gt_label_id in unique_label_ids:
+    #     pred_counts_per_class[gt_label_id] = np.sum(pred_label_ids == gt_label_id)
     best_gt_idx_list = []
     # ====== 目的: 十分精准的匹配 TP ======
     for pred_i, (pred_box, pred_label_id) in enumerate(zip(pred_boxes, pred_label_ids)):
+        matched = False 
         
         class_mask = gt_label_ids == pred_label_id  # 只观察在gt中是否出现
         if (not np.any(class_mask)):
@@ -205,7 +293,9 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
                 cls_seq = np.int_(pred_label_id) - 1
                 if 0 <= cls_seq < len(distance_errors_list):
                     record_bad_case('fp', fp_case, distance_errors_list, cls_seq)
-                    
+                
+                frame_bad_cases['fp_cases'].append(fp_case)
+
             continue
 
         # ==== 核心匹配逻辑 ====
@@ -254,11 +344,42 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
                     cls_seq = np.int_(pred_label_id) - 1
                     if 0 <= cls_seq < len(distance_errors_list):
                         record_bad_case('fp', fp_case, distance_errors_list, cls_seq)
+                    
+                    frame_bad_cases['fp_cases'].append(fp_case)
+                    
             continue
         
         # 2. 找到类别正确且距离满足条件的候选GT框
         candidate_gt_indices = np.where(distance_gt_mask_flag & class_mask)[0] # 可能多个? 如何才能最佳？
         if len(candidate_gt_indices) == 0:
+            
+            if is_record_bad_cases:
+                distances_to_gt_class = distance_matrix[pred_i, :]
+                closest_gt_idx = np.argmin(distances_to_gt_class)
+                
+                fp_case = {
+                    'frame_idx': frame_idx,
+                    'pred_idx': pred_i,
+                    'pred_box': pred_box.copy(),
+                    # 'all_gt_box': gt_boxes.copy(),
+                    'pred_label': pred_label_id,
+                    'pred_score': pred_scores[pred_i],
+                    'reason': 'pred_no_matched_class',
+                    'closest_gt_idx': closest_gt_idx,
+                    'closest_gt_box': gt_boxes[closest_gt_idx].copy(),
+                    'closest_distance': distance_matrix[pred_i, closest_gt_idx],
+                    'longitudinal_error': d1_error_one_pred_and_mul_gt[closest_gt_idx],
+                    'lateral_error': d2_error_one_pred_and_mul_gt[closest_gt_idx],
+                    'longitudinal_threshold': d1_error_threshold_gt[closest_gt_idx],
+                    'lateral_threshold': d2_error_threshold_gt[closest_gt_idx],
+                    'ego_distance': np.linalg.norm(pred_box[:2] - ego_pos),
+                }
+                cls_seq = np.int_(pred_label_id) - 1
+                if 0 <= cls_seq < len(distance_errors_list):
+                    record_bad_case('fp', fp_case, distance_errors_list, cls_seq)
+                
+                frame_bad_cases['fp_cases'].append(fp_case)
+            
             continue
         
         # 3. 过滤掉已经被匹配的GT框
@@ -266,8 +387,8 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
         for gt_idx in candidate_gt_indices:
             if gt_idx not in matched_gt_boxes_per_class[pred_label_id]:
                 unmatched_candidates.append(gt_idx)
+
         if len(unmatched_candidates) == 0:
-            
             # 记录FP case - 所有候选GT都已被匹配
             if is_record_bad_cases:
                 fp_case = {
@@ -284,6 +405,9 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
                 cls_seq = np.int_(pred_label_id) - 1
                 if 0 <= cls_seq < len(distance_errors_list):
                     record_bad_case('fp', fp_case, distance_errors_list, cls_seq)
+            
+                frame_bad_cases['fp_cases'].append(fp_case)
+            
             continue
         
         # 4. 从多个候选GT框中选择最佳匹配
@@ -302,6 +426,7 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
         if best_gt_idx is not None:
             # 记录匹配状态
             # 5. 执行匹配
+            matched = True
             gt_matched_status[best_gt_idx] = True
             matched_gt_boxes_per_class[pred_label_id].add(best_gt_idx)
             true_positives[pred_i] = 1
@@ -341,6 +466,8 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
                     if 0 <= cls_seq < len(distance_errors_list):
                         record_bad_case('hard', hard_case, distance_errors_list, cls_seq)
         
+                    frame_bad_cases['hard_cases'].append(hard_case)
+        
         # 记录匹配信息
         gt_box = gt_boxes[best_gt_idx]
         
@@ -372,8 +499,9 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
             s_e = 1 - scale_iou(gt_box[3:6], pred_box[3:6])  # ASE  lwh 0~1
             o_e = angle_diff(gt_box[6], pred_box[6])         # AOE  rot abs -> 0~pi  
             o_e = abs(o_e)
-            v_e = velocity_l2(pred_box[7:9], gt_box[7:9]) if pred_box.shape[0] > 7 and gt_box.shape[0] > 7 else 0.0  # AVE  v
+            v_e = velocity_l2(pred_box[7:9], gt_box[8:10]) if pred_box.shape[0] > 7 and gt_box.shape[0] > 7 else 0.0  # AVE  v
 
+            print(pred_box[6:10], gt_box[6:10])
             dv = v_e
             
             ref_pt_error = cal_reference_point_from_gt_to_pred(box_gt=gt_box.reshape(1, -1), 
@@ -407,37 +535,6 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
     # loggerinfo(range_mask_dt_ori==range_mask_dt)
     # loggerinfo(range_mask_dt)
     # 临时|打印单帧详细的统计信息
-    if is_print_during_info:
-        loggerinfo(f"=== 第 {frame_idx:^6} 样本检测结果统计 ===")
-        for label in matched_gt_boxes_per_class:
-            gt_count = np.sum(gt_label_ids == label)
-            pred_count = pred_counts_per_class[label]
-            matched_count = len(matched_gt_boxes_per_class[label])
-            
-            loggerinfo(f"类别 {label}:")
-            loggerinfo(f" - Ground truth boxes: {gt_count}")
-            loggerinfo(f" - 预测框数量: {pred_count}")
-            loggerinfo(f" - 成功匹配数量: {matched_count}")
-            if gt_count > 0:
-                loggerinfo(f" - 召回率: {matched_count/gt_count:.3f}")
-                if matched_count/gt_count >1:
-                    assert False, f'frame_idx= {frame_idx}'
-                
-            if pred_count > 0:
-                loggerinfo(f" - 精确率: {matched_count/pred_count:.3f}")
-                if matched_count/pred_count > 1:
-                    assert False, f'frame_idx= {frame_idx}'
-                    
-            
-            # 打印未匹配统计
-            loggerinfo(f" - 漏检数量(FN): {gt_count - matched_count}")
-            loggerinfo(f" - 误检数量(FP): {pred_count - matched_count}")
-            if gt_count - matched_count < 0:
-                assert False, f'frame_idx= {frame_idx}'
-            if pred_count - matched_count< 0:
-                assert False, f'frame_idx= {frame_idx}'
-        loggerinfo(f"===============================")
-        
         
     if is_record_bad_cases:
         for gt_idx, gt_box in enumerate(gt_boxes):
@@ -479,7 +576,39 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
                 cls_seq = np.int_(gt_label) - 1
                 if 0 <= cls_seq < len(distance_errors_list):
                     record_bad_case('fn', fn_case, distance_errors_list, cls_seq)
-                    
+            
+                frame_bad_cases['fn_cases'].append(fn_case)
+        
+        # === 记录整帧的bad case信息 ===
+        record_frame_bad_case(frame_bad_cases, distance_errors_list)    
+    
+    if is_print_during_info:
+        print_frame_statistics(frame_idx, 
+                                gt_boxes, 
+                                pred_boxes, 
+                                pred_label_ids, 
+                                gt_label_ids, 
+                                class_names, 
+                                matched_gt_boxes_per_class, 
+                                loggerinfo)
+        
+        # print_frame_statistics_from_bad_cases(frame_idx, gt_boxes, pred_boxes, pred_label_ids, gt_label_ids, 
+        #                                       class_names, matched_gt_boxes_per_class=matched_gt_boxes_per_class, 
+        #                                       frame_bad_cases=frame_bad_cases, loggerinfo=loggerinfo)
+        
+        # debug_result = debug_fp_mismatch(
+        #     frame_idx=frame_idx,
+        #     pred_labels=pred_labels,
+        #     matched_gt_boxes_per_class=matched_gt_boxes_per_class,
+        #     frame_bad_cases=frame_bad_cases,  # 如果有的话
+        #     class_id=2  # 
+        # )
+        
+        # print_frame_statistics_debug(frame_idx, gt_boxes, pred_boxes, pred_label_ids, gt_label_ids, 
+        #                         class_names, matched_gt_boxes_per_class=matched_gt_boxes_per_class, 
+        #                         frame_bad_cases=frame_bad_cases, loggerinfo=loggerinfo)
+        
+        
     batch_metrics.append([true_positives, pred_scores, pred_label_ids, range_mask_dt, range_mask_gt,])
     return batch_metrics, distance_errors_list
 
@@ -586,7 +715,7 @@ def export_bad_cases_to_file(class_names, distance_errors_list, output_dir="./ba
                                   np.int16, np.int32, np.int64, np.uint8,
                                   np.uint16, np.uint32, np.uint64)):
                 return int(obj)
-            elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
+            elif isinstance(obj, (np.float16, np.float32, np.float64)):
                 return float(obj)
             elif isinstance(obj, dict):
                 return {k: convert_numpy_to_list(v) for k, v in obj.items()}
@@ -602,8 +731,227 @@ def export_bad_cases_to_file(class_names, distance_errors_list, output_dir="./ba
             json.dump(bad_cases_serializable, f, indent=2)
         
         loggerinfo(f"Bad cases for {cls_name} saved to => {output_file}")
+
+def export_frames_bad_cases_to_file(class_names, distance_errors_list, output_dir="./bad_cases", loggerinfo=print):
+    """
+    将整帧的bad cases导出到文件
+    """
+    def convert_numpy_to_list(obj):
+        import numpy as np
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
+                                np.int16, np.int32, np.int64, np.uint8,
+                                np.uint16, np.uint32, np.uint64)):
+            return int(obj)
+        elif isinstance(obj, (np.float16, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj, dict):
+            return {k: convert_numpy_to_list(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_numpy_to_list(item) for item in obj]
+        else:
+            return obj
+
+    bad_cases_frame = distance_errors_list[-1]['frame_statistics']
+    bad_cases_frame_serializable = convert_numpy_to_list(bad_cases_frame)
+    
+    output_file = os.path.join(output_dir, f"frame_statistics_bad_cases.json")
+    with open(output_file, 'w') as f:
+        json.dump(bad_cases_frame_serializable, f, indent=2)
+    
+    loggerinfo(f"Bad cases for frame_statistics saved to => {output_file}")
+
+
+def record_frame_bad_case(frame_bad_cases, distance_errors_list):
+    """
+    记录整帧的bad case信息到frame_statistics中，以帧为单位统一管理
+    
+    Args:
+        frame_bad_cases: 帧级别的bad case字典
+        distance_errors_list: 距离误差列表，最后一个元素为frame_statistics
+    """
+    # 获取frame_statistics存储位置 (最后一个元素)
+    frame_stats_container = distance_errors_list[-1]['frame_statistics']
+    
+    frame_data = {
+        # 在上层函数中一开始就传入了具体的数量
+        'frame_idx': frame_bad_cases['frame_idx'],
+        'frame_case_type': frame_bad_cases['case_type'],
+        'pred_empty': frame_bad_cases['pred_empty'],
+        'gt_empty': frame_bad_cases['gt_empty'],
+        'total_pred_count': frame_bad_cases['total_pred_count'],
+        'total_gt_count': frame_bad_cases['total_gt_count'],
+        'summary': {
+            'total_fn_count': len(frame_bad_cases['fn_cases']),
+            'total_fp_count': len(frame_bad_cases['fp_cases']),
+            'total_hard_count': len(frame_bad_cases['hard_cases']),
+            'classes_count': 0,
+            'involved_classes': [],
+        },
+        'classes_data': {},  # 按类别组织的数据
+    }
+    
+    # 收集所有涉及的类别
+    all_classes = set()
+    
+    # 从FN cases中收集类别
+    for fn_case in frame_bad_cases['fn_cases']:
+        gt_label = int(fn_case['gt_label'])
+        all_classes.add(gt_label)
+    
+    # 从FP cases中收集类别
+    for fp_case in frame_bad_cases['fp_cases']:
+        pred_label = int(fp_case['pred_label'])
+        all_classes.add(pred_label)
+    
+    # 从Hard cases中收集类别
+    for hard_case in frame_bad_cases['hard_cases']:
+        pred_label = int(hard_case['pred_label'])
+        all_classes.add(pred_label)
+    
+    # 为每个类别初始化数据结构
+    for class_label in all_classes:
+        frame_data['classes_data'][str(class_label)] = {
+            'class_label': class_label,
+            'fn_cases': [],
+            'fp_cases': [], 
+            'hard_cases': [],
+            'fn_count': 0,
+            'fp_count': 0,
+            'hard_count': 0,
+        }
+    
+    # 整理FN cases
+    for fn_case in frame_bad_cases['fn_cases']:
+        gt_label = fn_case['gt_label']
+        str_label = str(gt_label)
+        frame_data['classes_data'][str_label]['fn_cases'].append(fn_case)
+        frame_data['classes_data'][str_label]['fn_count'] += 1
+    
+    # 整理FP cases
+    for fp_case in frame_bad_cases['fp_cases']:
+        pred_label = int(fp_case['pred_label'])
+        str_label = str(pred_label)
+        frame_data['classes_data'][str_label]['fp_cases'].append(fp_case)
+        frame_data['classes_data'][str_label]['fp_count'] += 1
+
+    # 整理Hard cases
+    for hard_case in frame_bad_cases['hard_cases']:
+        pred_label = int(hard_case['pred_label'])
+        str_label = str(pred_label)
+
+        frame_data['classes_data'][str_label]['hard_cases'].append(hard_case)
+        frame_data['classes_data'][str_label]['hard_count'] += 1
+
+    
+    # 计算帧级别汇总统计
+    # 更新summary信息
+    
+    for class_label in all_classes:
+        frame_data['summary'][str(class_label)] = {
+            # "fn_cases": frame_data['classes_data'][str(class_label)]['fn_cases'],
+            # "fp_cases": frame_data['classes_data'][str(class_label)]['fp_cases'],
+            # "hard_cases": frame_data['classes_data'][str(class_label)]['hard_cases'],
+            "fn_count": frame_data['classes_data'][str(class_label)]['fn_count'],
+            "fp_count": frame_data['classes_data'][str(class_label)]['fp_count'],
+            "hard_count": frame_data['classes_data'][str(class_label)]['hard_count'],
+        }
+    
+    frame_data['summary']['involved_classes'] = list(all_classes)
+    frame_data['summary']['classes_count'] = len(list(all_classes))
+    
+    # 添加到frame_statistics
+    frame_stats_container.append(frame_data)
+
+
+def print_frame_statistics(frame_idx, gt_boxes, pred_boxes, pred_labels, gt_label_ids, 
+                           class_names, matched_gt_boxes_per_class=None, loggerinfo=None):
+    """
+    统一打印帧统计信息的函数
+    Args:
+        frame_idx: 帧索引
+        gt_boxes: GT框数组
+        pred_boxes: 预测框数组  
+        pred_labels: 预测标签数组
+        gt_label_ids: GT标签ID数组
+        class_names: 类别名称列表
+        matched_gt_boxes_per_class: 每个类别的匹配GT框集合字典
+        loggerinfo: 日志函数
+    """
+    if loggerinfo is None:
+        loggerinfo = print
         
+    num_len = 8
+    header_list = ['Class', 'GT', 'DT', 'MT', 'R', 'P', 'FN', 'FP']
+    
+    loggerinfo(f"===>>> 第 [{frame_idx:^6}] 样本检测结果统计 {','.join(class_names)}")
+    loggerinfo(f"{'|'.join([f'{i:^{num_len}}' for i in header_list])}|")
+    
+    class_names_ids = [int(i)+1 for i in range(len(class_names))]
+    
+    # 统计每个类别的预测框数量
+    pred_counts_per_class = {}
+    if len(pred_boxes) > 0 and pred_labels is not None:
+        for class_id in class_names_ids:
+            pred_counts_per_class[class_id] = np.sum(pred_labels == class_id)
+    else:
+        for class_id in class_names_ids:
+            pred_counts_per_class[class_id] = 0
+    
+    total_list = []
+    for label in class_names_ids:
+        # GT数量统计
+        gt_count = int(np.sum(gt_label_ids == label)) if len(gt_boxes) > 0 else 0
+        pred_count = int(pred_counts_per_class[label])
         
+        # 匹配数量统计
+        if matched_gt_boxes_per_class is not None and label in matched_gt_boxes_per_class:
+            mt_count = int(len(matched_gt_boxes_per_class[label]))
+        else:
+            mt_count = 0
+        
+        # 计算指标
+        recall = mt_count / gt_count if gt_count > 0 else 0.0
+        precision = mt_count / pred_count if pred_count > 0 else 0.0
+        fn = gt_count - mt_count
+        fp = pred_count - mt_count
+        
+        print_info = (f"{label:^{num_len}}|"
+                    f"{gt_count:^{num_len}}|"
+                    f"{pred_count:^{num_len}}|"
+                    f"{mt_count:^{num_len}}|"
+                    f"{recall:^{num_len}.3f}|"
+                    f"{precision:^{num_len}.3f}|"
+                    f"{fn:^{num_len}}|"
+                    f"{fp:^{num_len}}|")
+        loggerinfo(print_info)
+        total_list.append([gt_count, pred_count, mt_count, recall, precision, fn, fp])
+    
+    total_data = np.array(total_list).sum(0)
+    # total_data[0] = total_data[0]
+    # total_data[1] = total_data[1]
+    # total_data[2] = total_data[2]
+    # total_data[5] = total_data[5]
+    # total_data[6] = total_data[6]
+    
+    total_data[3] = total_data[2] / total_data[0] if total_data[0] > 0 else 0.0
+    total_data[4] = total_data[4] / total_data[1] if total_data[1] > 0 else 0.0
+    total_str = 'Total'
+    print_info = (f"{total_str:^{num_len}}|"
+                  f"{int(total_data[0]):^{num_len}}|"
+                  f"{int(total_data[1]):^{num_len}}|"
+                  f"{int(total_data[2]):^{num_len}}|"
+                  f"{total_data[3]:^{num_len}.3f}|"
+                  f"{total_data[4]:^{num_len}.3f}|"
+                  f"{int(total_data[5]):^{num_len}}|"
+                  f"{int(total_data[6]):^{num_len}}|"
+                  )
+    loggerinfo(print_info)
+    
+    loggerinfo(f"="*((num_len+1)*len(header_list)))
+
+
 def get_distance_errors(cls_nums=4):
     distance = [
         {
@@ -628,4 +976,6 @@ def get_distance_errors(cls_nums=4):
             
         } for _ in range(cls_nums)
         ]
+    # 帧级别的统计信息
+    distance.append({'frame_statistics': []})
     return distance

@@ -54,12 +54,12 @@ def DrivingBevStaRemap(checkpoint1_keys, checkpoint2_keys):
 
 
 def DrivingBevSta():
-    ckpt1 = "/data/ai_group/workdirs/multitask_lanenet_group/wujianlong/multitask_lanenet/work_dir/hat_ori_rpy_bev_aug_1deg_solid_dash_centerline_0824/model/ep020.pth"
+    ckpt1 = "/data/ai_group/workdirs/multitask_lanenet_group/wujianlong/multitask_lanenet/work_dir/hat_ori_rpy_bev_aug_1deg_0726/model/ep022.pth"
     checkpoint1 = torch.load(ckpt1, map_location="cpu")
     checkpoint1_keys = list(checkpoint1.keys())
     # print(checkpoint1_keys)
 
-    ckpt2 = "/data/ai_group/workdirs/gpal_neural_network_group/airflow_workspace/gpal_neural_network_one_node_traning_job_on_airflow_20250919_06_20_34/checkpoint/epoch=6-step=100000_checkpoint.pth"
+    ckpt2 = "workspace/20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint.pth"
     checkpoint2 = torch.load(ckpt2, map_location="cpu")
     # print(checkpoint2['state_dict'].keys())
     checkpoint2_keys = list(checkpoint2['state_dict'].keys())
@@ -68,25 +68,16 @@ def DrivingBevSta():
     remap_all = DrivingBevStaRemap(checkpoint1_keys, checkpoint2_keys)
     print(len(checkpoint1_keys), len(checkpoint2_keys), len(remap_all))
 
-    # for k in checkpoint2_keys:
-    #     if checkpoint2['state_dict'][k].shape != checkpoint1[remap_all[k]].shape:
-    #         print(k, checkpoint2['state_dict'][k].shape, checkpoint1[remap_all[k]].shape,
-    #               checkpoint2['state_dict'][k].shape == checkpoint1[remap_all[k]].shape)
-    #     checkpoint2['state_dict'][k] = checkpoint1[remap_all[k]]
-    
     for k in checkpoint2_keys:
         if checkpoint2['state_dict'][k].shape != checkpoint1[remap_all[k]].shape:
             print(k, checkpoint2['state_dict'][k].shape, checkpoint1[remap_all[k]].shape,
                   checkpoint2['state_dict'][k].shape == checkpoint1[remap_all[k]].shape)
-        checkpoint1[remap_all[k]] = checkpoint2['state_dict'][k]
+        checkpoint2['state_dict'][k] = checkpoint1[remap_all[k]]
     #                    lane_map_head.decoder.layers.0.sa.in_proj_weight
     # model.DRIVING_BEV_STA.head.head1.decoder.layers.0.sa.in_proj_weight
-    # ckpt2_edit = ckpt2.replace(".pth", "_wangtong.pth")
-    # print(ckpt2_edit)
-    # torch.save(checkpoint2, ckpt2_edit)
-    ckpt1_edit = ckpt1.replace(".pth", "_0922.pth")
-    print(ckpt1_edit)
-    torch.save(checkpoint1, ckpt1_edit)
+    ckpt2_edit = ckpt2.replace(".pth", "_wangtong.pth")
+    print(ckpt2_edit)
+    torch.save(checkpoint2, ckpt2_edit)
 
     bias = checkpoint2['state_dict']["model.DRIVING_BEV_STA.head.head1.input_proj.bias"]
     weight = checkpoint2['state_dict']["model.DRIVING_BEV_STA.head.head1.input_proj.weight"]

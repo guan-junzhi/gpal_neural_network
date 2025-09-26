@@ -303,7 +303,6 @@ class DRIVING_BEV_STATask(BaseTask):
             img_vis = self.GetImgVis(data, metadata, calib, bev_real2aug, json_list[0], true_json_list[0], i)
             concat_vis = self.concat_imgvis_and_bevvis(img_vis, bev_vis)
         name = metadata[i]['last_img_path'].split('/')[-1]
-        print("name", name)
         cv2.imwrite(osp.join(save_root, name), concat_vis)
 
     def get_point_from_normalized_position(self, points, normalized_pos):

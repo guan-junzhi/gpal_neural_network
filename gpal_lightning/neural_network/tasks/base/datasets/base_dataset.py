@@ -107,6 +107,8 @@ class BaseDataset(Dataset, ABC):
             self.buffer = FastLoaderBuffer(fast_buffer_path)
         else:
             self.buffer = None
+        self.buffer_slice_write_cache = {}
+        self.buffer_slice_read_cache = {}
 
     @property
     def worker(self):
@@ -254,9 +256,43 @@ class BaseDataset(Dataset, ABC):
         except:
             return None, None
 
+    def _slice_image_cache(self, slice_key, view_key, img, pre_resize, quality):
+        if (self.buffer is None):
+            return False
+
+        if slice_key not in self.buffer_slice_write_cache:
+            for k, v in self.buffer_slice_write_cache.items():
+                ret = self.buffer.Cache(k, pickle.dumps(v))
+                if not ret:
+                    print(f"self.buffer.Cache {k} faild")
+
+            self.buffer_slice_write_cache = {slice_key: {}}
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+        h = int(img.shape[0]).to_bytes(4, byteorder='little', signed=False)
+        w = int(img.shape[1]).to_bytes(4, byteorder='little', signed=False)
+        img = cv2.resize(img, pre_resize)
+        result, encimg = cv2.imencode('.jpg', img, encode_param)
+        self.buffer_slice_write_cache[slice_key][view_key] = h + w + encimg.tobytes()
+        return True
+
+    def _slice_image_buffer_access(self, slice_key, view_key):
+        if (self.buffer is None):
+            return None, None
+        try:
+        # if True:
+            if slice_key not in self.buffer_slice_read_cache:
+                self.buffer_slice_read_cache = {slice_key: pickle.loads(self.buffer[slice_key])}
+           
+            x = self.buffer_slice_read_cache[slice_key][view_key]
+            h = int().from_bytes(x[:4], byteorder='little', signed=False)
+            w = int().from_bytes(x[4:8], byteorder='little', signed=False)
+            return cv2.imdecode(np.frombuffer(x[8:], dtype=np.uint8), cv2.IMREAD_COLOR), [h, w]
+        except Exception as e:
+            # print(f"_slice_image_buffer_access failed {e}")
+            return None, None
 
 if __name__ == "__main__":
-    buffer = FastLoaderBuffer("DRIVING_BEV_STA_data_buf")
+    buffer = FastLoaderBuffer("DRIVING_BEV_DYN_data_buf_exp2")
     img = cv2.imread(
         "/data/dp_group/process-prod-bucket/data_collect/EKART_ID4001_2025-05-15-09-25-16/2025-05-15-09-39-31.17/img_front_120/1747274141.024808.jpg")
     compress_rate = 100

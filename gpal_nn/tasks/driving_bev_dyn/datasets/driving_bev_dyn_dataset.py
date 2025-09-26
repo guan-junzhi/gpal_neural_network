@@ -30,6 +30,10 @@ from gpal_nn.tasks.driving_bev_dyn.utils import common_utils
 
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.datasets.data_processor import DataProcessor
+from pyquaternion import Quaternion
+import torch.nn.functional as F
+import scipy
+from torchvision import transforms as T
 
 
 def read_img(files_img, image_resize=[360, 640, 3]):
@@ -109,6 +113,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.json_dir = os.path.join(WORKDIRS_ROOT, json_dir)
         self.image_dir = os.path.join(
             WORKDIRS_ROOT if is_manual_label else DATA_COLLECT_ROOT, image_dir)
+        # self.image_dir = "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/2025-09-23_16-40-52-312.4"
         self.middle_json_str = middle_json_str
 
         self.id_to_type = task_config.class_dict
@@ -158,7 +163,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                          worker=worker,
                          pseudo_labels_path=pseudo_labels_path,
                          fast_buffer_path="" if fast_buffer_path == "" else os.path.join(
-                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf")
+                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf_by_slice")
                          )
 
         self.img_crop_size = self.task_config.image_crop_config['IMAGE_CROP_SIZE']
@@ -219,13 +224,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 max_objects=MAX_OBJ_NUMS,
                 TARGET_ENABLED=dict(train=True, test=False)
             ),
-            dict(
-                NAME='build_targets_former',
-                hm_size=OD_HEATMAP_OUT_HW,
-                num_classes=len(CLASS_NAMES_LIST),
-                max_objects=MAX_OBJ_NUMS,
-                TARGET_ENABLED=dict(train=True, test=False)
-            ),
+            # dict(
+            #     NAME='build_targets_former',
+            #     hm_size=OD_HEATMAP_OUT_HW,
+            #     num_classes=len(CLASS_NAMES_LIST),
+            #     max_objects=MAX_OBJ_NUMS,
+            #     TARGET_ENABLED=dict(train=True, test=False)
+            # ),
             # dict(
             #     NAME='build_occ',
             #     voxel_size=OCC_OUT_VOXEL_SIZE,
@@ -269,6 +274,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # breakpoint()
             for curr_view in self.image_view:
                 curr_view_yaml_file = f"{WORKDIRS_ROOT}/gpal_neural_network_group/sikong/temp_dir_for_od/{cam_calib_dir}/{curr_view.replace('img_', '')}.yaml"
+                # curr_view_yaml_file = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/tools_own/read_update_cam_yaml_and_save_grid_valid/calibration-dev@1ac5e4038a8/JX_C5_1/vehicle_config/calibration/camera/{curr_view.replace('img_', '')}.yaml"
                 yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
                 intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
                 distort_coeff.append(
@@ -285,6 +291,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             self.cam_dist = distort_coeff_np
             self.r_mat_np = r_mat_np
             self.t_vec_np = t_vec_np
+
+        self.jitter = T.ColorJitter([0.2, 1.2], 0.3, 0.3, 0.2)
 
         self.ClearFastBufCnt()
 
@@ -373,6 +381,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             fusion_infos = fusion_infos_new
             self.fusion_infos = []
         # fusion_infos = [fusion_infos[100]] * 6
+        # if phase == const.PHASE_TRAINING:
+        #     fusion_infos_ext = []
+        #     for ele in fusion_infos:
+        #         fusion_infos_ext.append(copy.deepcopy(ele))
+        #         ele["curr_index"], ele["next_index"] = ele["next_index"], ele["curr_index"]
+        #         ele["curr_timestamp"], ele["next_timestamp"] = ele["next_timestamp"], ele["curr_timestamp"]
+        #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
+        #         fusion_infos_ext.append(copy.deepcopy(ele))
+        #     fusion_infos = fusion_infos_ext
         print('Total samples for HeSai dataset: %d' %
               (len(fusion_infos)))
         return fusion_infos
@@ -456,7 +473,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             heading = bbox.rotation[2]
             object_type = bbox.object_type
             trackid = bbox.track_id
-            vx, vy = 0.0, 0.0
+            # vx, vy = 0.0, 0.0
+            vx, vy = bbox.velocity[0], bbox.velocity[1]
             is_visible = bbox.image_visible
 
             obj = [x, y, z, l, w, h, heading, 0.0, vx, vy]
@@ -484,6 +502,24 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             image = image[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
             self._image_cache(
                 database_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
+        else:
+            self.fast_buf_sec_cnt += 1
+
+        return image
+
+    def get_image_by_slice(self, filepath, slice_timestamp, view_key, view_idx):
+        """统一处理不同视角的图像"""
+        img_file = filepath
+        self.fast_buf_try_cnt += 1
+        database_slice_key = "_".join(img_file.split('/')[-4:-2]+[slice_timestamp])
+        image, hw_origin = self._slice_image_buffer_access(
+            database_slice_key, view_key)
+        if image is None:
+            image = read_img(str(img_file), self.image_resize + [3])
+            image = cv2.resize(image, self.image_resize[::-1])
+            image = image[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+            self._slice_image_cache(
+                database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=95)
         else:
             self.fast_buf_sec_cnt += 1
 
@@ -533,7 +569,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             if not_selected != []:
                 print(len(data_dict['gt_names'][selected]),
                       data_dict['gt_names'][not_selected])
-                exit(1)
+                # exit(1)
             data_dict['gt_boxes'] = data_dict['gt_boxes'][selected]
             data_dict['gt_names'] = data_dict['gt_names'][selected]
             gt_classes = np.array([self.type_to_id[n]
@@ -574,6 +610,87 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.fast_buf_try_cnt = 0
         self.fast_buf_sec_cnt = 0
 
+
+    def img_aug_cuda(self, img_tensor, trans_cv, rots_cv, intrin, device = "cuda:0"):
+        noise_rot_mat = None
+        # if self.task_config.ext_aug_conf and random.random() < 0.25:
+        if random.random() < 0.5:
+            trans_cv, rots_cv, noise_rot_mat = self.ext_augmentation(trans_cv, rots_cv)
+            # print(trans_cv, rots_cv, noise_rot_mat)
+        if noise_rot_mat is not None:
+            img_tensor = self.remap_rotate_aug2_cuda(img_tensor, noise_rot_mat, intrin, device)
+        if self.jitter and random.random() < 0.7:
+            for i in range(img_tensor.shape[0]):
+                img_tensor[i] = self.jitter(img_tensor[i]/255.0) * 255.0
+
+        return img_tensor, trans_cv, rots_cv
+
+    def ext_augmentation(self, trans_cv, rots_cv):
+        max_noise_angle = [3, 3, 3]
+        select = list(np.linspace(-max_noise_angle[0], max_noise_angle[0], 11))
+        noise_angle = np.array([random.sample(select, 1)[0],
+                                random.sample(select, 1)[0],
+                                random.sample(select, 1)[0]])
+        noise_angle = noise_angle * (np.pi / 180.)
+        cos_noise_angle = np.cos(noise_angle)
+        sin_noise_angle = np.sin(noise_angle)
+        noise_rot_mat = np.array([1.0, 0.0, 0.0,
+                                  0.0, cos_noise_angle[0], -sin_noise_angle[0],
+                                  0.0, sin_noise_angle[0], cos_noise_angle[0]]).reshape(3, 3) @ \
+                        np.array([cos_noise_angle[1], 0.0, -sin_noise_angle[1],
+                                  0.0, 1.0, 0.0,
+                                  sin_noise_angle[1], 0.0, cos_noise_angle[1]]).reshape(3, 3) @ \
+                        np.array([cos_noise_angle[2], -sin_noise_angle[2], 0.0,
+                                  sin_noise_angle[2], cos_noise_angle[2], 0.0,
+                                  0.0, 0.0, 1.0]).reshape(3, 3)
+        # print(rots_cv)
+        # print(noise_rot_mat)
+        rots_cv = rots_cv * Quaternion._from_matrix(noise_rot_mat)
+        # print(rots_cv)
+        # No noise for translation for now
+        return trans_cv, rots_cv, noise_rot_mat
+    
+    def generate_homo_grid(self, homo, size, device = "cuda:0"):
+        #assert type(size) == torch.Size
+        N, C, H, W = size
+
+        base_grid = homo.new(1, H, W, 3).to(device)
+        linear_points = torch.linspace(-1, 1, W, device=device) if W > 1 else torch.Tensor([-1], device=device)
+        base_grid[:, :, :, 0] = torch.ger(torch.ones(H, device=device), linear_points).expand_as(base_grid[:, :, :, 0])
+        linear_points = torch.linspace(-1, 1, H, device=device) if H > 1 else torch.Tensor([-1], device=device)
+        base_grid[:, :, :, 1] = torch.ger(linear_points, torch.ones(W, device=device)).expand_as(base_grid[:, :, :, 1])
+        base_grid[:, :, :, 2] = 1
+        grid = torch.bmm(base_grid.view(1, H * W, 3), homo.transpose(1, 2))
+        grid = grid.view(1, H, W, 3)
+        grid[:, :, :, 0] = grid[:, :, :, 0] / grid[:, :, :, 2]
+        grid[:, :, :, 1] = grid[:, :, :, 1] / grid[:, :, :, 2]
+
+        grid = grid[:, :, :, :2].float()
+        return grid.repeat(N, 1, 1, 1)
+
+    def remap_rotate_aug2_cuda(self, img, noise_rot_mat, intrin, device = "cuda:0"):
+        N, C, H, W = img.shape
+
+        transformation_matrix = np.dot(noise_rot_mat, np.linalg.inv(intrin))
+        pts_src = np.array([[0, 0], [0, H-1], [W-1, 0], [W-1, H-1]])
+        x_flat = pts_src[:,0]
+        y_flat = pts_src[:,1]
+        ones = np.ones_like(x_flat)
+        camera_coords = np.dot(intrin, transformation_matrix) @ np.vstack((x_flat, y_flat, ones))    
+        pts_dst = np.round(camera_coords[:2] / camera_coords[2]).T
+
+        pts_dst[:, 0] = pts_dst[:, 0]  / (W-1) * 2.0 - 1.0
+        pts_src[:, 0] = pts_src[:, 0]  / (W-1) * 2.0 - 1.0
+
+        pts_dst[:, 1] = pts_dst[:, 1]  / (H-1) * 2.0 - 1.0
+        pts_src[:, 1] = pts_src[:, 1]  / (H-1) * 2.0 - 1.0
+        h, status = cv2.findHomography(pts_src, pts_dst)
+        
+        homo = torch.from_numpy(h).unsqueeze(0).to(device)
+        homo_grid = self.generate_homo_grid(homo, img.shape, device)
+        out = F.grid_sample(img, homo_grid).float()
+
+        return out 
     @TimeProf
     def __getitem__(self, idx):
         """
@@ -601,6 +718,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             # === 当前帧 格式必须统一
             curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
+            # curr_json_file = "/data/ai_group/workdirs/od_occ_group/huiquyang/data/Obstacle_3DModelResult_/EKART_ID4001_2025-08-15-18-20-39/2025-08-15_18-34-44-232/3d_detection_json/1755254118.200182.json"
             curr_json_data = self.json_data.load(curr_json_file)
             re_curr_infos = self.json_data.parse_json(curr_json_data)
             meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
@@ -613,30 +731,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['gt_boxes'] = gt_boxes
 
             time_dp.Duration("cur_json", "begin")
-
-            # === 前一帧
-            if self.have_prev_label:
-                prev_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{prev_time_stamp}.json'
-                prev_json_data = self.json_data.load(prev_json_file)
-                
-                try:
-                    prev_json_data = self.json_data.load(prev_json_file)
-                except:
-                    print(f'error json file: {prev_json_file}')
-                    
-                re_prev_infos  = self.json_data.parse_json(prev_json_data)  # 上一帧不需要真值(但模型输出的有(是连续的))
-                meta_info, cameras, bounding_boxes, special_labels = re_prev_infos
-
-                gt_boxes_, gt_names_ = self.get_box(bounding_boxes=bounding_boxes)
-                intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
-                _, _, _, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
-
-                input_dict['gt_names_former'] = gt_names_
-                input_dict['gt_boxes_former'] = gt_boxes_
-            else:
-                input_dict['gt_names_former'] = gt_names
-                input_dict['gt_boxes_former'] = gt_boxes
-
 
             time_dp.Duration("prev_json", "cur_json")
 
@@ -652,29 +746,48 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 temp[:, :3:, [3]] = self.t_vec_np
                 extrinsic = temp
 
-            input_dict['intrinsic'] = intrinsic  # np.stack([intrinsic, intrinsic])
-            input_dict['cam_dist'] = cam_dist  # np.stack([cam_dist, cam_dist])
-            input_dict['extrinsic'] = extrinsic  # np.stack([extrinsic, extrinsic])
-            input_dict['camera_names'] = self.image_view
-            input_dict['camera_sizes'] = camera_sizes
+            input_dict['intrinsic'] = copy.deepcopy(intrinsic)  # np.stack([intrinsic, intrinsic])
+            input_dict['cam_dist'] = copy.deepcopy(cam_dist)  # np.stack([cam_dist, cam_dist])
+            input_dict['extrinsic'] = copy.deepcopy(extrinsic)  # np.stack([extrinsic, extrinsic])
+            input_dict['camera_names'] = copy.deepcopy(self.image_view)
+            input_dict['camera_sizes'] = copy.deepcopy(camera_sizes)
 
             img_path = {}
             for view_idx, camera_view in enumerate(self.image_view):
                 image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
                 img_path[camera_view] = image_file
-                current_img = self.get_image(image_file, view_idx)  # cv2: BGR
+                # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
+                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx)
+
+                calib_intrin = copy.deepcopy(input_dict['intrinsic'][view_idx])
+                calib_extrin = copy.deepcopy(input_dict["extrinsic"][view_idx])
+                calib_dist = copy.deepcopy(input_dict["cam_dist"][view_idx])
+                img_crop_dict = copy.deepcopy(self.img_crop_dict)
+                
+                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
+                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
+
+                current_img = cv2.undistort(
+                    current_img, calib_intrin, calib_dist, calib_intrin)
+
                 if self.phase == const.PHASE_TRAINING:
-                    # current_img = aug_image(current_img)
-                    pass
+                    current_img = torch.from_numpy(current_img).unsqueeze(
+                        0).to("cpu").permute(0, 3, 1, 2).float()
+                    cam_to_vehicle = np.linalg.inv(calib_extrin)
+                    rot_temp = scipy.spatial.transform.Rotation.from_matrix(
+                        cam_to_vehicle[:3, :3]).as_quat()
+                    rot_temp = Quaternion(rot_temp[3], rot_temp[0], rot_temp[1], rot_temp[2])
+                    current_img, trans_cv, rots_cv = self.img_aug_cuda(
+                        current_img, None, rot_temp, calib_intrin, device="cpu")
+                    cam_to_vehicle[:3, :3] = rots_cv.rotation_matrix
+
+                    input_dict["extrinsic"][view_idx] = np.linalg.inv(cam_to_vehicle)
+                    current_img = current_img.squeeze(
+                        0).permute(1, 2, 0).cpu().numpy()
+    
                 input_dict[f'images_input{view_idx}'] = current_img.astype(
                     np.float32) / 255.0
-                image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{prev_time_stamp}.jpg'
-                previous_img = self.get_image(image_file, view_idx)
-                if self.phase == const.PHASE_TRAINING:
-                    # previous_img = aug_image(previous_img)
-                    pass
-                input_dict[f'images_input_former{view_idx}'] = previous_img.astype(
-                    np.float32) / 255.0
+
             time_dp.Duration("image", "prev_json")
 
             data_dict = self.prepare_data(data_dict=input_dict)
@@ -685,8 +798,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             for i in range(len(data_dict["camera_names"])):
                 data_dict_ret['image'][data_dict["camera_names"]
                                     [i]] = data_dict[f"images_input{i}"].transpose(2, 0, 1)
-                data_dict_ret['image'][data_dict["camera_names"]
-                                    [i]+"_pre"] = data_dict[f"images_input_former{i}"].transpose(2, 0, 1)
+                # data_dict_ret['image'][data_dict["camera_names"]
+                #                     [i]+"_pre"] = data_dict[f"images_input_former{i}"].transpose(2, 0, 1)
 
             for key in data_dict:
                 if "gt_curr_" in key:
@@ -698,7 +811,24 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             for key in ["intrinsic", "cam_dist", "extrinsic"]:
                 data_dict_ret["calib"][key] = data_dict[key]
 
+            data_dict_ret["calib"]["cam_dist"] *= 0.0
+            
             data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
+            data_dict_ret['calib']["img_shapes"] = np.stack(
+                [np.array(list(img.shape)) for img in data_dict_ret["image"].values()], axis=0)
+            data_dict_ret['calib']["bev_real2aug"] = np.eye(4, dtype=np.float32)
+
+            intrinsics = copy.deepcopy(data_dict_ret['calib']["intrinsic"])
+            for i in range(intrinsics.shape[0]):
+                intrinsics[i, :2] /= self.img_crop_dict["CROP_HeSai_ID4"]['SCALE'][i]
+                intrinsics[i, 1,
+                           2] -= self.img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][i]
+            
+            data_dict_ret['calib']["ego2imgs"] = np.stack(
+                [i@e for e, i in zip(data_dict_ret['calib']['extrinsic'][:,:3], intrinsics)], axis=0)
+            data_dict_ret['calib']["ego2imgs"] = np.stack([np.concatenate([ele, np.array(
+                [[0, 0, 0, 1]])], axis=0) for ele in data_dict_ret['calib']["ego2imgs"]], axis=0)
+
 
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
@@ -708,15 +838,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
             data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
             data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
-            
-        except:
+
+        except Exception as e:
 
             if self.phase == const.PHASE_TRAINING:
                 new_index = np.random.randint(self.__len__())
-                print(f"PHASE_TRAINING {idx} load faild, resample trig {new_index}")
+                print(f"PHASE_TRAINING {idx} load faild {e}, resample trig {new_index}")
                 return self.__getitem__(new_index)
             else:
-                print(f"PHASE_TRAINING {idx} load faild, faild exit(1)")
+                print(f"PHASE_TRAINING {idx} load faild {e}, faild exit(1)")
                 exit(1)
 
         time_dp.Duration("move_data", "prepare_data")
@@ -733,7 +863,7 @@ def Get(dataset_temp, i, j):
 
 if __name__ == "__main__":
     import pickle as pkl
-    inputs = pkl.load(open("inputs.pkl", 'rb'))
+    inputs = pkl.load(open("ssd/inputs.pkl", 'rb'))
 
     random.seed(555)
     os.environ['MASTER_ADDR'] = '127.0.0.1'
@@ -754,16 +884,20 @@ if __name__ == "__main__":
     print(len(train_dataset))
 
     d = train_dataset[0]
-    
-    # exit(1)
+    print(ShowDataStruct("d", d))
 
-    for d in train_dataset:
-        # print(d["frame_id"])
-        print(d["meta"]["fast_try_sum"], d["meta"]["fast_sec_sum"])
-        pass
-
+    import time
+    t1 = time.time()
+    for i in range(0, 10):
+        print(i)
+        d = train_dataset[i]
+        print(d["fast_buf_sec_cnt"], d["fast_buf_try_cnt"] )
+    t2 = time.time()
+    d = train_dataset[0]
+    print(t2-t1)
+    # 无缓存 7.560542583465576
+    # 帧缓存 5.709890842437744
     exit(1)
-    # print(d)
 
     from tools_scripts.data_format_cvt import ShowDataStruct
     from tools_scripts.vis_2d import Vis2D

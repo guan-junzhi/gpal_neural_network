@@ -87,7 +87,7 @@ class RatioDataloader:
                 concat_dataset = ConcatDataset(concat_list)
                 setattr(concat_dataset, 'camera_name', dataset.camera_name)
                 sampler = WeightedRandomSampler(
-                    weighted_list, len(weighted_list))
+                    weighted_list, len(weighted_list), replacement = (len(ratio_list) > 1))
                 dataloader = DataLoader(
                     dataset=concat_dataset,
                     batch_size=batch_size,

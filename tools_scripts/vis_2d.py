@@ -123,7 +123,6 @@ class Vis2D():
         """
         # 检查输入点集的有效性
         if len(pts.shape) != 2 or pts.shape[0] < 2 or pts.shape[1] < 2:
-            print("Invalid input points")
             return
         
         # 依次绘制每一段线

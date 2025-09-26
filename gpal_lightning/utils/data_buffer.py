@@ -9,7 +9,7 @@ import lmdb
 class FastLoaderBuffer():
     def __init__(self, filename) -> None:
         self.lmdb_path = filename
-        self.map_size = 1099511627776 * 2
+        self.map_size = 1099511627776 * 4
         self.lmdb = None
 
     def Cache(self, key, data):
@@ -20,9 +20,8 @@ class FastLoaderBuffer():
                     ret = txn.put(str(key).encode(), data)
                     # print(f"cache {key} success")
                     return True
-        except:
-            pass
-        print(f"cache {key} faild")
+        except Exception as e:
+            print(f"cache {key} faild {e}")
         return False
 
     def __getitem__(self, key):

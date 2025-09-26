@@ -5,8 +5,10 @@ from gpal_lightning.neural_network.tasks.base.heads.head import BaseHead
 from gpal_nn.tasks.driving_bev_dyn.losses.loss import DRIVING_BEV_DYNLoss
 import torch.nn.functional as F
 from tools_scripts.data_format_cvt import ShowDataStruct
-from gpal_nn.tasks.driving_bev_dyn.heads.bev_points import Bev_To_Points
 from gpal_nn.tasks.driving_bev_dyn.heads.pointtransformersiamese import PointnetTransformerSiamese
+from gpal_nn.tasks.driving_bev_dyn.heads.fast_decoder_head import FastDecoderHead
+from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
+
 
 BN_MOMENTUM = 0.1
 
@@ -351,7 +353,7 @@ class CenterHead(nn.Module):
         keep = (hm == heat).float()
         hm = hm * keep
 
-        return hm.view(batch_size, 2, hm.shape[1], hm.shape[2], hm.shape[3])
+        return hm.view(batch_size, 1, hm.shape[1], hm.shape[2], hm.shape[3])
 
     def forward(self, x):
         ret = {}
@@ -400,7 +402,7 @@ class CenterHead(nn.Module):
         #         data_dict['cls_preds_normalized'] = True
 
         hm_cen_pred = self.generate_predicted_hm_cen(ret,
-                                                     batch_size=int(spatial_features_2d.shape[0]/2))
+                                                     batch_size=int(spatial_features_2d.shape[0]))
         ret["hm_cen_pred"] = hm_cen_pred
         return ret
 
@@ -412,73 +414,39 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.is_track_task = True  # 区分当前是否是Track任务
         self.head_conv = 64
 
-        self.neck_cfg = dict(
-            NAME="ImageNeck",
-            # NAME="FusionOccSim",
-            Fusion_Sptial=True,
-            CROP_AREA=[[8, 88], [16, 208]],
-            LAYER_NUMS=[2, 2, 2, 2],
-            LAYER_STRIDES=[1, 2, 2, 2],
-            DOWN_FILTERS=[64, 128, 256, 512],
-            CAT_FILTERS=[768, 256, 384, 64],
-            UPSAMPLE_FILTERS=[128, 64, 64, 64],
-            num_bev_features=[64, 64, 128, 64, 128, 128, 128]
-        )
+        # self.neck_cfg = dict(
+        #     NAME="ImageNeck",
+        #     # NAME="FusionOccSim",
+        #     Fusion_Sptial=True,
+        #     CROP_AREA=[[8, 88], [16, 208]],
+        #     LAYER_NUMS=[2, 2, 2, 2],
+        #     LAYER_STRIDES=[1, 2, 2, 2],
+        #     DOWN_FILTERS=[64, 128, 256, 512],
+        #     CAT_FILTERS=[768, 256, 384, 64],
+        #     UPSAMPLE_FILTERS=[128, 64, 64, 64],
+        #     num_bev_features=[64, 64, 128, 64, 128, 128, 128]
+        # )
+        self.head_config = {"in_channels": 1024,
+                            "num_stages": 6, "out_channels": 21, "upsample": 4}
+
         super(DRIVING_BEV_DYNHead, self).__init__(
             global_config, task_config, loss_func)
 
     def _setup(self):
         self.head = nn.ModuleDict()
-        self.head["bev_feature_extractor"] = ImageNeck(self.neck_cfg,
-                                                       self.task_config.bev_channels)
-
-        self.head["center_head"] = CenterHead(
-            self.head_conv, self.neck_cfg["num_bev_features"][3])
-
-        BEV_TO_POINTS = dict(
-            NAME="Bev_To_Points",
-            NUM_BEV_FEATURES=64,
-            VOXEL_SIZE=[0.64, 0.64],
-            SCORE_THRESH=0.3,
-            DOWN_RATIO=2,
-            NUM_KEYPOINTS=256,
-            TRAIN=True,
-            NUM_OUTPUT_FEATURES=64
-        )
-
-        POINTTRANSFORMER_HEAD = dict(
-            NAME="PointnetTransformerSiamese",
-            CLASS_AGNOSTIC=False,
-            HEAD_CONV=64
-        )
-
-        self.head["bev_2_points"] = Bev_To_Points(model_cfg=BEV_TO_POINTS,
-                                                  grid_size=[480, 192,  12],
-                                                  voxel_size=[0.32, 0.32, 0.5],
-                                                  point_cloud_range=[-51.2, -
-                                                                     30.72, -1., 102.4, 30.72, 5.],
-                                                  num_bev_features=[64, 64, 128, 64, 128, 128, 128])
-
-        self.head["point_transformer"] = PointnetTransformerSiamese(
-            model_cfg=POINTTRANSFORMER_HEAD,
-            input_channels=[64, 64, 128, 64, 128, 128, 128],
-            num_class=6,
-            class_names=['vehicle_car', 'vehicle_truck', 'vehicle_construction_vehicle',
-                         'vehicle_cyclist', 'vehicle_tricycle', 'human_pedestrian'],
-            grid_size=[480, 192,  12],
-            point_cloud_range=[-51.2, -30.72, -1.,   102.4,   30.72,   5.],
-            predict_boxes_when_training=False,
-            voxel_size=[0.32, 0.32, 0.5])
-
+        self.head["center_head"] = FastDecoderHead(self.head_config)
     def load_state_dict(self, state_dict, strict=True):
-        for head_name, head in self.head.items():
-            state_dict_sub = {k.replace(f"{head_name}.", ""): state_dict[k]
-                              for k in state_dict if head_name in k}
-            head.load_state_dict(state_dict_sub, strict)
+        if len(self.head) == 1:
+            self.head["center_head"].load_state_dict(state_dict, strict)
+        else:
+            for head_name, head in self.head.items():
+                state_dict_sub = {k.replace(f"{head_name}.", ""): state_dict[k]
+                                for k in state_dict if head_name in k}
+                head.load_state_dict(state_dict_sub, strict)
 
     def forward(self, x: torch.Tensor, calib=None) -> torch.Tensor:
-        _, spatial_features_2d = self.head["bev_feature_extractor"](x)
-        x = self.head["center_head"](spatial_features_2d[0])
-        x = self.head["bev_2_points"].forward(x)
-        x = self.head["point_transformer"].forward(x)
-        return [x]
+        # B,HW,C = x.shape
+        # x = x.permute(0,2,1).reshape(B,C,96,240)
+        x = self.head["center_head"](x)
+        batch_dict = {'head_conv': x[:, 6:], "hm_cen": x[:, :6]}
+        return [batch_dict]
