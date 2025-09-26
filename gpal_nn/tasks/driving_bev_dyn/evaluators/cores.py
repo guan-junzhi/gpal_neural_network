@@ -499,8 +499,9 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
             s_e = 1 - scale_iou(gt_box[3:6], pred_box[3:6])  # ASE  lwh 0~1
             o_e = angle_diff(gt_box[6], pred_box[6])         # AOE  rot abs -> 0~pi  
             o_e = abs(o_e)
-            v_e = velocity_l2(pred_box[7:9], gt_box[7:9]) if pred_box.shape[0] > 7 and gt_box.shape[0] > 7 else 0.0  # AVE  v
+            v_e = velocity_l2(pred_box[7:9], gt_box[8:10]) if pred_box.shape[0] > 7 and gt_box.shape[0] > 7 else 0.0  # AVE  v
 
+            print(pred_box[6:10], gt_box[6:10])
             dv = v_e
             
             ref_pt_error = cal_reference_point_from_gt_to_pred(box_gt=gt_box.reshape(1, -1), 
