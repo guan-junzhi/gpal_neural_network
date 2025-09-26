@@ -24,11 +24,11 @@ def scale_iou(gt_size, pred_size):
 def angle_diff(angle1, angle2):
     """计算角度差"""
     diff = angle1 - angle2
-    # 将角度差归一化到 [-pi, pi]
-    while diff > np.pi:
-        diff -= 2 * np.pi
-    while diff < -np.pi:
-        diff += 2 * np.pi
+    # 将角度差归一化到 [-0.5 *pi, 0.5 *pi]
+    while diff > 0.5 * np.pi:
+        diff -= np.pi
+    while diff < - 0.5 * np.pi:
+        diff += np.pi
     return diff
 
 

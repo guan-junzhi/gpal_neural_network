@@ -7,13 +7,14 @@ sudo apt-get -y install procps
 pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install pandas
 pip install matplotlib
+pip install pyquaternion
 
 echo "[NODE INFO]:"
 nvidia-smi 
 free -m
 
 echo "[READ GLOBAL ENV VAR]:"
-airflow_key="gpal_neural_network_one_node_traning_job_on_airflow"
+airflow_key="lane_detection_one_node_traning_job_on_airflow"
 echo "AIRFLOW_CTX_DAG_ID=$AIRFLOW_CTX_DAG_ID"
 echo "airflow_key=$airflow_key"
 if [[ "$TASK_IN_AIRFLOW" == "1" ]];
@@ -55,7 +56,8 @@ then
 elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250903_06_51_57_huiqu_ckpt/checkpoint/epoch=0-step=0_checkpoint_huiqu.pth
+    # load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250911_12_22_22/checkpoint/epoch=16-step=30000_checkpoint.pth
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20250922_15_55_28/checkpoint/epoch=9-step=11000_checkpoint.pth
     config=configs_for_develop/driving_bev_dyn_config.yaml
 elif [[ $1 == "radar4d_nn_sdk" ]];
 then

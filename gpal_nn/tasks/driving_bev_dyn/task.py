@@ -115,10 +115,10 @@ class DRIVING_BEV_DYNTask(BaseTask):
             pred_objs = self.vector_to_json(preds, metadata, False)
             for box in gts[idx]['gt_boxes']:
                 #  [x, y, z, dx, dy, dz, heading]
-                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], None, [0, 255, 0],
+                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], [box[8], box[9]], [0, 255, 0],
                             [255, 255, 255], line_width=1)
             for box, score in zip(pred_objs[idx]['boxes_lidar'], pred_objs[idx]['score']):
-                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], None, [0, 0, 255],
+                vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], [box[7], box[8]], [0, 0, 255],
                             [255, 255, 255], line_width=1)
 
 
@@ -148,8 +148,8 @@ class DRIVING_BEV_DYNTask(BaseTask):
                 vis_imgs.append(img)
             vis_imgs = np.concatenate(vis_imgs, axis=0)
 
-        except:
-            print("DRIVING_BEV_DYNTask GetVis faild")
+        except ValueError as e:
+            print(f"DRIVING_BEV_DYNTask GetVis faild {e}")
             pass
         
         vis_draw1 = vis1.Draw()
@@ -158,8 +158,17 @@ class DRIVING_BEV_DYNTask(BaseTask):
             vis_imgs = cv2.resize(vis_imgs, (int(vis_imgs.shape[1] / vis_imgs.shape[0] * vis_draw1.shape[0]), vis_draw1.shape[0]))
             vis_draw1 = np.concatenate([vis_draw1, vis_imgs], axis=1)
 
-        except:
-            print("DRIVING_BEV_DYNTask GetVis faild")
+            cv2.putText(vis_draw1, metadata[idx]['frame_num'], (50, 30),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
+            cv2.putText(vis_draw1, metadata[idx]['clip_id'], (50, 60),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
+            cv2.putText(vis_draw1, '/'.join(metadata[idx]['img_path']['img_front_120'].split('/')[-4:]), (50, 90),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
+
+
+
+        except ValueError as e:
+            print(f"DRIVING_BEV_DYNTask GetVis faild {e}")
             pass
 
         
@@ -167,10 +176,17 @@ class DRIVING_BEV_DYNTask(BaseTask):
 
     def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, calib, loss_info=None):
         imgs = []
-        for idx in range(4):
+        for idx in range(min(4,len(metadata))):
             vis = self.GetVis(data, preds, trues, metadata, calib, idx)
             imgs.append(vis)
+            # import cv2
+            # cv2.imwrite(f"eval_vis_online/{metadata[idx]['frame_id'].split('/')[0]}.jpg", vis)
+
         imgs = np.concatenate(imgs, axis=1)
+
+        # import cv2
+        # cv2.imwrite(f"eval_vis_single2/{iteration}.jpg", imgs)
+
         self.logger.image_log(iteration, phase, log_writer,
                               0, torch.from_numpy(imgs).permute(2, 0, 1).flip(0))
 

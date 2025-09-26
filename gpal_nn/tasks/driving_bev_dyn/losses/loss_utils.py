@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
+from tools_scripts.data_format_cvt import ShowDataStruct
 
 
 def _sigmoid(x):
@@ -20,7 +21,10 @@ def _neg_loss(pred, gt, track, alpha=2, beta=4):
 
     pos_inds = gt.gt(0)  # greater than 0
     neg_inds = gt.eq(0).float()  # equal to 0
-
+    
+    # print(pos_inds.sum())
+    # print(neg_inds.sum())
+    # exit(1)
     # neg_weights = torch.pow(1 - gt, beta)
     if track:
         neg_weights = torch.pow(1 - gt, beta)
@@ -78,11 +82,11 @@ class L1Loss(nn.Module):
         super(L1Loss, self).__init__()
 
     def forward(self, output, mask, ind, target):
-        pred = _transpose_and_gather_feat(
-            output, ind)  # 默认为0也被索引，所以需要消除，下面的mask起作用
+        # pred = _transpose_and_gather_feat(
+        #     output, ind)  # 默认为0也被索引，所以需要消除，下面的mask起作用
 
-        mask = mask.unsqueeze(2).expand_as(pred).float()
-        loss = F.l1_loss(pred * mask, target * mask, size_average=False)
+        # mask = mask.unsqueeze(2).expand_as(pred).float()
+        loss = F.l1_loss(output * mask, target * mask, size_average=False)
         loss = loss / (mask.sum() + 1e-4)
         return loss
 
@@ -101,9 +105,9 @@ class L1Loss_Balanced(nn.Module):
         self.beta = beta
 
     def forward(self, output, mask, ind, target):
-        pred = _transpose_and_gather_feat(output, ind)
-        mask = mask.unsqueeze(2).expand_as(pred).float()
-        loss = self.balanced_l1_loss(pred * mask, target * mask)
+        # pred = _transpose_and_gather_feat(output, ind)
+        # mask = mask.unsqueeze(2).expand_as(pred).float()
+        loss = self.balanced_l1_loss(output * mask, target * mask)
         loss = loss.sum() / (mask.sum() + 1e-4)
 
         return loss
@@ -273,6 +277,9 @@ class Compute_Loss(nn.Module):
 
     def forward(self, preds, trues):
         tb_dict = {}
+        # import pickle as pkl
+        # pkl.dump((preds, trues), open("Compute_Loss.pkl", 'wb'))
+        # exit(1)
 
         # is_track_task = batch_dict["track"]
         is_track_task = True
@@ -285,30 +292,167 @@ class Compute_Loss(nn.Module):
         # tb_dict['track_loss_heatmap'] = l_hm_cen.item()
         tb_dict['track_loss_hm'] = l_hm_cen  # with gradient
 
-        # det, not track, drop
-        if not is_track_task:
-            raise NotImplementedError
-            cen_offset_sigmoid = _sigmoid(outputs['cen_offset'])
-            vel_sigmoid = _sigmoid(outputs['vel'])
-            z_coor_sigmoid = outputs['z_coor']
-            l_z_coor = self.l1_loss(
-                z_coor_sigmoid, batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['z_coor'])
-            l_dim = self.l1_loss_balanced(
-                outputs['dim'], batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['dim'])
-            l_vel = self.l1_loss(
-                vel_sigmoid, batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['vel'])
-            l_cen_offset = self.l1_loss(
-                cen_offset_sigmoid, batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['cen_offset'])
-            l_direction = self.l1_loss(
-                outputs['direction'], batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['direction'])
-            box_loss = l_cen_offset * self.weight_cenoff + \
-                l_dim * self.weight_dim + l_direction * self.weight_direction + \
-                l_z_coor * self.weight_z_coor + l_vel
-            total_loss += box_loss
-            tb_dict['z_coor'] = l_z_coor.item()
-            tb_dict['dim'] = l_dim.item()
-            tb_dict['cen_offset'] = l_cen_offset.item()
-            tb_dict['direction'] = l_direction.item()
-            tb_dict['vel'] = l_vel.item()
+        # cen_offset_sigmoid = _sigmoid(outputs['cen_offset'])
+        # vel_sigmoid = _sigmoid(outputs['vel'])
+        # z_coor_sigmoid = outputs['z_coor']
+        head_conv = preds["head_conv"].permute(0, 2, 3, 1).flatten(1, 2)
+        # hm_cen_cls = preds["hm_cen"].permute(0, 2, 3, 1).flatten(1, 2)
+
+
+        gt_mask = trues['track_obj_mask'].unsqueeze(-1)
+        gt_idx = trues['track_indices_center'].long()
+
+        B, _, D = head_conv.shape
+
+        head_conv_sel = head_conv[torch.arange(B)[:, None, None], gt_idx.reshape(B, -1, 1).repeat(1, 1, D), torch.arange(D)[None, None, :]]
+        # hm_cen_cls_sel = hm_cen_cls[torch.arange(B)[:, None, None], gt_idx.reshape(B, -1, 1).repeat(1, 1, 6), torch.arange(6)[None, None, :]]
+        # hm_cen_cls_sel = hm_cen_cls_sel.max(dim = -1)[0]
+        # print("hm_cen_cls_sel ", hm_cen_cls_sel.shape)
+
+        # gt_curr_hm_cen = trues['gt_curr_hm_cen'].permute(0, 2, 3, 1).flatten(1, 2)
+
+
+        # for i in range(-1,2):
+        #     for j in range(-1,2):
+        #         idx = 7759 +240 * i + j
+        #         print(idx, gt_curr_hm_cen[0, idx, 1], hm_cen_cls[0, idx, 1].sigmoid())
+
+        # print(gt_curr_hm_cen.min(), gt_curr_hm_cen.max())
+        # gt_curr_hm_cen_sel = gt_curr_hm_cen[torch.arange(B)[:, None, None], gt_idx.reshape(B, -1, 1).repeat(1, 1, 6), torch.arange(6)[None, None, :]]
+        # gt_curr_hm_cen_sel = gt_curr_hm_cen_sel.max(dim = -1)[0]
+        # print("gt_curr_hm_cen ", gt_curr_hm_cen_sel.shape)
+
+
+        head_conv_sel = torch.stack([map[idx] for idx, map in zip(gt_idx, head_conv)], dim = 0)
+        estimation_cen = head_conv_sel[..., :2]
+        estimation_z = head_conv_sel[..., 2:3]
+        estimation_dim = head_conv_sel[..., 3:6]
+        estimation_dir = head_conv_sel[..., 6:12]
+        estimation_vel = head_conv_sel[..., 12:14]
+        
+        point_cloud_range = [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+        voxel_size = [0.64, 0.64, 0.5]
+        H = 96
+        W = 240
+
+        ys, xs = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)])
+        ys = ys.view(1, H, W) * voxel_size[1] + point_cloud_range[1]
+        xs = xs.view(1, H, W) * voxel_size[0] + point_cloud_range[0]
+        xys = torch.cat([ys, xs], dim=0).view(
+            1, 2, -1).to(head_conv_sel).repeat(B, 1, 1).flip(1).permute(0,2,1)
+        xys_sel = xys[torch.arange(B)[:, None, None], gt_idx.reshape(B, -1, 1).repeat(1, 1, 2), torch.arange(2)[None, None, :]]
+
+        # print(xys.shape)
+
+        # exit(1)
+        # print(trues['track_cen_offset'][0][:10])
+        # print(xys_sel[0][:10])
+        l_z_coor = self.l1_loss(estimation_z, gt_mask, None, trues['track_z_coor'])
+        l_dim = self.l1_loss_balanced(estimation_dim, gt_mask, None, trues['track_dim'])
+        # l_vel = self.l1_loss(
+        #     vel_sigmoid, batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['vel'])
+        l_cen_offset = self.l1_loss(estimation_cen + xys_sel, gt_mask, None, trues['track_cen_offset'])
+        # l_direction = self.l1_loss(estimation_dir, gt_mask, None, trues['track_direction'])
+        # box_loss = l_cen_offset * self.weight_cenoff + \
+        #     l_dim * self.weight_dim + l_direction * self.weight_direction + \
+        #     l_z_coor * self.weight_z_coor + l_vel
+        # total_loss += box_loss
+
+        l_vel = self.l1_loss(estimation_vel, gt_mask, None, trues['track_vel'])
+
+        if gt_mask.sum() > 0:
+            gt_masked = trues['track_multibin_direction'][gt_mask.squeeze(
+                -1).bool(), :]
+            pred_masked = estimation_dir[gt_mask.squeeze(-1).bool(), :]
+            rotbin_loss = F.cross_entropy(pred_masked[...,:2], gt_masked[...,0].long(), reduction="sum") / gt_mask.sum()
+            rotres_loss = torch.tensor(0.0).to(head_conv_sel.device)
+            if len(gt_masked[:, 0].nonzero(as_tuple=False)) > 0:
+                idx1 = gt_masked[:, 0] > 0
+                loss_sin1 = F.smooth_l1_loss(
+                    pred_masked[idx1, 2], gt_masked[idx1, 2].float(), reduction="none"
+                )
+                loss_cos1 = F.smooth_l1_loss(
+                    pred_masked[idx1, 3], gt_masked[idx1, 3].float(), reduction="none"
+                )
+                loss_sin1 = loss_sin1.sum() / idx1.sum()
+                loss_cos1 = loss_cos1.sum() / idx1.sum()
+                rotres_loss += loss_sin1 + loss_cos1
+            if len(gt_masked[:, 1].nonzero(as_tuple=False)) > 0:
+                idx2 = gt_masked[:, 1] > 0
+                loss_sin2 = F.smooth_l1_loss(
+                    pred_masked[idx2, 4], gt_masked[idx2, 4].float(), reduction="none"
+                )
+                loss_cos2 = F.smooth_l1_loss(
+                    pred_masked[idx2, 5], gt_masked[idx2, 5].float(), reduction="none"
+                )
+                loss_sin2 = loss_sin2.sum() / idx2.sum()
+                loss_cos2 = loss_cos2.sum() / idx2.sum()
+                rotres_loss += loss_sin2 + loss_cos2
+            l_direction = rotbin_loss * 0.4 + rotres_loss * 2.0
+        else:
+            l_direction = torch.tensor(0.0).to(head_conv_sel.device)
+
+        tb_dict['track_loss_score'] = torch.tensor(0.0).to(head_conv_sel.device)
+        tb_dict['track_loss_cen'] = l_cen_offset
+        tb_dict['track_loss_z'] = l_z_coor
+        tb_dict['track_loss_dim'] = l_dim
+        tb_dict['track_loss_dir'] = l_direction
+        tb_dict['track_loss_vel'] = l_vel
+
+        # print(gt_mask.shape, trues['track_z_coor'].shape, trues['track_cen_offset'].shape, trues['track_direction'].shape)
+
+        # preds["Points_Loss"]["estimation_score"] = gt_mask.permute(0,2,1).float()
+        # preds["Points_Loss"]["estimation_cen"] = trues['track_cen_offset'].permute(
+        #     0, 2, 1).float()
+        # preds["Points_Loss"]["estimation_z"] = trues['track_z_coor'].permute(
+        #     0, 2, 1).float()
+
+        # preds["Points_Loss"]["estimation_dim"] = trues['track_dim'].permute(
+        #     0, 2, 1).float() + 0.2
+        # preds["Points_Loss"]["estimation_dir"] = trues['track_direction'].permute(
+        #     0, 2, 1).float()
+
+
+        # print([trues['track_cen_offset'].float().shape, trues['track_dim'].float().shape])
+        # print([(estimation_cen + xys_sel).float().shape, estimation_dim.permute(0, 2, 1).float().shape])
+
+        # print(preds["head_conv"].shape)
+
+        # dim_l = (preds["head_conv"][0].permute(1,2,0)[...,3]).clip(0,10.0).detach().cpu().numpy()
+        # print(dim_l.shape, dim_l.min(), dim_l.max())
+        # import cv2
+        # import numpy as np
+        # cv2.imwrite("bev_dim.jpg", (dim_l * 10).astype(np.uint8))
+
+        # box_gt = torch.cat([gt_idx.unsqueeze(-1), gt_curr_hm_cen_sel.unsqueeze(-1),
+        #                    trues['track_cen_offset'].float(), trues['track_dim'].float(), trues['track_direction'].float()], dim=-1)
+        # box_sel = torch.cat([hm_cen_cls_sel.unsqueeze(-1).sigmoid(), (estimation_cen + xys_sel).float(),
+        #                     estimation_dim.float(), estimation_dir.float()], dim=-1)
+        # box_pred = torch.cat([preds["Points_Loss"]["estimation_score"].permute(0, 2, 1).float().sigmoid(), preds["Points_Loss"]
+                            #  ["estimation_cen"].permute(0, 2, 1).float(), preds["Points_Loss"]["estimation_dim"].permute(0, 2, 1).float(), preds["Points_Loss"]["estimation_dir"].permute(0, 2, 1).float()], dim=-1)
+        # # print(box_gt.shape, box_sel.shape)
+
+        # torch.set_printoptions(precision = 2, sci_mode = False, linewidth =120)
+        # # print(gt_mask[0])
+        # print(box_gt[0,gt_mask[0,:,0].bool()])
+        # print(box_sel[0,gt_mask[0,:,0].bool()])
+        # print(box_pred[0,:50])
 
         return total_loss, tb_dict
+
+
+if __name__ == "__main__":
+    import pickle as pkl
+    inputs = pkl.load(open("Compute_Loss.pkl", 'rb'))
+    print("hello")
+    # r50 = EncoderRes50(*inputs)
+    loss = Compute_Loss()
+
+
+    print(ShowDataStruct("inputs", inputs))
+    y = loss(*inputs)
+
+    print(y)
+    
+
+    #     0<class 'torch.Tensor'> : torch.Size([4, 64, 40, 96]) torch.float32
