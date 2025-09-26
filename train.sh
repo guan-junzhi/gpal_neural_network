@@ -92,9 +92,7 @@ echo seed=$seed
 
 if [[ "$load_from" == "None" ]];
 then
-echo not load
 python3 train.py --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed $seed --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 else
-echo load
 python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed $seed --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 fi

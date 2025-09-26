@@ -194,7 +194,9 @@ class ObjectDetectionEvaluator:
                 gt_labels_tot = gt_labels_tot + curr_gt_boxes_3d[:, -1].astype(np.int32).tolist()
             
             gt_labels_tot_np = np.array(gt_labels_tot).astype(np.int32)
-                
+
+            loggerinfo = print  # 只打印结果信息
+            
             loggerinfo("\t>>>\t Start to compute metrics ...")
             dt_sample_metrics_tot = list(zip(*dt_sample_metrics_tot))
             
