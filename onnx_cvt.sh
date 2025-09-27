@@ -1,16 +1,16 @@
 #!/bin/bash
 
-
 current_time=$(date +%Y%m%d_%H_%M_%S)
 echo $current_time
 
 echo "[INSTALL ENVS]:"
-pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install pandas
-pip install terminaltables
-pip install similaritymeasures
-pip install matplotlib
-
+# pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+# pip install pandas
+# pip install terminaltables
+# pip install similaritymeasures
+# pip install matplotlib
+# pip install onnxsim
+# pip install onnx_graphsurgeon
 echo "[READ GLOBAL ENV VAR]:"
 airflow_key="gpal_neural_network_one_node_traning_job_on_airflow"
 echo "AIRFLOW_CTX_DAG_ID=$AIRFLOW_CTX_DAG_ID"
@@ -40,6 +40,7 @@ export ENV_GPAL_NEURAL_NETWORK_WORLD_SIZE=1
 export ENV_GPAL_NEURAL_NETWORK_WORKSPACE=$ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT/$current_time
 export ENV_GPAL_NEURAL_NETWORK_GPUS=1
 fi
+
 
 echo ""
 echo "[SET LOCAL ENV VAR]:"
@@ -73,4 +74,7 @@ fi
 echo load_from=$load_from
 echo config=$config
 
-python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+# python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+
+
+python to_onnx.py --load_from ${load_from} --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config

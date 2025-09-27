@@ -259,8 +259,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
 
     @torch.no_grad()
     def generate_predicted_boxes(self, outputs, batch_size, **kwargs):
-        template_xyz = outputs['template_xyz'][:, :,
-                                            :2].view(-1, 2)  # 前一帧的xy实际位置(从keypts获得)和得分
+        # template_xyz = outputs['template_xyz'][:, :, :2].view(-1, 2)
         pred_cen = outputs['estimation_cen'].permute(0, 2, 1)
         pred_z = outputs['estimation_z'].permute(0, 2, 1)
         pred_dim = outputs['estimation_dim'].permute(0, 2, 1)
@@ -281,7 +280,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
                                 pred_dim,
                                 pred_yaw,
                                 pred_vel*80,
-                                template_xyz.view(-1, 256, 2),
+                                # template_xyz.view(-1, 256, 2),
                                 #   indicee
                                 ], dim=-1
                                 )
