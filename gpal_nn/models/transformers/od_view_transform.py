@@ -74,23 +74,25 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=
     div = 8
     a = torch.zeros([B, C, Z, Y, X], dtype = torch.float, device = rgb_camBX.device)
 
+    WH = torch.tensor([[[[(W-1) * div, (H-1) * div]]]], device=rgb_camBX.device,
+                      dtype=rgb_camBX.dtype)
+    
+    xyz_camAX = xyz_camAX.to(rgb_camBX.device).repeat(
+        rgb_camBX.shape[1], 1, 1, 1)
 
-    for i in range(ego2imgs.shape[1]):
+    bev_feature_batch = []
+    for i in range(ego2imgs.shape[0]):
         xyz_camA = xyz_camAX.clone()
-        rgb_camB = rgb_camBX[:, i]
-        B, C, H, W = list(rgb_camB.shape)
-        xy_pixB1, z = project_ego_pts_to_image(xyz_camA, ego2imgs[:, i])
-
-        WH = torch.tensor([[[[(W-1) * div, (H-1) * div]]]], device=xy_pixB1.device,
-                          dtype=xy_pixB1.dtype)
+        rgb_camB = rgb_camBX[i]
+        V, C, H, W = list(rgb_camB.shape)
+        xy_pixB1, z = project_ego_pts_to_image(xyz_camA, ego2imgs[i])
         uv_norm = (2.0 * (xy_pixB1 / WH) - 1.0)
-        valid_mem = (z[:, :, 0] > 0).reshape(B, 1, Z, Y, X).float()
-        
+        valid_mem = (z[:, :, 0] > 0).reshape(V, 1, Z, Y, X).float()
         values = F.grid_sample(
             rgb_camB, uv_norm.float(), align_corners=False, padding_mode='zeros')
-        values = values.view(B, C, Z, Y, X)
-        a += values * valid_mem
-
+        values = values.view(V, C, Z, Y, X)
+        bev_feature_batch.append((values * valid_mem).sum(0))
+    a = torch.stack(bev_feature_batch, dim = 0)
     return a
 
 
@@ -142,8 +144,7 @@ class ODViewTransformer(BaseModule):
             feats = torch.stack(image_feats_stack, dim=1)
             feats = feats.reshape(B, -1, C, H, W)
         xyz_camA = self.xyz_camA.clone()
-
-        xyz_camA = xyz_camA.to(feats.device).repeat(feats.shape[0], 1, 1, 1)
+        
         feat_bev = unproject_image_to_mem(
             feats,
             self.grid_size[2],
