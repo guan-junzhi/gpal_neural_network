@@ -188,10 +188,11 @@ class Bev_To_Points(nn.Module):
             'estimation_dir': estimation_dir,
             'estimation_vel': estimation_vel,
             'estimation_score': pred_curr_track_score,
+            'estimation_score_cls': batch_dict['score'].squeeze(2),
             # 'template_xyz': template_xyz,  # xy实际位置和上一帧得分
         }
 
         if torch.onnx.is_in_onnx_export():
-            return batch_dict['Points_Loss']
+            return {k: batch_dict['Points_Loss'][k].squeeze(0) for k in batch_dict['Points_Loss']}
         else:
             return batch_dict
