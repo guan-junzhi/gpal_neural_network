@@ -7,6 +7,7 @@ import numpy as np
 from gpal_lightning import const
 from gpal_lightning.data.dataloader_helpers.gpal_collate import gpal_collate
 from gpal_lightning.neural_network.global_config import GlobalConfig
+from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 
 class GpNetDeploy(GpNet):
     def __init__(
