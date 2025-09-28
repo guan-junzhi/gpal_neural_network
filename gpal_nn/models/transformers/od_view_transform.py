@@ -44,108 +44,55 @@ def gridcloud3d(B, Z, Y, X, norm=False, device='cuda'):
     y = torch.reshape(grid_y, [B, -1])
     z = torch.reshape(grid_z, [B, -1])
     # these are B x N
-    xyz = torch.stack([x, y, z], dim=2)
+    xyz = torch.stack([x, y, z, torch.ones_like(z)], dim=2).unsqueeze(-1)
     # this is B x N x 3
     return xyz
 
-
-def project_radar_to_image_now(radar, distort_coeffa, rmata, tveca, intrinsica):
-    # radar shape: (B, N, 3)
-    # distort_coeffa shape: (B, 1, 5)
-    # rmata shape: (B, 4, 4)
-    # intrinsica shape: (B, 3, 3)
-    B, N, _ = radar.shape
-    reference_points = torch.cat(
-        (radar, torch.ones_like(radar[..., :1])), -1).unsqueeze(-1)  # b,n,4，1
-    lidar2cam = rmata.unsqueeze(1).repeat(1, N, 1, 1)  # b,n,4，4
-    cam_intrinsics = intrinsica.unsqueeze(1).repeat(1, N, 1, 1)  # b,n,3,3
+def project_ego_pts_to_image(pts, ego2img):
+    B, N, _, _ = pts.shape
+    reference_points = pts
+    ego2img = ego2img.unsqueeze(1).repeat(1, N, 1, 1)  # b,n,4，4
     eps = 1e-5  # 创建体素遮罩
 
     # 坐标变换
-    reference_points_cam = torch.matmul(lidar2cam.to(torch.float32),
+    reference_points_img = torch.matmul(ego2img.to(torch.float32),
                                         reference_points.to(torch.float32)).permute(0, 1, 3, 2)  # B,N,1,4
     # 透视投影
-    # reference_points_cam_t2 = reference_points_cam[..., 0:2] / torch.maximum(
-    # reference_points_cam[..., 2:3], torch.ones_like(reference_points_cam[..., 2:3]) * eps) #B,N,1,2
-    reference_points_cam_t2 = reference_points_cam[..., 0:2] / (
-        eps+reference_points_cam[..., 2:3])  # B,N,1,2
-    z = reference_points_cam[..., 2:3].clone()
-    x = reference_points_cam_t2[..., [0]]  # B,N,1,1
-    y = reference_points_cam_t2[..., [1]]  # B,N,1,1
+    reference_points_img_uv = reference_points_img[..., 0:2] / (
+        eps+reference_points_img[..., 2:3])  # B,N,1,2
 
-    # x = x * cam_intrinsics[..., 0:1, 0:1] + y * cam_intrinsics[..., 0:1, 1:2] + cam_intrinsics[..., 0:1, 2:3]
-    # y = x * cam_intrinsics[..., 1:2, 0:1] + y * cam_intrinsics[..., 1:2, 1:2] + cam_intrinsics[..., 1:2, 2:3]
-    x_new = x * cam_intrinsics[..., 0:1, 0:1] + y * \
-        cam_intrinsics[..., 0:1, 1:2] + cam_intrinsics[..., 0:1, 2:3]
-    y_new = x * cam_intrinsics[..., 1:2, 0:1] + y * \
-        cam_intrinsics[..., 1:2, 1:2] + cam_intrinsics[..., 1:2, 2:3]
-    x, y = x_new, y_new
-
-    reference_points_cam_t2_new = torch.cat(
-        [x, y], dim=-1).squeeze(-2)  # [1, 2, 6, 80000, 2]
-
-    return reference_points_cam_t2_new, z.squeeze(-1)
+    return reference_points_img_uv, reference_points_img[..., 2].clone()
 
 
-def normalize_grid2d(grid_y, grid_x, Y, X, clamp_extreme=True):
-    # make things in [-1,1]
-    grid_y = 2.0*(grid_y / float(Y-1)) - 1.0
-    grid_x = 2.0*(grid_x / float(X-1)) - 1.0
 
-    if clamp_extreme:
-        grid_y = torch.clamp(grid_y, min=-2.0, max=2.0)
-        grid_x = torch.clamp(grid_x, min=-2.0, max=2.0)
-
-    return grid_y, grid_x
-
-
-def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=None, mask=None, batch_dict=None):
-    image_crop_config = batch_dict['img_crop_dict']
-
+def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=None, mask=None, batch_dict=None, image_crop_config=None):
     B, C, H, W = rgb_camBX[:, 0].shape
-    view_num = batch_dict['intrinsic'].shape[1]
+    view_num = batch_dict['ego2imgs'].shape[1]
+    # print(ShowDataStruct("batch_dict", batch_dict))
 
-    intrinsics = batch_dict['intrinsic'].view(
-        BB, 1, view_num, 3, 3).repeat(1, 1, 1, 1, 1).view(B, view_num, 3, 3)
-    extrinsics = batch_dict['extrinsic'].view(
-        BB, 1, view_num, 4, 4).repeat(1, 1, 1, 1, 1).view(B, view_num, 4, 4)
-    cam_distorts = batch_dict['cam_dist'].view(
-        BB, 1, view_num, 1, 5).repeat(1, 1, 1, 1, 1).view(B, view_num, 1, 5)
-
-    offset_pixel = image_crop_config['CROP_HeSai_ID4']['CROP_START']
-    scale = image_crop_config['CROP_HeSai_ID4']['SCALE']
+    ego2imgs = batch_dict["ego2imgs"]
     div = 8
     a = torch.zeros([B, C, Z, Y, X], dtype = torch.float, device = rgb_camBX.device)
 
-    for i in range(intrinsics.shape[1]):
+    WH = torch.tensor([[[[(W-1) * div, (H-1) * div]]]], device=rgb_camBX.device,
+                      dtype=rgb_camBX.dtype)
+    
+    xyz_camAX = xyz_camAX.to(rgb_camBX.device).repeat(
+        rgb_camBX.shape[1], 1, 1, 1)
 
-        intrinsic = intrinsics[:, i]
-        extrinsic = extrinsics[:, i]
-        cam_distort = cam_distorts[:, i]
+    bev_feature_batch = []
+    for i in range(ego2imgs.shape[0]):
         xyz_camA = xyz_camAX.clone()
-        rgb_camB = rgb_camBX[:, i]
-        B, C, H, W = list(rgb_camB.shape)
-        tvec = extrinsic[:, :3, 3].view(B, 1, 1, 3)
-        xy_pixB1, z = project_radar_to_image_now(
-            xyz_camA, cam_distort, extrinsic, tvec, intrinsic)
-
-        x, y = xy_pixB1[:, :, 0]/scale[i][0]/div, xy_pixB1[:,
-                                                           :, 1]/scale[i][0]/div - offset_pixel[i][0]/div
-
-        x_valid = (x > -0.5).bool() & (x < float(W-0.5)).bool()
-        y_valid = (y > -0.5).bool() & (y < float(H-0.5)).bool()
-        z_valid = (z[:, :, 0] > 0).bool()
-        valid_mem = (x_valid & y_valid & z_valid).reshape(
-            B, 1, Z, Y, X).float()
-        y_pixB, x_pixB = normalize_grid2d(y, x, H, W)
-        xyz_pixB = torch.stack([x_pixB, y_pixB], axis=2)
-        xyz_pixB = torch.reshape(xyz_pixB, [B, Z*Y, X, 2])
+        rgb_camB = rgb_camBX[i]
+        V, C, H, W = list(rgb_camB.shape)
+        xy_pixB1, z = project_ego_pts_to_image(xyz_camA, ego2imgs[i])
+        uv_norm = (2.0 * (xy_pixB1 / WH) - 1.0)
+        valid_mem = (z[:, :, 0] > 0).reshape(V, 1, Z, Y, X).float()
         values = F.grid_sample(
-            rgb_camB, xyz_pixB.float(), align_corners=False)
-        # values = values.view(B, C, -1) + scale_tensor[i][...,0]
-        values = values.view(B, C, Z, Y, X)
-        a += values * valid_mem
-
+            rgb_camB, uv_norm.float(), align_corners=False, padding_mode='zeros')
+        values = values.view(V, C, Z, Y, X)
+        bev_feature_batch.append((values * valid_mem).sum(0))
+    a = torch.stack(bev_feature_batch, dim = 0)
     return a
 
 
@@ -176,6 +123,7 @@ class ODViewTransformer(BaseModule):
             self.voxel_size[2]/2 + self.point_cloud_range[2]
 
         self.xyz_camA = xyz_camA
+        self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
 
     def forward(
         self,
@@ -184,16 +132,19 @@ class ODViewTransformer(BaseModule):
     ) -> Tensor:
         """Forward bevformer viewtransformer."""
 
-        image_feats_stack = []
-        for k in self.input_source:
-            for fea in feats[k]:
-                image_feats_stack.append(fea)
-                B, C, H, W = fea.shape
-        feats = torch.stack(image_feats_stack, dim=1)
-        feats = feats.reshape(B, -1, C, H, W)
+        if torch.onnx.is_in_onnx_export():
+            feats = feats[0].unsqueeze(0)
+            B = 1
+        else:
+            image_feats_stack = []
+            for k in self.input_source:
+                for fea in feats[k]:
+                    image_feats_stack.append(fea)
+                    B, C, H, W = fea.shape
+            feats = torch.stack(image_feats_stack, dim=1)
+            feats = feats.reshape(B, -1, C, H, W)
         xyz_camA = self.xyz_camA.clone()
-
-        xyz_camA = xyz_camA.to(feats.device).repeat(feats.shape[0], 1, 1)
+        
         feat_bev = unproject_image_to_mem(
             feats,
             self.grid_size[2],
@@ -205,6 +156,7 @@ class ODViewTransformer(BaseModule):
             xyz_camAX=xyz_camA,
             mask=None,
             batch_dict=data,
+            image_crop_config=self.image_crop_config
         )
         B, C, Z, H, W = feat_bev.shape
         feat_bev = feat_bev.view(

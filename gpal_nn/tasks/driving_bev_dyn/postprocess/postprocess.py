@@ -166,9 +166,12 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
 
         """
         post_process_cfg = self.POST_PROCESSING
-        batch_size = batch_dict['score'].shape[0]
+        batch_size = batch_dict['Points_Loss']['estimation_cen'].shape[0]
         recall_dict = {}
         pred_dicts = []
+        _, label = batch_dict['Points_Loss']['estimation_score_cls'].max(dim=1)  # 原始的score含通道
+        batch_pred_labels = label.view(batch_size, -1) + 1
+
         for index in range(batch_size):
             if batch_dict.get('batch_index', None) is not None:
                 assert batch_dict['batch_box_preds'].shape.__len__() == 2
@@ -223,8 +226,9 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             else:
                 cls_preds, label_preds = torch.max(cls_preds, dim=-1)
                 if batch_dict.get('has_class_labels', False):
-                    label_key = 'roi_labels' if 'roi_labels' in batch_dict else 'batch_pred_labels'
-                    label_preds = batch_dict[label_key][index]
+                    # label_key = 'roi_labels' if 'roi_labels' in batch_dict else 'batch_pred_labels'
+                    # label_preds = batch_dict[label_key][index]
+                    label_preds = batch_pred_labels[index]
                 else:
                     label_preds = label_preds + 1
                 selected, selected_scores = model_nms_utils.class_agnostic_nms(
@@ -259,8 +263,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
 
     @torch.no_grad()
     def generate_predicted_boxes(self, outputs, batch_size, **kwargs):
-        template_xyz = outputs['template_xyz'][:, :,
-                                            :2].view(-1, 2)  # 前一帧的xy实际位置(从keypts获得)和得分
+        # template_xyz = outputs['template_xyz'][:, :, :2].view(-1, 2)
         pred_cen = outputs['estimation_cen'].permute(0, 2, 1)
         pred_z = outputs['estimation_z'].permute(0, 2, 1)
         pred_dim = outputs['estimation_dim'].permute(0, 2, 1)
@@ -281,7 +284,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
                                 pred_dim,
                                 pred_yaw,
                                 pred_vel*80,
-                                template_xyz.view(-1, 256, 2),
+                                # template_xyz.view(-1, 256, 2),
                                 #   indicee
                                 ], dim=-1
                                 )
@@ -295,9 +298,10 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             return gt_list
         else:
             #   if not self.training or self.predict_boxes_when_training:
-            vectors[0] = self.bev_2_points(vectors[0])
+            if "with_postprocess" not in vectors[0]:
+                vectors[0] = self.bev_2_points(vectors[0])
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(vectors[0]['Points_Loss'],
-                                                                             batch_size=vectors[0]['score'].shape[0])
+                                                                             batch_size=vectors[0]['Points_Loss']['estimation_cen'].shape[0])
             vectors[0]['batch_cls_preds'] = batch_cls_preds
             vectors[0]['batch_box_preds'] = batch_box_preds
             vectors[0]['cls_preds_normalized'] = True

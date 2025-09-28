@@ -22,7 +22,7 @@ Backbones:
     load: all
     # freeze: all
     out_channels: 64
-    input_source: [ 'img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30']
+    input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
     
 Groups:
   group0: {load: all, freeze: all, type: DummyBackbone, input_source: backbone0}
@@ -46,7 +46,7 @@ Transformer:
     task_name: DRIVING_BEV_DYN
     bev_map_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
     bev_map_voxel_size: [0.64, 0.64, 0.5]
-    input_source: [ 'img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30']
+    input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
     
 
 Tasks:
@@ -83,8 +83,8 @@ Tasks:
       "IMAGE_CROP_H_LEN": 320
       "IMAGE_CROP_SIZE": [320, 768]
       "CROP_HeSai_ID4":
-        "SCALE": [5, 2.5, 2.5, 2.5, 2.5, 2.5, 5]
-        "CROP_START": [0, 80, 80, 80, 80, 80, 0]
+        "SCALE": [5, 5, 2.5, 2.5, 2.5, 2.5, 2.5]
+        "CROP_START": [0, 0, 80, 80, 80, 80, 80]
   
 
     od_range:
@@ -116,7 +116,7 @@ Tasks:
 
           root_dir: "bev_park/PointLine_train/",
           data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20250923-015942/20250923-015942_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          camera_name: ['img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30'],
+          camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
           fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
@@ -131,8 +131,8 @@ Tasks:
 
           root_dir: "bev_park/PointLineData_Test/",
           data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          camera_name: ['img_front_120', 'img_front_left', 'img_rear_left', 'img_front_right', 'img_rear_right', 'img_back', 'img_front_30',],
+          camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: True,
-          fast_buffer_path: "./buf_eval" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./buf_eval_origin_size" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }

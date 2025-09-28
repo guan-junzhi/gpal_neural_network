@@ -34,6 +34,8 @@ class ArgumentParserHelper:
         cls._model_parser.add_argument(
             "--load_from", type=str, help="load checkpoint from other experiment.")
         cls._model_parser.add_argument(
+            "--onnx_path", type=str, help="load onnx_runtime engine from onnx file.")
+        cls._model_parser.add_argument(
             "--resume_from", type=str, help="resume thcheckpoint from other experiment. --save should be empty"
         )
         cls._model_parser.add_argument(

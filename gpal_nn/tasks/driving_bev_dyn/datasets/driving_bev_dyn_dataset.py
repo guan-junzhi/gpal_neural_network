@@ -296,6 +296,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         self.ClearFastBufCnt()
 
+        self.deploy_eval = (phase != const.PHASE_TRAINING) and (global_config.onnx_path != None)
+
+
     def include_fusion_data(self, phase):
 
         print('Loading HeSai dataset ...')
@@ -516,8 +519,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             database_slice_key, view_key)
         if image is None:
             image = read_img(str(img_file), self.image_resize + [3])
-            image = cv2.resize(image, self.image_resize[::-1])
-            image = image[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+            if self.phase == const.PHASE_TRAINING:
+                image = cv2.resize(image, self.image_resize[::-1])
+                image = image[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
             self._slice_image_cache(
                 database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=95)
         else:
@@ -763,7 +767,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 calib_extrin = copy.deepcopy(input_dict["extrinsic"][view_idx])
                 calib_dist = copy.deepcopy(input_dict["cam_dist"][view_idx])
                 img_crop_dict = copy.deepcopy(self.img_crop_dict)
-                
+
+                if self.phase != const.PHASE_TRAINING:
+                    input_dict[f'origin_images_input{view_idx}'] = current_img.astype(
+                        np.float32).copy()
+                    current_img = cv2.resize(current_img, self.image_resize[::-1])
+                    current_img = current_img[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+
                 calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
                 calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
 
@@ -796,10 +806,12 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret = {
                 "meta": {"frame_id": data_dict["frame_id"]}, 'image': {}, "label": {}, "calib": {}}
             for i in range(len(data_dict["camera_names"])):
-                data_dict_ret['image'][data_dict["camera_names"]
-                                    [i]] = data_dict[f"images_input{i}"].transpose(2, 0, 1)
-                # data_dict_ret['image'][data_dict["camera_names"]
-                #                     [i]+"_pre"] = data_dict[f"images_input_former{i}"].transpose(2, 0, 1)
+                if not self.deploy_eval:
+                    data_dict_ret['image'][data_dict["camera_names"]
+                                        [i]] = data_dict[f"images_input{i}"].transpose(2, 0, 1)
+                else:
+                    data_dict_ret['image'][data_dict["camera_names"]
+                                           [i]] = data_dict[f"origin_images_input{i}"]
 
             for key in data_dict:
                 if "gt_curr_" in key:
@@ -810,9 +822,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             for key in ["intrinsic", "cam_dist", "extrinsic"]:
                 data_dict_ret["calib"][key] = data_dict[key]
-
-            data_dict_ret["calib"]["cam_dist"] *= 0.0
-            
             data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
             data_dict_ret['calib']["img_shapes"] = np.stack(
                 [np.array(list(img.shape)) for img in data_dict_ret["image"].values()], axis=0)
