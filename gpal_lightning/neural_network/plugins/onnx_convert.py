@@ -5,6 +5,8 @@ import logging
 import onnx
 import numpy as np
 from onnxsim import simplify
+import torch.nn.functional as F
+
 from gpal_lightning import const
 from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from gpal_lightning.neural_network.global_config import GlobalConfig
@@ -35,14 +37,27 @@ class WrappedGpNet(GpNet):
         x = input["image"]
         calib = input["calib"]
         task = input["task"]
+        images_grid = calib["images_grid"]
 
+        cam8m_set = ["img_front_120", "img_front_30"]
+        cam2m_set = ["img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
+
+        img8ms = torch.cat([x[k] for k in cam8m_set], dim=0).permute(0, 3, 1, 2)
+        img2ms = torch.cat([x[k] for k in cam2m_set], dim=0).permute(0, 3, 1, 2)
+
+        udist_img8ms = F.grid_sample(
+            img8ms, images_grid[:len(cam8m_set)].float(), align_corners=True, padding_mode='border', mode="nearest")
+        udist_img2ms = F.grid_sample(
+            img2ms, images_grid[len(cam8m_set):].float(), align_corners=True, padding_mode='border', mode="nearest")
+
+        imgs = torch.cat([udist_img8ms, udist_img2ms], dim = 0) / 255.0
 
         mono3d, mono_od, gate_lever, side_od, neck2_in = [], [], [], [], []
 
         for backbone_name, camera_list in self.backbone_camera_mapping.items():
         
-            print(x.shape)
-            bb_output = self.model[backbone_name](x)
+            print(imgs.shape)
+            bb_output = self.model[backbone_name](imgs)
             print(backbone_name, bb_output[0].shape)
 
             g0_output = self.model['group0'](bb_output)
@@ -89,14 +104,23 @@ class PytorchToOnnx:
     @staticmethod
     def TaskImageShapeDict(task_name):
         if task_name in ["DRIVING_BEV_DYN"]:
+            # used_image_shapes: dict = {
+            #     "img_front_120": [768, 320, 3],
+            #     "img_front_30": [768, 320, 3],
+            #     "img_back": [768, 320, 3],
+            #     "img_front_left": [768, 320, 3],
+            #     "img_front_right": [768, 320, 3],
+            #     "img_rear_left": [768, 320, 3],
+            #     "img_rear_right": [768, 320, 3],
+            # }
             used_image_shapes: dict = {
-                "img_front_120": [768, 320, 3],
-                "img_front_left": [768, 320, 3],
-                "img_rear_left": [768, 320, 3],
-                "img_front_right": [768, 320, 3],
-                "img_rear_right": [768, 320, 3],
-                "img_back": [768, 320, 3],
-                "img_front_30": [768, 320, 3],
+                "img_front_120": [3840, 2160, 3],
+                "img_front_30": [3840, 2160, 3],
+                "img_back": [1920, 1080, 3],
+                "img_front_left": [1920, 1080, 3],
+                "img_front_right": [1920, 1080, 3],
+                "img_rear_left": [1920, 1080, 3],
+                "img_rear_right": [1920, 1080, 3],
             }
 
             return used_image_shapes
@@ -110,16 +134,16 @@ class PytorchToOnnx:
         used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name)
         for cam in used_image_shapes:
             if cam not in input_dict.keys():
-                vector_shape = 1, 3, used_image_shapes[cam][1], used_image_shapes[cam][0]
-                input_dict[cam] = torch.rand(*vector_shape)
+                vector_shape = 1, used_image_shapes[cam][1], used_image_shapes[cam][0], 3
+                input_dict[cam] = torch.rand(*vector_shape).cuda()
         print(ShowDataStruct("input_dict", input_dict))
-        merged_input_dict = {"task": tasks[0].name, "image": torch.concat(
-            [input_dict[cam] for cam in input_dict]).cuda()}
                         
         for task in tasks:
             if task.name == "DRIVING_BEV_DYN":
+                merged_input_dict = {"task": tasks[0].name, "image": input_dict}
                 merged_input_dict["calib"]={}
-                # merged_input_dict["calib"]["intrinsic"]= torch.rand(1, 7, 3, 3).cuda()
+                merged_input_dict["calib"]["images_grid"] = torch.rand(
+                    7, 320, 768, 2).cuda()
                 merged_input_dict["calib"]["ego2imgs"] = torch.rand(
                     1, 7, 4, 4).cuda()
 
@@ -160,7 +184,8 @@ class PytorchToOnnx:
         
         os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
         
-        input_names = ["image", "ego2imgs"]  # occ_od
+        input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
+                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "ego2imgs"]  # occ_od
 
         output_names = ["center", "z",
                         "size", "heading", "velocity", "score", "score_cls"]
