@@ -64,7 +64,7 @@ elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250925_16_31_04/checkpoint/epoch=1-step=11000_checkpoint.pth
-    onnx_path="workspace/20250929_03_24_41_onnx/checkpoint/epoch=1-step=11000_checkpoint_sim.onnx"
+    onnx_path="epoch=1-step=11000_checkpoint_sim.onnx"
     config=configs_for_develop/driving_bev_dyn_config.yaml
 else 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth
@@ -75,5 +75,5 @@ fi
 echo load_from=$load_from
 echo config=$config
 
-# python3 eval.py --load_from $load_from --onnx_path $onnx_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
-python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+CUDA_VISIBLE_DEVICES=1 python3 eval.py --load_from $load_from --onnx_path $onnx_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+# CUDA_VISIBLE_DEVICES=1 python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config

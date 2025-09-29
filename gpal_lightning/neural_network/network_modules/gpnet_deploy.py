@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Callable, List, Union
 
+import os
 import cv2
 import torch
 from tqdm import tqdm
@@ -15,7 +16,8 @@ from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.models.transformers.od_view_transform import GetProjectGridByEgo2Imgs
 
-
+global cnt 
+cnt = 0
 def DistGridMap(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn):
     ws = np.linspace(-1.0, 1.0, src_w,
                      endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
@@ -55,6 +57,7 @@ class GpNetDeploy(GpNet):
                 'estimation_score_cls': [],
             }
         }
+        save_path = f'calib'
         batch_size = len(metadata)
         for i in tqdm(range(batch_size)):
             # img_slice = torch.stack(
@@ -100,6 +103,16 @@ class GpNetDeploy(GpNet):
             inputs_dict.update(
                 {"vt_grid": vt_grid.float().detach().cpu().numpy(), "vt_grid_valid": vt_grid_valid.float().detach().cpu().numpy()})
             # print(ShowDataStruct("inputs_dict", inputs_dict))
+            global cnt
+            breakpoint()
+            np.savetxt(f'vt_grid_valid.txt', vt_grid_valid.float().detach().cpu().numpy().flatten())
+            for k in inputs_dict:
+                save_input_path = f'{save_path}/{k}/{cnt}.npy'
+                os.makedirs(os.path.dirname(save_input_path), exist_ok=True)
+                np.save(save_input_path, inputs_dict[k])
+            cnt+=1
+            if cnt > 200:
+                quit()
             outputs = self.session.run(None, inputs_dict)
             for k, o in zip(batch_ret["Points_Loss"], outputs):
                 batch_ret["Points_Loss"][k].append(o)
