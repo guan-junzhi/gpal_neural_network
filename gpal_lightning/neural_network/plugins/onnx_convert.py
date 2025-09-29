@@ -144,8 +144,10 @@ class PytorchToOnnx:
                 merged_input_dict["calib"]={}
                 merged_input_dict["calib"]["images_grid"] = torch.rand(
                     7, 320, 768, 2).cuda()
-                merged_input_dict["calib"]["ego2imgs"] = torch.rand(
-                    1, 7, 4, 4).cuda()
+                merged_input_dict["calib"]["vt_grid"] = torch.rand(
+                    7, 384, 240, 2).cuda()
+                merged_input_dict["calib"]["vt_grid_valid"] = torch.rand(
+                    7, 4, 96, 240).cuda()
 
 
         return merged_input_dict
@@ -185,7 +187,7 @@ class PytorchToOnnx:
         os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
         
         input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
-                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "ego2imgs"]  # occ_od
+                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid", "vt_grid_valid"]  # occ_od
 
         output_names = ["center", "z",
                         "size", "heading", "velocity", "score", "score_cls"]
@@ -208,3 +210,6 @@ class PytorchToOnnx:
         model_sim, check = simplify(model)
         assert check, "Simplified ONNX model could not be validated"
         onnx.save(model_sim, onnx_sim_path)
+
+        print(f"onnx_path = {onnx_path}")
+        print(f"onnx_sim_path = {onnx_sim_path}")

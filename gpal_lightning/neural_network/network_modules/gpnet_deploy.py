@@ -13,6 +13,7 @@ from gpal_lightning.data.dataloader_helpers.gpal_collate import gpal_collate
 from gpal_lightning.neural_network.global_config import GlobalConfig
 from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from tools_scripts.data_format_cvt import ShowDataStruct
+from gpal_nn.models.transformers.od_view_transform import GetProjectGridByEgo2Imgs
 
 
 def DistGridMap(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn):
@@ -86,12 +87,18 @@ class GpNetDeploy(GpNet):
             #     cv2.imwrite(
             #         f"eval_imgs/eval_imgs_{i}_{k}_u2.jpg", (udist_img8ms.squeeze(0)).permute(1, 2, 0).cpu().numpy().astype(np.uint8))
 
-            ego2imgs = calib["ego2imgs"][i].unsqueeze(
-                0).float().detach().cpu().numpy()
+            ego2imgs = calib["ego2imgs"][i]
+            xyz_camAX = self.model[self._transformers["DRIVING_BEV_DYN"]].xyz_camA.clone()
+            vt_grid, vt_grid_valid = GetProjectGridByEgo2Imgs(
+                ego2imgs, H=40, W=96, div=8, Z=4, Y=96, X=240, sample_pts_3d=xyz_camAX.to(ego2imgs.device).clone())
+            vt_grid = torch.clip(vt_grid, -1.1, 1.1)
+            
             inputs_dict = {}
             inputs_dict.update(img_slice)
             inputs_dict.update({"images_grid": images_grid.astype(np.float32)})
-            inputs_dict.update({"ego2imgs": ego2imgs})
+            # inputs_dict.update({"ego2imgs": ego2imgs})
+            inputs_dict.update(
+                {"vt_grid": vt_grid.float().detach().cpu().numpy(), "vt_grid_valid": vt_grid_valid.float().detach().cpu().numpy()})
             # print(ShowDataStruct("inputs_dict", inputs_dict))
             outputs = self.session.run(None, inputs_dict)
             for k, o in zip(batch_ret["Points_Loss"], outputs):
