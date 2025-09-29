@@ -10,6 +10,7 @@ pip install pandas
 pip install terminaltables
 pip install similaritymeasures
 pip install matplotlib
+pip install pyquaternion
 
 echo "[READ GLOBAL ENV VAR]:"
 airflow_key="gpal_neural_network_one_node_traning_job_on_airflow"
@@ -63,7 +64,7 @@ elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250925_16_31_04/checkpoint/epoch=1-step=11000_checkpoint.pth
-    onnx_path="workspace/20250927_12_39_05/checkpoint/epoch=1-step=11000_checkpoint_sim.onnx"
+    onnx_path="workspace/20250929_03_24_41_onnx/checkpoint/epoch=1-step=11000_checkpoint_sim.onnx"
     config=configs_for_develop/driving_bev_dyn_config.yaml
 else 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth
