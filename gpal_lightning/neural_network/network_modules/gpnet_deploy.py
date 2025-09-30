@@ -17,11 +17,17 @@ from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.models.transformers.od_view_transform import GetProjectGridByEgo2Imgs
 
 
-def DistGridMap(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn):
-    ws = np.linspace(-1.0, 1.0, src_w,
-                     endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
-    hs = np.linspace(-1.0, 1.0, src_h,
-                     endpoint=True)[:, np.newaxis, np.newaxis].repeat(src_w, 1)
+def DistGridMap(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm = True):
+    if norm:
+        ws = np.linspace(-1.0, 1.0, src_w,
+                        endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
+        hs = np.linspace(-1.0, 1.0, src_h,
+                        endpoint=True)[:, np.newaxis, np.newaxis].repeat(src_w, 1)
+    else:
+        ws = np.linspace(0.0, src_w-1.0, src_w,
+                        endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
+        hs = np.linspace(0.0, src_h-1.0, src_h,
+                        endpoint=True)[:, np.newaxis, np.newaxis].repeat(src_w, 1)
     # cv2.imwrite("ws.jpg", (ws * 127+128).astype(np.uint8))
     # cv2.imwrite("hs.jpg", (hs * 127+128).astype(np.uint8))
     src_map = np.concatenate([ws, hs], axis=-1)
