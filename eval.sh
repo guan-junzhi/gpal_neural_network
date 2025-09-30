@@ -64,9 +64,10 @@ elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250925_16_31_04/checkpoint/epoch=1-step=11000_checkpoint.pth
-    onnx_path="workspace/20250927_12_39_05/checkpoint/epoch=1-step=11000_checkpoint_sim.onnx"
-    calib_data_save_path="None"  
+    onnx_path="workspace//20250930_06_49_06_onnx/checkpoint/epoch=1-step=11000_checkpoint_sim.onnx"
+    onnx_path="/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet_calibration_hbm/tools/ptq/model_output/single_frame_moldel_v1_int8_/single_frame_moldel_v1_int8_quantized_model.bc"
     config=configs_for_develop/driving_bev_dyn_config.yaml
+    calib_data_save_path="None" 
 else 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth
     config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/config.yaml
@@ -76,5 +77,5 @@ fi
 echo load_from=$load_from
 echo config=$config
 
-python3 eval.py --load_from $load_from --onnx_path $onnx_path  --calib_data_save_path $calib_data_save_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
-# python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+# python3 eval.py --load_from $load_from --onnx_path $onnx_path  --calib_data_save_path $calib_data_save_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
