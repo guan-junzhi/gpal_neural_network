@@ -16,6 +16,7 @@ from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.models.transformers.od_view_transform import GetProjectGridByEgo2Imgs
 
+from horizon_tc_ui import HBRuntime
 
 def DistGridMap(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm = True):
     if norm:
@@ -47,8 +48,11 @@ class GpNetDeploy(GpNet):
             collate_fn: Callable = gpal_collate,
     ):
         super().__init__(global_config, tasks, automatic_optimization, collate_fn)
-        self.session = ort.InferenceSession(global_config.onnx_path)
-        
+        self.global_config = global_config
+        self.session = HBRuntime(self.global_config.onnx_path)
+        self.output_names = self.session.output_names
+
+        self.model_file = global_config.onnx_path
         self.calib_data_cnt = 0
 
     def forward_one_DRIVING_BEV_DYN(self, x, calib, metadata):
@@ -102,9 +106,19 @@ class GpNetDeploy(GpNet):
             vt_grid, vt_grid_valid = GetProjectGridByEgo2Imgs(
                 ego2imgs, H=40, W=96, div=8, Z=4, Y=96, X=240, sample_pts_3d=xyz_camAX.to(ego2imgs.device).clone())
             vt_grid = torch.clip(vt_grid, -1.1, 1.1)
-            
+
             inputs_dict = {}
-            inputs_dict.update(img_slice)
+            if "quantized_model.bc" in self.model_file:
+                # 添加 bgr 2 nv12 转换
+                print("nv12 input ...")
+                img_slice_nv12 = {}
+                for img_name, img_data in img_slice.items():
+                    y_data, uv_data = self.bgr_to_nv12_split(img_data)
+                    img_slice_nv12[f"{img_name}_y"] = y_data
+                    img_slice_nv12[f"{img_name}_uv"] = uv_data
+                inputs_dict.update(img_slice_nv12)
+            else:
+                inputs_dict.update(img_slice)
             inputs_dict.update({"images_grid": images_grid.astype(np.float32)})
             # inputs_dict.update({"ego2imgs": ego2imgs})
             inputs_dict.update(
@@ -117,7 +131,8 @@ class GpNetDeploy(GpNet):
                     np.save(single_calib_data_save_path, inputs_dict[k])
                 self.calib_data_cnt+=1
 
-            outputs = self.session.run(None, inputs_dict)
+            self.session = HBRuntime(self.global_config.onnx_path)
+            outputs = self.session.run(self.output_names, inputs_dict)
             for k, o in zip(batch_ret["Points_Loss"], outputs):
                 batch_ret["Points_Loss"][k].append(o)
         # exit(1)
@@ -138,6 +153,28 @@ class GpNetDeploy(GpNet):
                 forward_outputs.append(output)
 
         return forward_outputs
+
+    def bgr_to_nv12_split(self, img_bgr):
+        img_bgr = img_bgr.squeeze(axis=0).astype(np.uint8)
+        # 转换为YUV420 (I420)
+        yuv_i420 = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2YUV_I420)
+        h, w = img_bgr.shape[:2]
+        
+        # 提取Y平面
+        y_plane = yuv_i420[:h, :]
+        
+        uv_start = h
+        uv_height = h // 4 
+        u_plane = yuv_i420[uv_start:uv_start+uv_height, :]
+        v_plane = yuv_i420[uv_start+uv_height:uv_start+2*uv_height, :]
+        
+        uv_interleaved = np.zeros((h//2 * w//2 * 2), dtype=np.uint8)
+        uv_interleaved[0::2] = u_plane.flatten()
+        uv_interleaved[1::2] = v_plane.flatten()
+    
+        y_plane = y_plane.reshape(1, h, w, 1)   #.transpose(0, 3, 1, 2)
+        uv_interleaved = uv_interleaved.reshape(1, h//2, w//2, 2)   #.transpose(0, 3, 1, 2)
+        return y_plane, uv_interleaved 
         
 
 # pth 先resize
