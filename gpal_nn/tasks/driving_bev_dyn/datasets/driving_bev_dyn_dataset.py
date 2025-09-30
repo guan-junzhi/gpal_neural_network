@@ -34,7 +34,7 @@ from pyquaternion import Quaternion
 import torch.nn.functional as F
 import scipy
 from torchvision import transforms as T
-from gpal_lightning.neural_network.network_modules.gpnet_deploy import DistGridMap
+from gpal_lightning.utils.deploy_utils import DistGridMap
 
 
 def read_img(files_img, image_resize=[360, 640, 3]):
