@@ -64,34 +64,37 @@ def project_ego_pts_to_image(pts, ego2img):
     return reference_points_img_uv, reference_points_img[..., 2].clone()
 
 
+def GetProjectGridByEgo2Imgs(ego2imgs, H, W, div, Z, Y, X, sample_pts_3d):
+    sample_pts_3d = sample_pts_3d.repeat(ego2imgs.shape[0], 1, 1, 1)
+    uvs, z = project_ego_pts_to_image(sample_pts_3d, ego2imgs)
+    WH = torch.tensor([[[[(W-1) * div, (H-1) * div]]]], device=ego2imgs.device,
+                      dtype=ego2imgs.dtype)
+    uv_norm = (2.0 * (uvs / WH) - 1.0)
+    valid_mem = (z[:, :, 0] > 0).reshape(ego2imgs.shape[0], Z, Y, X).float()
+    uv_norm = uv_norm.reshape(ego2imgs.shape[0], -1, X, 2)
+
+    return uv_norm, valid_mem
 
 def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=None, mask=None, batch_dict=None, image_crop_config=None):
-    B, C, H, W = rgb_camBX[:, 0].shape
-    view_num = batch_dict['ego2imgs'].shape[1]
-    # print(ShowDataStruct("batch_dict", batch_dict))
-
-    ego2imgs = batch_dict["ego2imgs"]
     div = 8
-    a = torch.zeros([B, C, Z, Y, X], dtype = torch.float, device = rgb_camBX.device)
-
-    WH = torch.tensor([[[[(W-1) * div, (H-1) * div]]]], device=rgb_camBX.device,
-                      dtype=rgb_camBX.dtype)
-    
-    xyz_camAX = xyz_camAX.to(rgb_camBX.device).repeat(
-        rgb_camBX.shape[1], 1, 1, 1)
 
     bev_feature_batch = []
-    for i in range(ego2imgs.shape[0]):
-        xyz_camA = xyz_camAX.clone()
+    for i in range(rgb_camBX.shape[0]):
         rgb_camB = rgb_camBX[i]
         V, C, H, W = list(rgb_camB.shape)
-        xy_pixB1, z = project_ego_pts_to_image(xyz_camA, ego2imgs[i])
-        uv_norm = (2.0 * (xy_pixB1 / WH) - 1.0)
-        valid_mem = (z[:, :, 0] > 0).reshape(V, 1, Z, Y, X).float()
+        if torch.onnx.is_in_onnx_export():
+            vt_grid, vt_grid_valid = batch_dict["vt_grid"], batch_dict["vt_grid_valid"]
+        else:
+            vt_grid, vt_grid_valid = GetProjectGridByEgo2Imgs(
+                batch_dict["ego2imgs"][i], H, W, div, Z, Y, X, xyz_camAX.to(rgb_camBX.device).clone())
+        # print(ShowDataStruct("vt_grid", vt_grid))
+        # print(ShowDataStruct("vt_grid_valid", vt_grid_valid))
+        
+        vt_grid_valid = vt_grid_valid.unsqueeze(1)
         values = F.grid_sample(
-            rgb_camB, uv_norm.float(), align_corners=False, padding_mode='zeros')
+            rgb_camB, vt_grid.float(), align_corners=False, padding_mode='zeros')
         values = values.view(V, C, Z, Y, X)
-        bev_feature_batch.append((values * valid_mem).sum(0))
+        bev_feature_batch.append((values * vt_grid_valid).sum(0))
     a = torch.stack(bev_feature_batch, dim = 0)
     return a
 

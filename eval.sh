@@ -10,6 +10,7 @@ pip install pandas
 pip install terminaltables
 pip install similaritymeasures
 pip install matplotlib
+pip install pyquaternion
 
 echo "[READ GLOBAL ENV VAR]:"
 airflow_key="gpal_neural_network_one_node_traning_job_on_airflow"
@@ -64,6 +65,7 @@ then
     tasks=driving_bev_dyn 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250925_16_31_04/checkpoint/epoch=1-step=11000_checkpoint.pth
     onnx_path="workspace/20250927_12_39_05/checkpoint/epoch=1-step=11000_checkpoint_sim.onnx"
+    calib_data_save_path="None"  
     config=configs_for_develop/driving_bev_dyn_config.yaml
 else 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth
@@ -74,5 +76,5 @@ fi
 echo load_from=$load_from
 echo config=$config
 
-# python3 eval.py --load_from $load_from --onnx_path $onnx_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
-python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+python3 eval.py --load_from $load_from --onnx_path $onnx_path  --calib_data_save_path $calib_data_save_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+# python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config

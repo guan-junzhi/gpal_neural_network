@@ -34,6 +34,7 @@ from pyquaternion import Quaternion
 import torch.nn.functional as F
 import scipy
 from torchvision import transforms as T
+from gpal_lightning.neural_network.network_modules.gpnet_deploy import DistGridMap
 
 
 def read_img(files_img, image_resize=[360, 640, 3]):
@@ -771,14 +772,29 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 if self.phase != const.PHASE_TRAINING:
                     input_dict[f'origin_images_input{view_idx}'] = current_img.astype(
                         np.float32).copy()
-                    current_img = cv2.resize(current_img, self.image_resize[::-1])
-                    current_img = current_img[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
-
-                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
-                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
-
-                current_img = cv2.undistort(
-                    current_img, calib_intrin, calib_dist, calib_intrin)
+                    # current_img2 = cv2.undistort(
+                    #     current_img, calib_intrin, calib_dist, calib_intrin)
+                    # current_img2 = cv2.resize(current_img2, self.image_resize[::-1])
+                    # current_img2 = current_img2[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+                    img_grid = DistGridMap(current_img.shape[1],
+                                            current_img.shape[0],
+                                            calib_dist,
+                                                calib_intrin,
+                                                int(self.img_crop_dict["IMAGE_RESIZE"][1]),
+                                                int(self.img_crop_dict["IMAGE_RESIZE"][0]),
+                                                int(self.img_crop_dict["IMAGE_CROP_H_LEN"]),
+                                                int(self.img_crop_dict["CROP_HeSai_ID4"]
+                                                    ["CROP_START"][view_idx]),
+                                                norm = False).astype(np.float32)
+                    
+                    current_img = cv2.remap(current_img, img_grid[...,0], img_grid[...,1], 
+                        interpolation = cv2.INTER_NEAREST)
+                    calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
+                    calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
+                else:
+                    calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
+                    calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
+                    current_img = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
 
                 if self.phase == const.PHASE_TRAINING:
                     current_img = torch.from_numpy(current_img).unsqueeze(

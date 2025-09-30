@@ -53,6 +53,8 @@ class ArgumentParserHelper:
             "--seed", type=int, help="fix the random seed of the job.")
         cls._model_parser.add_argument(
             "--vis", type=bool, default=False)
+        cls._model_parser.add_argument(
+            "--calib_data_save_path", type=str, default=None)
 
     @staticmethod
     def _argument_check(args):
