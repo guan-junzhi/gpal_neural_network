@@ -47,7 +47,8 @@ class GpNetDeploy(GpNet):
             collate_fn: Callable = gpal_collate,
     ):
         super().__init__(global_config, tasks, automatic_optimization, collate_fn)
-        self.session = HBRuntime(global_config.onnx_path)
+        self.global_config = global_config
+        self.session = HBRuntime(self.global_config.onnx_path)
         self.output_names = self.session.output_names
 
         self.model_file = global_config.onnx_path
@@ -131,7 +132,7 @@ class GpNetDeploy(GpNet):
             #         )
                     
             #         np.save(os.path.join(self.calib_data_path, k, f'{curr_time_stamp}.npy'), v)
-            
+            self.session = HBRuntime(self.global_config.onnx_path)
             outputs = self.session.run(self.output_names, inputs_dict)
             for k, o in zip(batch_ret["Points_Loss"], outputs):
                 batch_ret["Points_Loss"][k].append(o)
