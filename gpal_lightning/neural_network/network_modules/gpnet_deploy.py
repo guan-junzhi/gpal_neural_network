@@ -16,8 +16,7 @@ from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.models.transformers.od_view_transform import GetProjectGridByEgo2Imgs
 
-global cnt 
-cnt = 0
+
 def DistGridMap(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn):
     ws = np.linspace(-1.0, 1.0, src_w,
                      endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
@@ -43,6 +42,8 @@ class GpNetDeploy(GpNet):
     ):
         super().__init__(global_config, tasks, automatic_optimization, collate_fn)
         self.session = ort.InferenceSession(global_config.onnx_path)
+        
+        self.calib_data_cnt = 0
 
     def forward_one_DRIVING_BEV_DYN(self, x, calib, metadata):
         batch_ret = {
@@ -103,16 +104,13 @@ class GpNetDeploy(GpNet):
             inputs_dict.update(
                 {"vt_grid": vt_grid.float().detach().cpu().numpy(), "vt_grid_valid": vt_grid_valid.float().detach().cpu().numpy()})
             # print(ShowDataStruct("inputs_dict", inputs_dict))
-            global cnt
-            breakpoint()
-            np.savetxt(f'vt_grid_valid.txt', vt_grid_valid.float().detach().cpu().numpy().flatten())
-            for k in inputs_dict:
-                save_input_path = f'{save_path}/{k}/{cnt}.npy'
-                os.makedirs(os.path.dirname(save_input_path), exist_ok=True)
-                np.save(save_input_path, inputs_dict[k])
-            cnt+=1
-            if cnt > 200:
-                quit()
+            if self.global_config.calib_data_save_path != "None":
+                for k in inputs_dict:
+                    single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
+                    os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
+                    np.save(single_calib_data_save_path, inputs_dict[k])
+                self.calib_data_cnt+=1
+
             outputs = self.session.run(None, inputs_dict)
             for k, o in zip(batch_ret["Points_Loss"], outputs):
                 batch_ret["Points_Loss"][k].append(o)
