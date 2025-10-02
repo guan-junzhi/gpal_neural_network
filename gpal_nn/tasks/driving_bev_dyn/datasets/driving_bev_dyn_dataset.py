@@ -838,7 +838,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             for key in ["intrinsic", "cam_dist", "extrinsic"]:
                 data_dict_ret["calib"][key] = data_dict[key]
-            data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
+            # data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
             data_dict_ret['calib']["img_shapes"] = np.stack(
                 [np.array(list(img.shape)) for img in data_dict_ret["image"].values()], axis=0)
             data_dict_ret['calib']["bev_real2aug"] = np.eye(4, dtype=np.float32)

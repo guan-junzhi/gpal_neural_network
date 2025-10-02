@@ -104,6 +104,8 @@ def Draw3DObjectsOnImage(img, objects, intrin, extrin, dist, color):
 class DRIVING_BEV_DYNTask(BaseTask):
     def __init__(self, global_config, task_config, name):
         super().__init__(global_config, task_config, name, None)
+        self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
+
         pass
 
     def GetVis(self, imgs, preds, gts, metadata, calib, idx):
@@ -127,11 +129,11 @@ class DRIVING_BEV_DYNTask(BaseTask):
                 calib_intrin = copy.deepcopy(calib["intrinsic"][idx][cam_idx]).detach().cpu().numpy()
                 calib_extrin = copy.deepcopy(calib["extrinsic"][idx][cam_idx]).detach().cpu().numpy()
                 calib_dist = copy.deepcopy(calib["cam_dist"][idx][cam_idx]).detach().cpu().numpy()
-                img_crop_dict = copy.deepcopy(calib["img_crop_dict"])
+                img_crop_dict = copy.deepcopy(self.image_crop_config)
                 img = (imgs[cam_name][idx].detach().cpu().numpy().transpose(
                     1, 2, 0) * 254).astype(np.uint8)
-                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx][idx])
-                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx][idx])
+                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx])
+                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx])
                 calib_dist *= 0.0
                 img = cv2.undistort(img, calib_intrin, calib_dist, calib_intrin)
 
