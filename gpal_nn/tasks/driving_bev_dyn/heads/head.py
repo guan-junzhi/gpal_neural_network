@@ -20,7 +20,7 @@ class SeqFeatureFuser(nn.Module):
             self.layers_config["in_channels"], self.layers_config["out_channels"], kernel_size=3, stride=1, padding=1, bias=False
         ), 
         nn.BatchNorm2d(self.layers_config["out_channels"]), nn.ReLU(True))
-        
+
     def forward(self, prev_feats, cur_feats, cur2prev):
         x = torch.cat([cur_feats, cur_feats], dim = 1)
         return self.conv_fuser(x)
@@ -50,7 +50,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
             self.head["center_head"].load_state_dict(state_dict, strict)
         else:
             for head_name, head in self.head.items():
-                state_dict_sub = {k.replace(f"{head_name}.", ""): state_dict[k]
+                state_dict_sub = {k.replace(f"{head_name}.", "", 1): state_dict[k]
                                 for k in state_dict if head_name in k}
                 head.load_state_dict(state_dict_sub, strict)
 
