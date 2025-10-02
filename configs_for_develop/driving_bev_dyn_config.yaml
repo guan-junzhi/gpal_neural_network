@@ -1,4 +1,4 @@
-image_per_gpu: 32
+image_per_gpu: 30
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 60000
@@ -34,7 +34,7 @@ Necks:
     # freeze: all
     layers_config:
       conv_channels: [128, 256, 512]
-      out_channel: 256
+      out_channel: 128
       use_relu: true
       drop_smooth_conv: true
 

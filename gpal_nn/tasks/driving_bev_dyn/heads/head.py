@@ -33,8 +33,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.is_track_task = True  # 区分当前是否是Track任务
         self.head_conv = 64
 
-        self.fuser_config = {"in_channels": 2048, "out_channels": 1024}
-        self.head_config = {"in_channels": 1024,
+        self.fuser_config = {"in_channels": 1024, "out_channels": 512}
+        self.head_config = {"in_channels": 512,
                             "num_stages": 6, "out_channels": 21, "upsample": 4}
 
         self.feature_bank = None
