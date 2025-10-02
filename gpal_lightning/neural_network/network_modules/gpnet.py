@@ -417,7 +417,8 @@ class GpNet(LightningModule):
             actual_lr = self.learning_rate
 
         # print(ShowDataStruct("batch", batch))
-
+        for ele_i, ele in enumerate(batch['meta'][:3]):
+            print(f"{ele_i} {ele['clip_id']} {ele['frame_id']} {ele['frame_num']}")
         time_dp.Duration("prepare", "begin")
 
         optimizer.zero_grad()

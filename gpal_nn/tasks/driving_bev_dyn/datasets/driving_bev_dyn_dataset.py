@@ -1,6 +1,7 @@
 
 import copy
 from multiprocessing import Pool
+import pickle as pkl
 import random
 import os
 import cv2
@@ -35,7 +36,7 @@ import torch.nn.functional as F
 import scipy
 from torchvision import transforms as T
 from gpal_lightning.utils.deploy_utils import DistGridMap
-
+from gpal_lightning.data.dataloader_helpers.clip_sampler import DatalistByclip
 
 def read_img(files_img, image_resize=[360, 640, 3]):
     # try:
@@ -408,6 +409,36 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             self.rank_local = 0
 
         self.world_data_list = self.include_fusion_data(self.phase)
+
+    def DistributeByClip(self, datalist, world_size, length_lim=15, rank_curr=0):
+        epoch_len = len(datalist) // world_size
+        datalist_by_clip = DatalistByclip(datalist, "sequence_name")
+        clip_key_list = [k for k in datalist_by_clip if len(
+            datalist_by_clip[k]) > length_lim]
+        res_clip_n_1 = []
+        while len(res_clip_n_1) < (world_size - 1):
+            res_clip_n_1 += clip_key_list[:world_size - 1 - len(res_clip_n_1)]
+        clip_key_list += res_clip_n_1
+
+        clip_keys_per_rank = len(clip_key_list) // world_size
+        
+        start_index = rank_curr * clip_keys_per_rank
+        end_index = start_index + clip_keys_per_rank
+        clip_keys_rank = pkl.loads(pkl.dumps(
+            clip_key_list[rank_curr::world_size][:clip_keys_per_rank]))
+
+        dataset = [ele for ele in datalist if ele["sequence_name"] in clip_keys_rank]
+        return dataset
+
+    def _distribute_data(self):
+        try:
+            rank_curr = distributed.get_rank()
+            world_size = distributed.get_world_size()
+        except (RuntimeError, AssertionError):
+            rank_curr = 0
+            world_size = 1
+        
+        return self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=15, rank_curr=rank_curr)
 
     def __len__(self):
         return len(self.dataset)
