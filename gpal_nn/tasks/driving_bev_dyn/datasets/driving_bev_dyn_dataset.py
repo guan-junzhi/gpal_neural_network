@@ -888,9 +888,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
-            data_dict_ret['meta']['img_path'] = img_path
+            # data_dict_ret['meta']['img_path'] = img_path
             frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
             data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
+            data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
             data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
             data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt

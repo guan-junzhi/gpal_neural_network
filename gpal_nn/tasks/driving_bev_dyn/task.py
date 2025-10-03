@@ -162,7 +162,9 @@ class DRIVING_BEV_DYNTask(BaseTask):
                         fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
             cv2.putText(vis_draw1, metadata[idx]['clip_id'], (50, 60),
             fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
-            cv2.putText(vis_draw1, '/'.join(metadata[idx]['img_path']['img_front_120'].split('/')[-4:]), (50, 90),
+            # cv2.putText(vis_draw1, '/'.join(metadata[idx]['img_path']['img_front_120'].split('/')[-4:]), (50, 90),
+            # fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
+            cv2.putText(vis_draw1, metadata[idx]['timestamp'], (50, 90),
             fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
 
 
