@@ -34,6 +34,12 @@ class BaseMapLossCost(nn.Module):
             alpha=0.25,
             loss_weight=cls_loss_weight,
         )
+        self.centerline_type_loss = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight,
+        )
         self.keypoint_cls_loss = FocalLoss(
             use_sigmoid=True,
             gamma=2.0,
@@ -54,7 +60,7 @@ class BaseMapLossCost(nn.Module):
             loss_weight=cls_loss_weight,
             reduction="none"
         )
-        self.centerline_type_loss = FocalLoss(
+        self.centerline_type_loss2 = FocalLoss(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
@@ -274,7 +280,7 @@ class BaseMapLossCost(nn.Module):
         centerline_type_valid_mask = centerline_type_gt >= 0
         centerline_type_gt_valid = torch.where(centerline_type_valid_mask, centerline_type_gt, torch.zeros_like(centerline_type_gt))
         centerline_type_weight = centerline_type_weight * centerline_type_valid_mask[:, None]
-        centerline_type_loss = self.centerline_type_loss(centerline_type_pred, centerline_type_gt_valid, weight=centerline_type_weight, avg_factor=1)
+        centerline_type_loss = self.centerline_type_loss2(centerline_type_pred, centerline_type_gt_valid, weight=centerline_type_weight, avg_factor=1)
 
         if is_centerline:
             # keypoint_cls_gt为0，表示不是关键点，要把值改为1才能适用focal_loss
