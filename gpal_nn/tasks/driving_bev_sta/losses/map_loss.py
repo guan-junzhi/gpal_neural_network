@@ -122,8 +122,15 @@ class BaseMapLossCost(nn.Module):
                 pred_to_gt_index).float() / len(gt_order))
 
         pred_mask_all = torch.cat(pred_mask_all).bool()
-        gt_index_all = torch.cat(gt_index_all).long() - 1
-        gt_order_idx_all = torch.cat(gt_order_idx_all).long()
+        if len(gt_index_all) == 0:
+            # 若为空，创建空张量（注意设备要与其他张量一致，这里用 bbox_pred 的设备）
+            gt_index_all = torch.tensor([], dtype=torch.long, device=bbox_pred.device) - 1
+        else:
+            gt_index_all = torch.cat(gt_index_all).long() - 1
+        if len(gt_order_idx_all) == 0:
+            gt_order_idx_all = torch.tensor([], dtype=torch.long, device=bbox_pred.device)
+        else:
+            gt_order_idx_all = torch.cat(gt_order_idx_all).long()
         avg_factor = torch.cat(avg_factor).float()
         pred_to_gt_label_all = torch.cat(pred_to_gt_label_all).long()
 
@@ -263,20 +270,19 @@ class BaseMapLossCost(nn.Module):
                                         normalized_points_gt).sum() * self.pts_l1_loss_weight
         points_dir_loss = self.pts_dir_loss(
             denormalized_points_pred, points_gt).sum() * self.pts_dir_loss_weight
+        centerline_type_weight = torch.ones_like(centerline_type_pred)
+        centerline_type_valid_mask = centerline_type_gt >= 0
+        centerline_type_gt_valid = torch.where(centerline_type_valid_mask, centerline_type_gt, torch.zeros_like(centerline_type_gt))
+        centerline_type_weight = centerline_type_weight * centerline_type_valid_mask[:, None]
+        centerline_type_loss = self.centerline_type_loss(centerline_type_pred, centerline_type_gt_valid, weight=centerline_type_weight, avg_factor=1)
 
         if is_centerline:
             # keypoint_cls_gt为0，表示不是关键点，要把值改为1才能适用focal_loss
-            centerline_type_weight = torch.ones_like(centerline_type_pred)
-            centerline_type_valid_mask = centerline_type_gt >= 0
-            centerline_type_gt_valid = torch.where(centerline_type_valid_mask, centerline_type_gt, torch.zeros_like(centerline_type_gt))
-            centerline_type_weight = centerline_type_weight * centerline_type_valid_mask[:, None]
-            centerline_type_loss = self.centerline_type_loss(centerline_type_pred, centerline_type_gt_valid, weight=centerline_type_weight, avg_factor=1)
             keypoint_cls_loss = self.keypoint_cls_loss2(
                 keypoint_cls_pred, (1 - keypoint_cls_gt), avg_factor=1)
             keypoint_reg_loss = (self.keypoint_reg_loss(
                 keypoint_reg_pred, keypoint_reg_gt[:, None]) * keypoint_cls_gt[:, None]).sum() * self.pts_l1_loss_weight
         else:
-            centerline_type_loss = torch.zeros_like(centerline_type_pred)
             keypoint_cls_loss = torch.zeros_like(keypoint_cls_pred)
             keypoint_reg_loss = torch.zeros_like(keypoint_reg_pred).sum()
 

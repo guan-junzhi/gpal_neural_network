@@ -203,7 +203,7 @@ class MapInstanceDetectorHead(nn.Module):
         )
 
         centerline_type_branch = nn.Sequential(
-            Linear(self.embed_dims, self.shape_type_num)
+            Linear(self.embed_dims, self.centerline_type_num)
         )
 
         keypoint_cls_branch = nn.Sequential(
