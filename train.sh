@@ -14,7 +14,7 @@ nvidia-smi
 free -m
 
 echo "[READ GLOBAL ENV VAR]:"
-airflow_key="lane_detection_one_node_traning_job_on_airflow"
+airflow_key="gpal_neural_network_one_node_traning_job_on_airflow"
 echo "AIRFLOW_CTX_DAG_ID=$AIRFLOW_CTX_DAG_ID"
 echo "airflow_key=$airflow_key"
 if [[ "$TASK_IN_AIRFLOW" == "1" ]];

@@ -1,7 +1,7 @@
 image_per_gpu: 32
 workers_per_gpu: 8
 skip_sanity_check: true
-max_iterations: 30000
+max_iterations: 60000
 save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
@@ -12,7 +12,7 @@ Train:
   visualize_every: 200
   max_visu_img_num: 10
   optimizer: {type: AdamW, lr: 3.0e-04, weight_decay: 1.0e-06}
-  lr_scheduler: {type: CosineAnnealingLR, T_max: 30000}
+  lr_scheduler: {type: CosineAnnealingLR, T_max: 60000}
   # optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   # lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
   #   after_scheduler: CosineAnnealingLR, T_max: 30000}
