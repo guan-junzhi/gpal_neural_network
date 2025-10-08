@@ -108,7 +108,7 @@ Tasks:
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["0911_normal_train_keys"],
+          pkl_infos: ["1004_train_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           # in_shape: [432, 768],
           in_shape: [540, 960],
@@ -123,7 +123,7 @@ Tasks:
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
           cut_start_h: 28,
-          lmdb_path: 'static_data_lmdb_0911',
+          lmdb_path: 'train_lmdb_1004',
           ratio: 200
         }
       - { dataset_name: 'gpal_large_kappa', 
@@ -131,7 +131,7 @@ Tasks:
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["0911_large_kappa_train_keys"],
+          pkl_infos: ["1004_large_kappa_train_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
@@ -145,7 +145,7 @@ Tasks:
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
           cut_start_h: 28,
-          lmdb_path: 'static_data_lmdb_0911',
+          lmdb_path: 'train_lmdb_1004',
           ratio: 50
         }
       - { dataset_name: 'gpal_split_merge', 
@@ -153,7 +153,7 @@ Tasks:
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["0911_split_marge_train_keys"],
+          pkl_infos: ["1004_split_merge_train_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
@@ -167,15 +167,15 @@ Tasks:
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
           cut_start_h: 28,
-          lmdb_path: 'static_data_lmdb_0911',
+          lmdb_path: 'train_lmdb_1004',
           ratio: 30
         }
-      - { dataset_name: 'gpal_ego_merge', 
+      - { dataset_name: 'gpal_ego_split_merge', 
           # root_dir:  "../lane_data",
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["0911_ego_merge_train_keys"],
+          pkl_infos: ["1004_ego_split_train_keys", "1004_ego_merge_train_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
@@ -189,15 +189,15 @@ Tasks:
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
           cut_start_h: 28,
-          lmdb_path: 'static_data_lmdb_0911',
-          ratio: 50
+          lmdb_path: 'train_lmdb_1004',
+          ratio: 60
         }
-      - { dataset_name: 'gpal_ego_split', 
+      - { dataset_name: 'gpal_ego_split_merge_large_kappa', 
           # root_dir:  "../lane_data",
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["0911_ego_split_train_keys"],
+          pkl_infos: ["1004_ego_merge_large_kappa_train_keys", "1004_ego_split_large_kappa_train_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
@@ -211,7 +211,7 @@ Tasks:
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
           cut_start_h: 28,
-          lmdb_path: 'static_data_lmdb_0911',
+          lmdb_path: 'train_lmdb_1004',
           ratio: 50,
         }
       - { dataset_name: 'gpal_doubleline_solid_dash', 
@@ -219,7 +219,7 @@ Tasks:
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["filtered_leftsolid_0911_normal_train_keys", "filtered_rightsolid_0911_normal_train_keys"],
+          pkl_infos: ["1004_double_left_solid_keys", "1004_double_right_solid_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
@@ -233,7 +233,29 @@ Tasks:
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
           cut_start_h: 28,
-          lmdb_path: 'static_data_lmdb_0911',
+          lmdb_path: 'train_lmdb_1004',
+          ratio: 30,
+        }
+      - { dataset_name: 'gpal_ego_doubleline_solid_dash', 
+          # root_dir:  "../lane_data",
+          root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
+          # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
+          #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
+          pkl_infos: ["1004_near_double_left_solid_keys", "1004_near_double_right_solid_keys"],
+          pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
+          in_shape: [540, 960],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: False,
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          rpy_aug: True, 
+          bev_aug: True,
+          rpy_aug_deg: [3,3,3], 
+          bev_aug_deg: 1,
+          cut_start_h: 28,
+          lmdb_path: 'train_lmdb_1004',
           ratio: 30,
         }
       - { dataset_name: 'gpal_fishbone_solid_dash', 
@@ -241,7 +263,7 @@ Tasks:
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["filtered_fishbone_dash_0911_normal_train_keys", "filtered_fishbone_solid_0911_normal_train_keys"],
+          pkl_infos: ["1004_fishbone_solid_keys", "1004_fishbone_dash_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
@@ -255,7 +277,7 @@ Tasks:
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
           cut_start_h: 28,
-          lmdb_path: 'static_data_lmdb_0911',
+          lmdb_path: 'train_lmdb_1004',
           ratio: 30,
         }
       - { dataset_name: 'gpal_emergency', 
@@ -263,7 +285,7 @@ Tasks:
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
           #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
-          pkl_infos: ["filtered_emergency_0911_normal_train_keys"],
+          pkl_infos: ["1004_emergency_lane_keys"],
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           in_shape: [540, 960],
           # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
@@ -277,7 +299,7 @@ Tasks:
           rpy_aug_deg: [3,3,3], 
           bev_aug_deg: 1,
           cut_start_h: 28,
-          lmdb_path: 'static_data_lmdb_0911',
+          lmdb_path: 'train_lmdb_1004',
           ratio: 30,
         }
       validation:
