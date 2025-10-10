@@ -151,7 +151,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
 
     def forward(self, x: torch.Tensor, calib=None, metadata=None) -> torch.Tensor:
-        print(ShowDataStruct("X",x))
+        # print(ShowDataStruct("X",x))
         if (self.feature_bank == None):
             self.feature_bank = torch.zeros_like(x).detach()
         B = len(metadata)
