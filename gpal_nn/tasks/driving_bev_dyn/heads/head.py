@@ -155,10 +155,10 @@ class DRIVING_BEV_DYNHead(BaseHead):
         if (self.feature_zeros == None) or (self.feature_bank == None):
             self.feature_zeros = torch.zeros_like(x).detach().clone()
             self.feature_bank = torch.zeros_like(x).detach().clone()
-
+        B = len(metadata)
         seq_flag, dts = self.SeqCheck(self.prev_metas, metadata)
         rts = self.GetCur2Prev(metadata, dts)
-        feats_shifted = self.shift_feature(self.xyz_camA.repeat(8, 1, 1, 1).to(x.device).clone(), rts.to(x.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
+        feats_shifted = self.shift_feature(self.xyz_camA.repeat(B, 1, 1, 1).to(x.device).clone(), rts.to(x.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
         seq_flag = seq_flag.to(x.device).float().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
 
         prev_feats = feats_shifted.clone() * seq_flag + (1-seq_flag) * self.feature_zeros
