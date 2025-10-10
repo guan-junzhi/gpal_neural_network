@@ -36,8 +36,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.is_track_task = True  # 区分当前是否是Track任务
         self.head_conv = 64
 
-        self.fuser_config = {"in_channels": 1024, "out_channels": 512}
-        self.head_config = {"in_channels": 512,
+        self.fuser_config = {"in_channels": 256, "out_channels": 128}
+        self.head_config = {"in_channels": 128,
                             "num_stages": 6, "out_channels": 21, "upsample": 4}
 
         self.feature_bank = None
@@ -151,6 +151,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
 
     def forward(self, x: torch.Tensor, calib=None, metadata=None) -> torch.Tensor:
+        print(ShowDataStruct("X",x))
         if (self.feature_bank == None):
             self.feature_bank = torch.zeros_like(x).detach()
         B = len(metadata)

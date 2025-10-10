@@ -105,11 +105,12 @@ class ODViewTransformer(BaseModule):
 
     def __init__(self, global_config, transformer_config, freeze_module: bool = False):
         super(ODViewTransformer, self).__init__(global_config)
+        z_layer_num = 4
         self.input_source = transformer_config["input_source"]
         self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
         self.voxel_size[2] = (self.point_cloud_range[5] -
-                              self.point_cloud_range[2])/4
+                              self.point_cloud_range[2])/z_layer_num
 
         self.grid_size = [int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
                           int((
@@ -127,6 +128,13 @@ class ODViewTransformer(BaseModule):
 
         self.xyz_camA = xyz_camA
         self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
+
+        self.conv_out = nn.Sequential(
+            nn.Conv2d(
+                transformer_config["in_channels"] * z_layer_num, transformer_config["out_channels"], kernel_size=1, stride=1, padding=0, bias=False
+            ),
+            nn.BatchNorm2d(transformer_config["out_channels"]), nn.ReLU(True))
+
 
     def forward(
         self,
@@ -165,6 +173,7 @@ class ODViewTransformer(BaseModule):
         feat_bev = feat_bev.view(
             B, -1, H, W)
 
+        feat_bev = self.conv_out(feat_bev)
         # exit(1)
         return feat_bev
 
