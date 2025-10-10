@@ -41,7 +41,6 @@ class DRIVING_BEV_DYNHead(BaseHead):
                             "num_stages": 6, "out_channels": 21, "upsample": 4}
 
         self.feature_bank = None
-        self.feature_zeros = None
         self.prev_metas = None
         self.cnt = 0
         
@@ -152,16 +151,16 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
 
     def forward(self, x: torch.Tensor, calib=None, metadata=None) -> torch.Tensor:
-        if (self.feature_zeros == None) or (self.feature_bank == None):
-            self.feature_zeros = torch.zeros_like(x).detach().clone()
-            self.feature_bank = torch.zeros_like(x).detach().clone()
+        if (self.feature_bank == None):
+            self.feature_bank = torch.zeros_like(x).detach()
         B = len(metadata)
         seq_flag, dts = self.SeqCheck(self.prev_metas, metadata)
         rts = self.GetCur2Prev(metadata, dts)
         feats_shifted = self.shift_feature(self.xyz_camA.repeat(B, 1, 1, 1).to(x.device).clone(), rts.to(x.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
         seq_flag = seq_flag.to(x.device).float().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
 
-        prev_feats = feats_shifted.clone() * seq_flag + (1-seq_flag) * self.feature_zeros
+        prev_feats = feats_shifted.clone() * seq_flag
+
         self.feature_bank = x.detach().clone()
         self.prev_metas = copy.deepcopy(metadata)
 
