@@ -36,7 +36,7 @@ shape_type_map = {
     "double_left_solid": 2,
     "double_right_soild": 3,  # 兼容标注规范拼写错误
     "double_right_solid": 3,
-    "thick_dashed": 1,
+    "thick_dashed": 4,
     "wide_solid": 0,
     "colored_three_line": 0,
     "reversible_line": 0,
