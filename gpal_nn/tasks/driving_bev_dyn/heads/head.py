@@ -38,7 +38,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
         self.fuser_config = {"in_channels": 256, "out_channels": 128}
         self.head_config = {"in_channels": 128,
-                            "num_stages": 6, "out_channels": 21, "upsample": 4}
+                            "num_stages": 6, "out_channels": 21, "upsample": 8}
 
         self.feature_bank = None
         self.prev_metas = None
