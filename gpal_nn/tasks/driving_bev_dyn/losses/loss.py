@@ -187,6 +187,10 @@ class DRIVING_BEV_DYNLoss(BaseLoss):
 
         #     print(gt["gt_curr_indices_center"])
 
+        if "with_postprocess" in preds[0]:
+            loss = {'total_loss': torch.tensor(0.0)}
+            return loss
+
         processed_gt = self.ProcessGt(trues, preds[0])
 
         loss = {}

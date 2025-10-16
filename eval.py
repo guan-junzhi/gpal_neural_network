@@ -2,6 +2,7 @@ from gpal_lightning import const
 from gpal_lightning.neural_network.runners.runner import Runner
 from gpal_lightning.neural_network.tasks.build_task import build_tasks
 from gpal_lightning.neural_network.network_modules.gpnet import GpNet
+from gpal_lightning.neural_network.network_modules.gpnet_deploy import GpNetDeploy
 
 from gpal_lightning.utils.load_global_config import load_global_config
 from gpal_lightning.utils.args_parser import ArgumentParserHelper
@@ -25,7 +26,10 @@ def evaluate():
                         phase="validation",
                         tasks_root="gpal_nn.tasks")
     print(tasks)
-    net = GpNet(global_config, tasks)
+    if global_config.onnx_path != None:
+        net = GpNetDeploy(global_config, tasks)
+    else:
+        net = GpNet(global_config, tasks)
 
     for t in tasks:
         if hasattr(t, 'callbacks'):

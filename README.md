@@ -56,6 +56,8 @@ tensorboard
 
     车道线评测: bash eval.sh 为了兼容正在迁移的工程,先不改
     APA评测: bash eval.sh parking_ipm_sta
+    OD评测：bash eval.sh driving_bev_dyn
+    od onnx评测：解注释onnx_path参数，然后bash eval.sh driving_bev_dyn
 
 
 ## 3. Deploy

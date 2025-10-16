@@ -132,10 +132,8 @@ class DRIVING_BEV_DYNTask(BaseTask):
                     1, 2, 0) * 254).astype(np.uint8)
                 calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx][idx])
                 calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx][idx])
+                calib_dist *= 0.0
                 img = cv2.undistort(img, calib_intrin, calib_dist, calib_intrin)
-
-
-                calib_dist *=0.0
 
                 gt_boxes = gts[idx]['gt_boxes']
                 img = Draw3DObjectsOnImage(

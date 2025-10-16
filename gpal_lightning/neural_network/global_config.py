@@ -118,6 +118,7 @@ class GlobalConfig:
         self.logging_level: str = "INFO"
         self.dump_json_during_validation: bool = True
         self.dump_calibset = False
+        self.onnx_path = None
 
     def _load_config(self):
         for key, val in self.config.items():

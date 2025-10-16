@@ -604,6 +604,14 @@ class GpNet(LightningModule):
             batch, batch_idx, task_dataloader_idx)
 
         data = batch["image"]
+
+        # import cv2
+        # import numpy as np
+        # for k in data:
+        #     for i, img_i in enumerate(data[k]):
+        #         cv2.imwrite(f"eval_imgs/eval_imgs_{i}_{k}_o.jpg", (img_i.permute(1,2,0) * 255).detach().cpu().numpy().astype(np.uint8))
+        # exit(1)
+
         if "points" in batch:
             data["points"] = batch.get("points", None)
         if "intrins" in batch:  # monodetpth
