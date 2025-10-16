@@ -501,7 +501,6 @@ def get_one_sample_statistics_rotated_3d_boxes_distance(
             o_e = abs(o_e)
             v_e = velocity_l2(pred_box[7:9], gt_box[8:10]) if pred_box.shape[0] > 7 and gt_box.shape[0] > 7 else 0.0  # AVE  v
 
-            print(pred_box[6:10], gt_box[6:10])
             dv = v_e
             
             ref_pt_error = cal_reference_point_from_gt_to_pred(box_gt=gt_box.reshape(1, -1), 
