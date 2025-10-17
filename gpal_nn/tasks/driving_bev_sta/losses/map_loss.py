@@ -34,6 +34,12 @@ class BaseMapLossCost(nn.Module):
             alpha=0.25,
             loss_weight=cls_loss_weight,
         )
+        self.centerline_type_loss = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight,
+        )
         self.keypoint_cls_loss = FocalLoss(
             use_sigmoid=True,
             gamma=2.0,
@@ -48,6 +54,13 @@ class BaseMapLossCost(nn.Module):
             reduction="none"
         )
         self.shape_type_loss2 = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight,
+            reduction="none"
+        )
+        self.centerline_type_loss2 = FocalLoss(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
@@ -78,9 +91,9 @@ class BaseMapLossCost(nn.Module):
                 self.output_group.append([group[0], (start_vec_idx, end_vec_idx)])
                 start_vec_idx = end_vec_idx
 
-    def loss_single_group(self, score_pred, bbox_pred, points_pred, shape_type_pred, \
+    def loss_single_group(self, score_pred, bbox_pred, points_pred, shape_type_pred, centerline_type_pred, \
                           keypoint_cls_pred, keypoint_reg_pred, \
-                          cls_gt, bbox_gt, points_gt, shape_types_gt, \
+                          cls_gt, bbox_gt, points_gt, shape_types_gt, centerline_type_gt, \
                            keypoint_cls_gt, keypoint_reg_gt, valid_masks, valid_lens, center_line_flags, is_centerline):
         loss_list = []
         avg_factor = []
@@ -91,7 +104,7 @@ class BaseMapLossCost(nn.Module):
         for b, l in enumerate(valid_lens):
             if l == 0:
                 if (center_line_flags is None) or (center_line_flags[b]):
-                    loss_list.append(self.no_gt_loss(score_pred[b], bbox_pred[b], points_pred[b], shape_type_pred[b], keypoint_cls_pred[b], keypoint_reg_pred[b]))
+                    loss_list.append(self.no_gt_loss(score_pred[b], bbox_pred[b], points_pred[b], shape_type_pred[b], centerline_type_pred[b], keypoint_cls_pred[b], keypoint_reg_pred[b]))
                 
                 pred_mask_all.append(torch.zeros_like(score_pred[0,:,0]))
                 avg_factor.append(torch.zeros_like(score_pred[0, :, 0]))
@@ -115,26 +128,35 @@ class BaseMapLossCost(nn.Module):
                 pred_to_gt_index).float() / len(gt_order))
 
         pred_mask_all = torch.cat(pred_mask_all).bool()
-        gt_index_all = torch.cat(gt_index_all).long() - 1
-        gt_order_idx_all = torch.cat(gt_order_idx_all).long()
+        if len(gt_index_all) == 0:
+            # 若为空，创建空张量（注意设备要与其他张量一致，这里用 bbox_pred 的设备）
+            gt_index_all = torch.tensor([], dtype=torch.long, device=bbox_pred.device) - 1
+        else:
+            gt_index_all = torch.cat(gt_index_all).long() - 1
+        if len(gt_order_idx_all) == 0:
+            gt_order_idx_all = torch.tensor([], dtype=torch.long, device=bbox_pred.device)
+        else:
+            gt_order_idx_all = torch.cat(gt_order_idx_all).long()
         avg_factor = torch.cat(avg_factor).float()
         pred_to_gt_label_all = torch.cat(pred_to_gt_label_all).long()
 
         _bbox_pred = bbox_pred.flatten(0,1)[pred_mask_all]
         _points_pred = points_pred.flatten(0, 1)[pred_mask_all]
         _shape_type_pred = shape_type_pred.flatten(0,1)[pred_mask_all]
+        _centerline_type_pred = centerline_type_pred.flatten(0,1)[pred_mask_all]
         _keypoint_cls_pred = keypoint_cls_pred.flatten(0,1)[pred_mask_all]
         _keypoint_reg_pred = keypoint_reg_pred.flatten(0,1)[pred_mask_all]
         _bbox_gt = bbox_gt.flatten(0,1)[gt_index_all]
         _points_gt = points_gt.flatten(0, 1)[gt_index_all, gt_order_idx_all]
         _shape_type_gt = shape_types_gt.flatten(0, 1)[gt_index_all]
+        _centerline_type_gt = centerline_type_gt.flatten(0, 1)[gt_index_all]
         _keypoint_cls_gt = keypoint_cls_gt.flatten(0, 1)[gt_index_all]
         _keypoint_reg_gt = keypoint_reg_gt.flatten(
             0, 1)[gt_index_all, gt_order_idx_all]
 
-        loss = self.loss_single(score_pred.flatten(0, 1), _bbox_pred, _points_pred, _shape_type_pred,
+        loss = self.loss_single(score_pred.flatten(0, 1), _bbox_pred, _points_pred, _shape_type_pred, _centerline_type_pred, 
                                   _keypoint_cls_pred, _keypoint_reg_pred,
-                                pred_to_gt_label_all, _bbox_gt, _points_gt, _shape_type_gt, \
+                                pred_to_gt_label_all, _bbox_gt, _points_gt, _shape_type_gt, _centerline_type_gt, \
                                 _keypoint_cls_gt, _keypoint_reg_gt, is_centerline)
 
 
@@ -142,12 +164,14 @@ class BaseMapLossCost(nn.Module):
         loss['loss_score'] = (loss['loss_score'] * avg_factor).sum()
         loss['loss_shape_type'] = (
             loss['loss_shape_type'] * avg_factor[pred_mask_all]).sum()
+        loss['loss_centerline_type'] = (
+            loss['loss_centerline_type'] * avg_factor[pred_mask_all]).sum()
         loss['loss_keypoint_cls'] = (
             loss['loss_keypoint_cls'] * avg_factor[pred_mask_all]).sum()
         loss_list.append(loss)
         return loss_list
 
-    def no_gt_loss(self, score_pred, bbox_pred, points_pred, shape_type_pred, keypoint_cls_pred, keypoint_reg_pred):
+    def no_gt_loss(self, score_pred, bbox_pred, points_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred):
         cls_gt = torch.zeros_like(score_pred)
         score_loss = self.cls_loss(score_pred, cls_gt, avg_factor=1)
         box_l1_loss = self.bbox_loss(bbox_pred, bbox_pred).sum() * self.l1_loss_weight
@@ -158,6 +182,7 @@ class BaseMapLossCost(nn.Module):
         points_dir_loss = self.pts_dir_loss(denormalized_points_pred,
                                             denormalized_points_pred).sum() * self.pts_dir_loss_weight
         shape_type_loss = self.shape_type_loss(shape_type_pred, shape_type_pred, weight=torch.zeros_like(shape_type_pred))
+        centerline_type_loss = self.centerline_type_loss(centerline_type_pred, centerline_type_pred, weight=torch.zeros_like(centerline_type_pred))
         keypoint_cls_loss = self.keypoint_cls_loss(keypoint_cls_pred, keypoint_cls_pred, weight=torch.zeros_like(keypoint_cls_pred))
         keypoint_reg_loss = self.keypoint_reg_loss(keypoint_reg_pred, keypoint_reg_pred).sum() * self.pts_l1_loss_weight
 
@@ -168,11 +193,12 @@ class BaseMapLossCost(nn.Module):
             "loss_points_l1": points_l1_loss,
             "loss_points_dir": points_dir_loss,
             "loss_shape_type": shape_type_loss,
+            "loss_centerline_type": centerline_type_loss,
             "loss_keypoint_cls": keypoint_cls_loss,
             "loss_keypoint_reg": keypoint_reg_loss,
         }
     def forward(self, pred_items, gt_items):
-        score_pred, bbox_pred, points_pred, shape_type_pred, keypoint_cls_pred, keypoint_reg_pred = pred_items
+        score_pred, bbox_pred, points_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred = pred_items
 
         total_loss_dict = {
             "loss_score": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
@@ -181,6 +207,7 @@ class BaseMapLossCost(nn.Module):
             "loss_points_l1": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
             "loss_points_dir": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
             "loss_shape_type": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
+            "loss_centerline_type": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
             "loss_keypoint_cls": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
             "loss_keypoint_reg": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
         }
@@ -191,6 +218,7 @@ class BaseMapLossCost(nn.Module):
             bbox_gt = gt_items[group_flag]["bboxes"]
             points_gt = gt_items[group_flag]["points"]
             shape_types_gt = gt_items[group_flag]["types"]
+            centerline_types_gt = gt_items[group_flag]["centerline_types"]
             keypoint_cls_gt = gt_items[group_flag]["keyp_cls"]
             keypoint_reg_gt = gt_items[group_flag]["keyp_reg"]
             valid_mask = gt_items[group_flag]["valid_mask"]
@@ -204,13 +232,14 @@ class BaseMapLossCost(nn.Module):
             cur_bbox_pred = bbox_pred[:, start_vec_idx:end_vec_idx]
             cur_points_pred = points_pred[:, start_vec_idx:end_vec_idx]
             cur_shape_type_pred = shape_type_pred[:, start_vec_idx:end_vec_idx]
+            cur_centerline_type_pred = centerline_type_pred[:, start_vec_idx:end_vec_idx]
             cur_keypoint_cls_pred = keypoint_cls_pred[:, start_vec_idx:end_vec_idx]
             cur_keypoint_reg_pred = keypoint_reg_pred[:, start_vec_idx:end_vec_idx]
 
             center_line_flags = center_line_flags if main_class_type_map["centerline"] in group[0] else None
-            loss_dict_list = self.loss_single_group(cur_score_pred, cur_bbox_pred, cur_points_pred, cur_shape_type_pred, \
+            loss_dict_list = self.loss_single_group(cur_score_pred, cur_bbox_pred, cur_points_pred, cur_shape_type_pred, cur_centerline_type_pred, \
                                                cur_keypoint_cls_pred, cur_keypoint_reg_pred, \
-                                               cls_gt, bbox_gt, points_gt, shape_types_gt, \
+                                               cls_gt, bbox_gt, points_gt, shape_types_gt, centerline_types_gt, \
                                                keypoint_cls_gt, keypoint_reg_gt, valid_mask, valid_len, center_line_flags, is_centerline)
 
             for loss_dict in loss_dict_list:
@@ -218,8 +247,8 @@ class BaseMapLossCost(nn.Module):
                     total_loss_dict[key] += loss_dict[key]
         return total_loss_dict
 
-    def loss_single(self, score_pred, bbox_pred, points_pred, shape_type_pred, keypoint_cls_pred, keypoint_reg_pred,
-                    cls_gt, bbox_gt, points_gt, shape_type_gt, keypoint_cls_gt, keypoint_reg_gt, is_centerline):
+    def loss_single(self, score_pred, bbox_pred, points_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred,
+                    cls_gt, bbox_gt, points_gt, shape_type_gt, centerline_type_gt, keypoint_cls_gt, keypoint_reg_gt, is_centerline):
 
         cls_weight = torch.ones_like(score_pred)
         cls_valid_mask = cls_gt >= 0
@@ -247,6 +276,11 @@ class BaseMapLossCost(nn.Module):
                                         normalized_points_gt).sum() * self.pts_l1_loss_weight
         points_dir_loss = self.pts_dir_loss(
             denormalized_points_pred, points_gt).sum() * self.pts_dir_loss_weight
+        centerline_type_weight = torch.ones_like(centerline_type_pred)
+        centerline_type_valid_mask = centerline_type_gt >= 0
+        centerline_type_gt_valid = torch.where(centerline_type_valid_mask, centerline_type_gt, torch.zeros_like(centerline_type_gt))
+        centerline_type_weight = centerline_type_weight * centerline_type_valid_mask[:, None]
+        centerline_type_loss = self.centerline_type_loss2(centerline_type_pred, centerline_type_gt_valid, weight=centerline_type_weight, avg_factor=1)
 
         if is_centerline:
             # keypoint_cls_gt为0，表示不是关键点，要把值改为1才能适用focal_loss
@@ -265,6 +299,7 @@ class BaseMapLossCost(nn.Module):
             "loss_points_l1": points_l1_loss,
             "loss_points_dir": points_dir_loss,
             "loss_shape_type": shape_type_loss,
+            "loss_centerline_type": centerline_type_loss,
             "loss_keypoint_cls": keypoint_cls_loss,
             "loss_keypoint_reg": keypoint_reg_loss,
         }

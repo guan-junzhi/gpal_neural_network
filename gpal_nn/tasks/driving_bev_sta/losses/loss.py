@@ -46,6 +46,7 @@ def pack_polyline_gt_points(data):
     annos = []
     classes = []
     shape_types = []
+    centerline_types = []
     is_split_merges = []
     keypoint_norms = []
     if 'points' in data['polylines']:
@@ -53,12 +54,14 @@ def pack_polyline_gt_points(data):
         polyline_num = len(data['polylines']['points'])
         shape_types.append(data['polylines']['shape_type'])
         classes.append(np.ones(len(data['polylines']['points'])) * main_class_type_map['lane_marking'])
+        centerline_types.append(np.ones(polyline_num) * (-1))
         is_split_merges.append(np.zeros(polyline_num, dtype=np.int32))
         keypoint_norms.append(np.array([0] * polyline_num, dtype=np.float32))
     if 'points' in data['edges']:
         annos.append(data['edges']['points'])
         edge_num = len(data['edges']['points'])
         shape_types.append(np.ones(edge_num) * (-1))
+        centerline_types.append(np.ones(edge_num) * (-1))
         classes.append(np.ones(edge_num) * main_class_type_map['edge'])
         is_split_merges.append(np.zeros(edge_num, dtype=np.int32))
         keypoint_norms.append(np.array([0] * edge_num, dtype=np.float32))
@@ -67,6 +70,7 @@ def pack_polyline_gt_points(data):
         annos.append(data['centerlines']['points'])
         centerline_num = len(data['centerlines']['points'])
         shape_types.append(np.ones(centerline_num) * (-1))
+        centerline_types.append(data['centerlines']['classes'])
         classes.append(np.ones(centerline_num) * main_class_type_map['centerline'])
         is_split_merges.append(np.array(data['centerlines']['is_split_merge'], dtype=np.int32))
         keypoint_norm = []
@@ -84,15 +88,16 @@ def pack_polyline_gt_points(data):
         annos = np.concatenate(annos, axis=0)
         classes = np.concatenate(classes, axis=0)
         shape_types = np.concatenate(shape_types, axis=0)
+        centerline_types = np.concatenate(centerline_types, axis=0)
         is_split_merges = np.concatenate(is_split_merges, axis=0)
         keypoint_norms = np.concatenate(keypoint_norms, axis=0)
-    return annos, classes, shape_types, is_split_merges, keypoint_norms
+    return annos, classes, shape_types, centerline_types, is_split_merges, keypoint_norms
 
 def lane_loss_computation(preds, trues, loss_func, centerline_dataset):
     all_cls_scores, all_bbox_pred, all_pts_pred, \
-        all_shape_types_pred, all_keypoint_classes_preds, all_keypoint_regs_pred = \
+        all_shape_types_pred, all_centerline_types_preds, all_keypoint_classes_preds, all_keypoint_regs_pred = \
         preds['all_cls_scores'], preds['all_bbox_preds'], preds['all_pts_preds'], \
-        preds['all_shape_types_preds'], preds['all_keypoint_classes_preds'], preds['all_keypoint_regs_preds']
+        preds['all_shape_types_preds'], preds['all_centerline_types_preds'], preds['all_keypoint_classes_preds'], preds['all_keypoint_regs_preds']
     num_iter, bs, _, pts_per_vector, _ = all_pts_pred.shape
     loss_list = list()
     for k in range(num_iter):
@@ -100,12 +105,12 @@ def lane_loss_computation(preds, trues, loss_func, centerline_dataset):
         time_dp = DetailProf()
         time_dp.Tic("begin")
 
-        score_pred, bbox_pred, pts_pred, shape_type_pred, \
-            keypoint_cls_pred, keypoint_reg_pred = all_cls_scores[k], all_bbox_pred[k], all_pts_pred[k], all_shape_types_pred[k], \
+        score_pred, bbox_pred, pts_pred, shape_type_pred, centerline_type_pred, \
+            keypoint_cls_pred, keypoint_reg_pred = all_cls_scores[k], all_bbox_pred[k], all_pts_pred[k], all_shape_types_pred[k], all_centerline_types_preds[k], \
             all_keypoint_classes_preds[k], all_keypoint_regs_pred[k]
         time_dp.Duration("lane_loss_computation_all_1", "begin")
         
-        stage_pred = [score_pred, bbox_pred, pts_pred, shape_type_pred, keypoint_cls_pred, keypoint_reg_pred]
+        stage_pred = [score_pred, bbox_pred, pts_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred]
         single_loss_dict = loss_func(stage_pred, trues)
 
         time_dp.Duration("lane_loss_computation_all_4",
@@ -147,9 +152,9 @@ def ProcessGt(trues, preds, centerline_dataset, output_group, max_ele_num=256):
     start_y = 16
     all_pts_pred = preds['all_pts_preds']
     num_iter, bs, _, pts_per_vector, _ = all_pts_pred.shape
-    gt_batched = {f"group_{idx}": {"valid_mask":[], "valid_len": [], "classes": [], "bboxes": [], "points": [], "types": [], "keyp_cls": [], "keyp_reg": [], "center_line_flag": []} for idx in range(len(output_group))}
+    gt_batched = {f"group_{idx}": {"valid_mask":[], "valid_len": [], "classes": [], "bboxes": [], "points": [], "types": [], "centerline_types": [],"keyp_cls": [], "keyp_reg": [], "center_line_flag": []} for idx in range(len(output_group))}
     for gt in trues:
-        annos, classes, shape_types, is_split_merges, keypoint_norms = pack_polyline_gt_points(gt)
+        annos, classes, shape_types, centerline_types, is_split_merges, keypoint_norms = pack_polyline_gt_points(gt)
         # gt ploylines to gt bboxes  [n, 4], [n, 20, 2]
         bboxes_gt, points_gt = transform_gt_box(annos, start_x, start_y,
                                                 num_pts_per_vec=pts_per_vector, y_first=False, device=all_pts_pred.device)
@@ -168,12 +173,14 @@ def ProcessGt(trues, preds, centerline_dataset, output_group, max_ele_num=256):
 
         if len(shape_types) == 0:
             shape_types = torch.zeros(0).to(all_pts_pred.device).long()
+            centerline_types = torch.zeros(0).to(all_pts_pred.device).long()
             keypoint_cls_gt = torch.zeros(0).to(all_pts_pred.device).long()
             keypoint_reg_gt = torch.zeros([0, 2]).to(
                 all_pts_pred.device).float()
             classes = torch.zeros(0).to(all_pts_pred.device).long()
         else:
             shape_types = torch.from_numpy(shape_types).to(all_pts_pred.device).long()
+            centerline_types = torch.from_numpy(centerline_types).to(all_pts_pred.device).long()
             keypoint_cls_gt = torch.from_numpy(keypoint_cls_gt).to(all_pts_pred.device).long()
             keypoint_reg_gt = torch.from_numpy(keypoint_reg_gt).to(all_pts_pred.device).float()
             classes = torch.from_numpy(classes).to(all_pts_pred.device).long()
@@ -192,6 +199,7 @@ def ProcessGt(trues, preds, centerline_dataset, output_group, max_ele_num=256):
             gt_batched[group_flag]["bboxes"].append(ExpandTensor(bboxes_gt[type_mask], max_ele_num))
             gt_batched[group_flag]["points"].append(ExpandTensor(points_gt[type_mask], max_ele_num))
             gt_batched[group_flag]["types"].append(ExpandTensor(shape_types[type_mask], max_ele_num))
+            gt_batched[group_flag]["centerline_types"].append(ExpandTensor(centerline_types[type_mask], max_ele_num))
             gt_batched[group_flag]["keyp_cls"].append(ExpandTensor(keypoint_cls_gt[type_mask], max_ele_num))
             gt_batched[group_flag]["keyp_reg"].append(ExpandTensor(keypoint_reg_gt[type_mask], max_ele_num))
             gt_batched[group_flag]["center_line_flag"].append(torch.tensor(gt['calib_type'] in centerline_dataset).to(all_pts_pred.device).long())
