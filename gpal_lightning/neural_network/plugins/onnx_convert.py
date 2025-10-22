@@ -111,20 +111,19 @@ class WrappedGpNet(GpNet):
         # print("input ", input)
         # pdb.set_trace()
         img = input["image"]
-        # fisheye_rear = img['fisheye_img_rear']
-        # fisheye_front = img['fisheye_img_front']
-        # fisheye_left = img['fisheye_img_left']
+        fisheye_rear = img['fisheye_img_rear']
+        fisheye_front = img['fisheye_img_front']
+        fisheye_left = img['fisheye_img_left']
         fisheye_right = img['fisheye_img_right']
-        print(fisheye_right.shape)
-        return fisheye_right
+       
+        grid_rear_and_front = input['grid_rear_and_front']
+        grid_left_and_right = input['grid_left_and_right']
+        print("grid_rear_and_front device ", grid_rear_and_front.device)
+
         mask_rear = input['mask_rear']
         mask_front = input['mask_front']
         mask_left = input['mask_left']
         mask_right = input['mask_right']
-
-        grid_rear_and_front = input['grid_rear_and_front']
-        grid_left_and_right = input['grid_left_and_right']
-        print("grid_rear_and_front device ", grid_rear_and_front.device)
         
         mask_rear = mask_rear.squeeze(0)
         mask_front = mask_front.squeeze(0)
@@ -174,7 +173,6 @@ class WrappedGpNet(GpNet):
             if task_name == "PARKING_IPM_STA":
                 print("task model ", self.model[task_name])
                 output = self.model[task_name](bev_feature)
-        print("CKPT0")
         # exit(1)
         return [avm, output]
 
@@ -245,9 +243,7 @@ class PytorchToOnnx:
                 merged_input_dict['mask_front'] = torch.rand(1, avm_w, avm_h, 1).cuda()
                 merged_input_dict['mask_left'] = torch.rand(1, avm_w, avm_h, 1).cuda()
                 merged_input_dict['mask_right'] = torch.rand(1, avm_w, avm_h, 1).cuda()
-                merged_input_dict={"task": task.name, "image": {"fisheye_img_right": merged_input_dict["image"]["fisheye_img_right"]}}
                 
-
         return merged_input_dict
 
     @staticmethod
@@ -293,11 +289,9 @@ class PytorchToOnnx:
                         "size", "heading", "velocity", "score", "score_cls"]
                
             if task.name == "PARKING_IPM_STA":
-                input_names=["img_rear", "img_front", "grid_rear_and_front", "img_left", "img_right", "grid_left_and_right","mask_rear", "mask_front", "mask_left", "mask_right"],
-                output_names=['avm', 'slot_point']
-                input_names=["img_rear"],
-                output_names=['avm']
-        print("ckpt1")
+                input_names=["img_rear", "img_front","img_left", "img_right",  "grid_rear_and_front", "grid_left_and_right","mask_rear", "mask_front", "mask_left", "mask_right"]
+                output_names=['avm', 'slot_point', 'slot_line']
+
         with torch.no_grad():
             torch.onnx.export(
                 net,
@@ -309,7 +303,7 @@ class PytorchToOnnx:
                 input_names=input_names,
                 output_names=output_names
             )
-        print("ckpt2")
+    
         onnx_sim_path = onnx_path.replace(".onnx", "_sim.onnx")
         model = onnx.load(onnx_path)
         # convert model
@@ -319,4 +313,3 @@ class PytorchToOnnx:
 
         print(f"onnx_path = {onnx_path}")
         print(f"onnx_sim_path = {onnx_sim_path}")
-        print("@@@@@@@@@")
