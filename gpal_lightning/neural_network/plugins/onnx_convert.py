@@ -18,6 +18,8 @@ import onnx_graphsurgeon as gs
 import numpy as np
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
+from gpal_nn.tasks.parking_ipm_sta.datasets.parking_ipm_sta_dataset import preprocess_img
+import pdb
 
 
 class WrappedGpNet(GpNet):
@@ -33,6 +35,12 @@ class WrappedGpNet(GpNet):
     
 
     def forward(self, input):
+        if input["task"] == "DRIVING_BEV_DYN":
+            return self.forward_dyn(input) 
+        if input["task"] == "PARKING_IPM_STA":
+            return self.forward_park(input)
+        
+    def forward_dyn(self, input):
         outputs = []
         x = input["image"]
         calib = input["calib"]
@@ -99,6 +107,77 @@ class WrappedGpNet(GpNet):
                 # exit(1)
         
         return output
+    def forward_park(self, input):
+        # print("input ", input)
+        # pdb.set_trace()
+        img = input["image"]
+        # fisheye_rear = img['fisheye_img_rear']
+        # fisheye_front = img['fisheye_img_front']
+        # fisheye_left = img['fisheye_img_left']
+        fisheye_right = img['fisheye_img_right']
+        print(fisheye_right.shape)
+        return fisheye_right
+        mask_rear = input['mask_rear']
+        mask_front = input['mask_front']
+        mask_left = input['mask_left']
+        mask_right = input['mask_right']
+
+        grid_rear_and_front = input['grid_rear_and_front']
+        grid_left_and_right = input['grid_left_and_right']
+        print("grid_rear_and_front device ", grid_rear_and_front.device)
+        
+        mask_rear = mask_rear.squeeze(0)
+        mask_front = mask_front.squeeze(0)
+        mask_left = mask_left.squeeze(0)
+        mask_right = mask_right.squeeze(0)
+
+        fisheye_rear_and_front = torch.cat((fisheye_rear,fisheye_front), dim=0)
+        fisheye_left_and_right = torch.cat((fisheye_left,fisheye_right), dim=0)
+
+        fisheye_rear_and_front = fisheye_rear_and_front.permute(0,3,1,2)
+        fisheye_left_and_right = fisheye_left_and_right.permute(0,3,1,2)
+      
+        # print("model ", self.model)
+        # 任选一个子模块的参数，查看其设备
+        if len(self.model) > 0:
+            # 获取第一个子模块的第一个参数
+            first_param = next(iter(self.model.values())).parameters().__next__()
+            print("设备:", first_param.device)  #
+
+        avm_rear_and_front = F.grid_sample(fisheye_rear_and_front, grid_rear_and_front, align_corners=True,padding_mode='zeros') 
+        avm_rear_and_front = avm_rear_and_front.sum(0).permute(1,2,0)
+
+        avm_left_and_right = F.grid_sample(fisheye_left_and_right, grid_left_and_right, align_corners=True,padding_mode='zeros') 
+        avm_left_and_right = avm_left_and_right.sum(0).permute(1,2,0)
+
+        avm = avm_left_and_right * mask_left / 255.0 + avm_rear_and_front * mask_rear / 255.0 + avm_rear_and_front * mask_front / 255.0 + avm_left_and_right * mask_right / 255.0 
+        avm_input = preprocess_img(avm)
+        avm_input = avm_input[None]
+        # out = self.model(avm_input)
+
+        bb_output = self.model['backbone0'](avm_input)
+        print('backbone0', bb_output[0].shape)
+        
+        g0_output = self.model['group0'](bb_output)
+        # print("group0", backbone_name, g0_output[0].shape)
+
+        neck0_output = self.model['neck0'](g0_output)
+        # print("neck0", neck0_output[0].shape)
+                    
+        # print(self._transformers)
+        # bev_feature = self.model[self._transformers[task]](
+        #     neck0_output,  calib)
+        bev_feature = neck0_output
+        print("transformers", bev_feature.shape)
+            
+        for task_name in self.tasks_to_run.keys():
+            if task_name == "PARKING_IPM_STA":
+                print("task model ", self.model[task_name])
+                output = self.model[task_name](bev_feature)
+        print("CKPT0")
+        # exit(1)
+        return [avm, output]
+
 
 class PytorchToOnnx:
     @staticmethod
@@ -124,23 +203,29 @@ class PytorchToOnnx:
             }
 
             return used_image_shapes
+        elif task_name in ["PARKING_IPM_STA"]:
+            used_image_shapes: dict = {
+                "fisheye_img_rear": [1920, 1536, 3],
+                "fisheye_img_front": [1920, 1536, 3],
+                "fisheye_img_left": [1920, 1536, 3],
+                "fisheye_img_right": [1920, 1536, 3],
+            }
+            return used_image_shapes
 
     @staticmethod
     def prepare_dummy_input(config, tasks):
-        print(tasks[0].name)
         input_dict = {}
-        
-        task = tasks[0]
-        used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name)
-        for cam in used_image_shapes:
-            if cam not in input_dict.keys():
-                vector_shape = 1, used_image_shapes[cam][1], used_image_shapes[cam][0], 3
-                input_dict[cam] = torch.rand(*vector_shape).cuda()
-        print(ShowDataStruct("input_dict", input_dict))
-                        
+           
         for task in tasks:
+            used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name)
+            for cam in used_image_shapes:
+                if cam not in input_dict.keys():
+                    vector_shape = 1, used_image_shapes[cam][1], used_image_shapes[cam][0], 3
+                    input_dict[cam] = torch.rand(*vector_shape).cuda()
+            print(ShowDataStruct("input_dict", input_dict))
+
             if task.name == "DRIVING_BEV_DYN":
-                merged_input_dict = {"task": tasks[0].name, "image": input_dict}
+                merged_input_dict = {"task": task.name, "image": input_dict}
                 merged_input_dict["calib"]={}
                 merged_input_dict["calib"]["images_grid"] = torch.rand(
                     7, 320, 768, 2).cuda()
@@ -148,7 +233,20 @@ class PytorchToOnnx:
                     7, 384, 240, 2).cuda()
                 merged_input_dict["calib"]["vt_grid_valid"] = torch.rand(
                     7, 4, 96, 240).cuda()
+            if task.name == "PARKING_IPM_STA":
+                avm_w = 768
+                avm_h = 768
+                merged_input_dict = {"task": task.name, "image": input_dict}
+                merged_input_dict['grid_rear_and_front'] = torch.rand(2, avm_w, avm_h, 2).cuda()
+                merged_input_dict['grid_left_and_right'] = torch.rand(2, avm_w, avm_h, 2).cuda()
+                # print(grid_rear_and_front.shape)
 
+                merged_input_dict['mask_rear'] = torch.rand(1, avm_w, avm_h, 1).cuda()
+                merged_input_dict['mask_front'] = torch.rand(1, avm_w, avm_h, 1).cuda()
+                merged_input_dict['mask_left'] = torch.rand(1, avm_w, avm_h, 1).cuda()
+                merged_input_dict['mask_right'] = torch.rand(1, avm_w, avm_h, 1).cuda()
+                merged_input_dict={"task": task.name, "image": {"fisheye_img_right": merged_input_dict["image"]["fisheye_img_right"]}}
+                
 
         return merged_input_dict
 
@@ -170,9 +268,9 @@ class PytorchToOnnx:
 
     @staticmethod
     def to_onnx(config, tasks, save_path):
-        transformer_type = config.Transformer["type"]
-
-        print(f"transformer_type = {transformer_type}")
+        
+        # transformer_type = config.Transformer["type"]
+        # print(f"transformer_type = {transformer_type}")
         
         input_dummy = PytorchToOnnx.prepare_dummy_input(config, tasks)
         print(ShowDataStruct("input_dummy", input_dummy))
@@ -185,25 +283,33 @@ class PytorchToOnnx:
 
         
         os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
-        
-        input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
+
+        for task in tasks:
+            if task.name == "DRIVING_BEV_DYN":
+                input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
                        "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid", "vt_grid_valid"]  # occ_od
 
-        output_names = ["center", "z",
+                output_names = ["center", "z",
                         "size", "heading", "velocity", "score", "score_cls"]
-
+               
+            if task.name == "PARKING_IPM_STA":
+                input_names=["img_rear", "img_front", "grid_rear_and_front", "img_left", "img_right", "grid_left_and_right","mask_rear", "mask_front", "mask_left", "mask_right"],
+                output_names=['avm', 'slot_point']
+                input_names=["img_rear"],
+                output_names=['avm']
+        print("ckpt1")
         with torch.no_grad():
             torch.onnx.export(
                 net,
                 (input_dummy, {}),
                 onnx_path,
-                verbose=True,
+                verbose=False,
                 opset_version=16,
                 # keep_initializers_as_inputs=False,
                 input_names=input_names,
                 output_names=output_names
             )
-        
+        print("ckpt2")
         onnx_sim_path = onnx_path.replace(".onnx", "_sim.onnx")
         model = onnx.load(onnx_path)
         # convert model
@@ -213,3 +319,4 @@ class PytorchToOnnx:
 
         print(f"onnx_path = {onnx_path}")
         print(f"onnx_sim_path = {onnx_sim_path}")
+        print("@@@@@@@@@")
