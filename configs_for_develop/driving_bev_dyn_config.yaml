@@ -79,12 +79,12 @@ Tasks:
         6: [human_pedestrian]
 
     image_crop_config:
-      "IMAGE_RESIZE": [432, 768]
-      "IMAGE_CROP_H_LEN": 320
-      "IMAGE_CROP_SIZE": [320, 768]
+      "IMAGE_RESIZE": [540, 960]
+      "IMAGE_CROP_H_LEN": 512
+      "IMAGE_CROP_SIZE": [512, 960]
       "CROP_HeSai_ID4":
-        "SCALE": [5, 5, 2.5, 2.5, 2.5, 2.5, 2.5]
-        "CROP_START": [0, 0, 80, 80, 80, 80, 80]
+        "SCALE": [4, 4, 2, 2, 2, 2, 2]
+        "CROP_START": [0, 0, 24, 24, 24, 24, 24]
   
 
     od_range:
