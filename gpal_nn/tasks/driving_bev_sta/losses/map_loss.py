@@ -283,14 +283,7 @@ class BaseMapLossCost(nn.Module):
                                                keypoint_cls_gt, keypoint_reg_gt, valid_mask, valid_len, center_line_flags, is_centerline)
             for loss_dict in loss_dict_list:
                 for key in loss_dict:
-                    if total_loss_dict[key].shape != loss_dict[key].shape:
-                        # 处理形状不匹配（如聚合为标量）
-                        total_loss_dict[key] += loss_dict[key].sum()
-                    else:
-                        total_loss_dict[key] += loss_dict[key]
-                    # print(f"Key: {key}, total_loss shape: {total_loss_dict[key].shape}, loss shape: {loss_dict[key].shape}")
-                    # print(f"total_loss: {total_loss_dict[key]}, loss: {loss_dict[key]}")
-                    # total_loss_dict[key] += loss_dict[key]
+                    total_loss_dict[key] += loss_dict[key]
         return total_loss_dict
 
     def loss_single(self, score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred,

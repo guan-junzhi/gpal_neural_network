@@ -29,14 +29,14 @@ lane_marking_type_map = {
 shape_type_map = {
     "single_solid": 0,
     "single_dashed": 1,
-    "double_soild": 4,  # 兼容标注规范拼写错误
-    "double_solid": 4,
-    "double_dashed": 5,
+    "double_soild": 5,  # 兼容标注规范拼写错误
+    "double_solid": 5,
+    "double_dashed": 6,
     "double_left_soild": 2,  # 兼容标注规范拼写错误
     "double_left_solid": 2,
     "double_right_soild": 3,  # 兼容标注规范拼写错误
     "double_right_solid": 3,
-    "thick_dashed": 6,
+    "thick_dashed": 4,
     "wide_solid": 7,
     "colored_three_line": 8,
     "reversible_line": 9,
