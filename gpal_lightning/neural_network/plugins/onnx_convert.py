@@ -192,7 +192,7 @@ class PytorchToOnnx:
 
         # output_names = ["center", "z",
         #                 "size", "heading", "velocity", "score", "score_cls"]
-        output_names = ["feature"]
+        output_names = ["head_conv", "hm_center"]
 
         with torch.no_grad():
             torch.onnx.export(

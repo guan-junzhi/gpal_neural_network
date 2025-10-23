@@ -39,7 +39,8 @@ class GpNetDeploy(GpNet):
 
     def forward_one_DRIVING_BEV_DYN(self, x, calib, metadata):
         batch_ret = {
-            'head_conv': []
+            'head_conv': [],
+            'hm_cen': [],
                
         }
         save_path = f'calib'
@@ -113,7 +114,7 @@ class GpNetDeploy(GpNet):
                 batch_ret[k].append(o)
         # exit(1)
         for k in batch_ret:
-            batch_ret[k] = torch.from_numpy(np.stack(
+            batch_ret[k] = torch.from_numpy(np.concatenate(
                 batch_ret[k], axis = 0)).cuda()
         # print(ShowDataStruct("batch_ret", batch_ret))
         return [batch_ret]
