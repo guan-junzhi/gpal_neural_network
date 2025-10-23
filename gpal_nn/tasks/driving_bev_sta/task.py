@@ -79,37 +79,37 @@ class DRIVING_BEV_STATask(BaseTask):
                 # print(f"ln \n{s.sigmoid().max()}")
                 # color = [random.randint(0, 255), random.randint(
                 #     0, 255), random.randint(0, 255)]
-                # try:
-                 # 画起始点（亮蓝色）
-                vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
-                _, shape_type = shape_type.max(-1)
-                _, centerline_type = centerline_type.max(-1)
-                # vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
-                if cls_pred != 0:
-                    if cls_pred == 2 and centerline_type == 1:
-                        vis2.DrawPolyline(l.detach().cpu().numpy(), [158, 168, 3], 2) #应急车道：青色
+                try:
+                    # 画起始点（亮蓝色）
+                    vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
+                    _, shape_type = shape_type.max(-1)
+                    _, centerline_type = centerline_type.max(-1)
+                    # vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                    if cls_pred != 0:
+                        if cls_pred == 2 and centerline_type == 1:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), [158, 168, 3], 2) #应急车道：青色
+                        else:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2)
+                        if is_split_merge_pred.values > 0.5:
+                            split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
+                            vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
                     else:
-                        vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2)
-                    if is_split_merge_pred.values > 0.5:
-                        split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
-                        vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
-                else:
-                    # if shape_type == 0 or shape_type == 1:
-                    #     vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
-                    # elif shape_type == 2:
-                    #     vis2.DrawPolyline(l.detach().cpu().numpy(), [250, 51, 153], 2, 'dashed', 20)
-                    # elif shape_type == 3:
-                    #     vis2.DrawPolyline(l.detach().cpu().numpy(), [203, 192, 255], 2, 'dashed', 20)
-                    # else:
-                    #     print("shape_type error:", shape_type)
-                    #     vis2.DrawPolyline(l.detach().cpu().numpy(), [192, 192, 192], 2, 'solid')
-                    print("shape_type:", shape_type)
-                    if isinstance(shape_type, torch.Tensor):
-                        # 确保张量是标量且在 CUDA 上，转为 CPU 并提取整数
-                        shape_type = shape_type.item() 
-                    vis2.DrawPolyline(l.detach().cpu().numpy(), [0, 0, 255], 2, shape_type, 20)
-                # except:
-                #     pass
+                        # if shape_type == 0 or shape_type == 1:
+                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                        # elif shape_type == 2:
+                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [250, 51, 153], 2, 'dashed', 20)
+                        # elif shape_type == 3:
+                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [203, 192, 255], 2, 'dashed', 20)
+                        # else:
+                        #     print("shape_type error:", shape_type)
+                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [192, 192, 192], 2, 'solid')
+                        # print("shape_type:", shape_type)
+                        if isinstance(shape_type, torch.Tensor):
+                            # 确保张量是标量且在 CUDA 上，转为 CPU 并提取整数
+                            shape_type = shape_type.item() 
+                        vis2.DrawPolyline(l.detach().cpu().numpy(), [0, 0, 255], 2, shape_type, 20)
+                except:
+                    pass
         # exit()
         vis_draw2 = vis2.Draw()
         vis_draw = np.concatenate([vis_draw1, vis_draw2], axis=1)

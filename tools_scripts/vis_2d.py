@@ -146,7 +146,7 @@ class Vis2D():
         """
         # 定义支持的线条类型集合
         line_types_dict = ['solid', 'dashed', 'double_left_solid', 'double_right_solid',
-            'thick_solid', 'thick_dashed', 'colorful_three_solid', 'reversible_line',
+            'thick_dashed', 'double_solid', 'double_dashed', 'thick_solid', 'colorful_three_solid', 'reversible_line',
             'variable_lane', 'point_line', 'other']
         if isinstance(shape_type, int) and 0 <= shape_type < len(line_types_dict):
             line_type = line_types_dict[shape_type]
@@ -181,7 +181,7 @@ class Vis2D():
                     dash_length=dash_length
                 )
         
-        elif line_type in ['double_left_solid', 'double_right_solid']:
+        elif line_type in ['double_solid', 'double_right_solid']:
             # 双实线（左/右侧重）：双线并行，车体系下左偏移向Y正方向
             line_spacing = line_width * 2  # 双线间距
             for p, q in zip(pts[:-1], pts[1:]):
@@ -217,6 +217,43 @@ class Vis2D():
                     self.DrawLine([p[0], p[1]], [q[0], q[1]],
                                 color=color2, line_width=actual_line_width,
                                 line_type='solid', dash_length=dash_length)
+                    
+        elif line_type in ['double_left_solid', 'double_dashed']:
+            # 双实线（左/右侧重）：双线并行，车体系下左偏移向Y正方向
+            line_spacing = line_width * 2  # 双线间距
+            for p, q in zip(pts[:-1], pts[1:]):
+                dx = q[0] - p[0]  # 线段X方向变化（车体系：向前为正）
+                dy = q[1] - p[1]  # 线段Y方向变化（车体系：向左为正）
+                length = np.sqrt(dx**2 + dy**2)
+                if length < 1e-3:
+                    continue
+                
+                # 车体系下的左偏移向量（垂直于线段，指向Y正方向）
+                # 推导：原方向向量(dx, dy)，垂直向量为(dy, -dx)（点积dx*dy + dy*(-dx)=0），确保向左偏移
+                vx = (dy / length) * line_spacing  # X方向偏移量
+                vy = (-dx / length) * line_spacing  # Y方向偏移量（左为正）
+                
+                # 主线条（根据类型确定左右位置）
+                if line_type == 'double_left_solid':
+                    # 左线为主实线，右线为副实线（向右偏移=左偏移向量取反）
+                    self.DrawLine([p[0], p[1]], [q[0], q[1]],
+                                color=color, line_width=actual_line_width,
+                                line_type='solid', dash_length=dash_length)
+                    # 右线（偏移后）
+                    p_sub = [p[0] - vx, p[1] - vy]  # 右偏移=左偏移*-1
+                    q_sub = [q[0] - vx, q[1] - vy]
+                    self.DrawLine(p_sub, q_sub,
+                                color=color2, line_width=actual_line_width,
+                                line_type='solid', dash_length=dash_length)
+                else:  # double_right_solid
+                    # 右线为主实线，左线为副实线
+                    self.DrawLine([p[0] - vx, p[1] - vy], [q[0] - vx, q[1] - vy],
+                                color=color, line_width=actual_line_width,
+                                line_type='dashed', dash_length=dash_length)
+                    # 左线（原位置）
+                    self.DrawLine([p[0], p[1]], [q[0], q[1]],
+                                color=color2, line_width=actual_line_width,
+                                line_type='dashed', dash_length=dash_length)
         
         elif line_type == 'colorful_three_solid':
             # 彩色三实线：三条并行，车体系下左/右偏移对称
