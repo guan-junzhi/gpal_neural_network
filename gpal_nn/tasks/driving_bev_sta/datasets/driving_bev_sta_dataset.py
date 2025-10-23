@@ -18,6 +18,8 @@ from gpal_nn.tasks.driving_bev_sta.datasets.transform import *
 from gpal_nn.tasks.driving_bev_sta.datasets.letter_box import letterbox_image, random_scale_and_translate
 from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 from gpal_nn.tasks.driving_bev_sta.datasets.centerline_connector import merge_connected_centerlines, get_centerline_dict
+from gpal_nn.tasks.driving_bev_sta.datasets.lane_marking_connector import connect_lane_markings
+from gpal_nn.tasks.driving_bev_sta.datasets.edge_connector import connect_edges
 from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
 from gpal_lightning.utils.profiling import TimeProf
 import random
@@ -407,7 +409,13 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         annot = data_info['annotation']
         self.process_edges(annot['edges'], data_dict, bev_real2aug)
         self.process_polylines(annot['polylines'], data_dict, bev_real2aug)
-        self.process_polygons_arrow(annot['polygons'], data_dict, bev_real2aug)
+        if 'points' in data_dict['polylines']:
+            data_dict['polylines'] = connect_lane_markings(data_dict['polylines'])
+            for i in range(len(data_dict['polylines']['points'])):
+                data_dict['polylines']['points'][i] = _fix_pts_interpolate(data_dict['polylines']['points'][i], self.pts_per_vector)
+            data_dict['polylines']['points'] = np.array(data_dict['polylines']['points'], dtype=np.float32)
+            if len(data_dict['polylines']['points']) == 0:
+                data_dict['polylines'] = {}
         if 'centerlines' in annot:
             self.process_centerline(annot['centerlines'], data_dict, bev_real2aug)
         if 'points' in data_dict['edges']:
@@ -430,7 +438,15 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             if edges_visible_mask.sum() > 0:
                 edges_visible_dict['points'] = data_dict['edges']['points'][edges_visible_mask]
                 edges_visible_dict['classes'] = np.array(data_dict['edges']['classes'])[edges_visible_mask]
+                edges_visible_dict['id'] = np.array(data_dict['edges']['id'])[edges_visible_mask]
             data_dict['edges'] = edges_visible_dict
+        if 'points' in data_dict['edges']:
+            data_dict['edges'] = connect_edges(data_dict['edges'])
+            for i in range(len(data_dict['edges']['points'])):
+                data_dict['edges']['points'][i] = _fix_pts_interpolate(data_dict['edges']['points'][i], self.pts_per_vector)
+            data_dict['edges']['points'] = np.array(data_dict['edges']['points'], dtype=np.float32)
+            if len(data_dict['edges']['points']) == 0:
+                data_dict['edges'] = {}
 
         data_dict["calib_type"] = data_info['sensor']['calib_type']
 
@@ -498,25 +514,29 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         shape_type = []
         color_type = []
         stop_type = []
+        ids = []
 
         assert len(polylines['points']) == len(masks) == \
                len(polylines['shape_type']) == len(polylines['color_type']) == len(polylines['stop_type'])
         
-        for mask, name, shape, color, stop in zip(masks, polylines['classes'],
+        for mask, name, shape, color, stop, id in zip(masks, polylines['classes'],
                                                   polylines['shape_type'],
                                                   polylines['color_type'],
-                                                  polylines['stop_type']):
+                                                  polylines['stop_type'],
+                                                  polylines['id']):
             if mask == False:
                 continue
             classes.append(lane_marking_type_map[name])
             shape_type.append(shape_type_map[shape])
             color_type.append(color_type_map[color])
             stop_type.append(stop_type_map[stop])
+            ids.append(id)
 
         data_dict['polylines']['classes'] = classes
         data_dict['polylines']['shape_type'] = shape_type
         data_dict['polylines']['color_type'] = color_type
         data_dict['polylines']['stop_type'] = stop_type
+        data_dict['polylines']['id'] = ids
 
     def process_edges(self, edges, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
         data_dict['edges'] = {}
@@ -554,15 +574,18 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
     def get_edge_attributes(self, edges, data_dict, masks):
         classes = []
+        ids = []
 
         assert len(edges['points']) == len(masks) == len(edges['classes'])
 
-        for mask, name in zip(masks, edges['classes']):
+        for mask, name, id in zip(masks, edges['classes'], edges['id']):
             if mask == False:
                 continue
             classes.append(edge_type_map[name])
+            ids.append(id)
 
         data_dict['edges']['classes'] = classes
+        data_dict['edges']['id'] = ids
 
     def process_centerline(self, centerlines, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
 
