@@ -57,17 +57,29 @@ class BaseMapLossCost(nn.Module):
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=cls_loss_weight,
-            reduction="none"
+            loss_weight=cls_loss_weight
         )
         self.lane_marking_color_loss = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight
+        )
+        self.shape_type_loss2 = FocalLoss(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
             loss_weight=cls_loss_weight,
             reduction="none"
         )
-        self.shape_type_loss2 = FocalLoss(
+        self.lane_marking_type_loss2 = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight,
+            reduction="none"
+        )
+        self.lane_marking_color_loss2 = FocalLoss(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
@@ -299,13 +311,13 @@ class BaseMapLossCost(nn.Module):
         lane_marking_type_valid_mask = lane_marking_type_gt >= 0
         lane_marking_type_gt_valid = torch.where(lane_marking_type_valid_mask, lane_marking_type_gt, torch.zeros_like(lane_marking_type_gt))
         lane_marking_type_weight = lane_marking_type_weight * lane_marking_type_valid_mask[:, None]
-        lane_marking_type_loss = self.lane_marking_type_loss(lane_marking_type_pred, lane_marking_type_gt_valid, weight=lane_marking_type_weight, avg_factor=1)
+        lane_marking_type_loss = self.lane_marking_type_loss2(lane_marking_type_pred, lane_marking_type_gt_valid, weight=lane_marking_type_weight, avg_factor=1)
 
         lane_marking_color_weight = torch.ones_like(lane_marking_color_pred)
         lane_marking_color_valid_mask = lane_marking_color_gt >= 0
         lane_marking_color_gt_valid = torch.where(lane_marking_color_valid_mask, lane_marking_color_gt, torch.zeros_like(lane_marking_color_gt))
         lane_marking_color_weight = lane_marking_color_weight * lane_marking_color_valid_mask[:, None]
-        lane_marking_color_loss = self.lane_marking_color_loss(lane_marking_color_pred, lane_marking_color_gt_valid, weight=lane_marking_color_weight, avg_factor=1)
+        lane_marking_color_loss = self.lane_marking_color_loss2(lane_marking_color_pred, lane_marking_color_gt_valid, weight=lane_marking_color_weight, avg_factor=1)
 
         shape_type_weight = torch.ones_like(shape_type_pred)
         shape_type_valid_mask = shape_type_gt >= 0
