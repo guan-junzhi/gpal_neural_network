@@ -70,6 +70,9 @@ def GetProjectGridByEgo2Imgs(ego2imgs, H, W, div, Z, Y, X, sample_pts_3d):
     WH = torch.tensor([[[[(W-1) * div, (H-1) * div]]]], device=ego2imgs.device,
                       dtype=ego2imgs.dtype)
     uv_norm = (2.0 * (uvs / WH) - 1.0)
+    mask = (z <= 0).unsqueeze(-1).expand_as(uv_norm)
+    # 将mask对应位置的uv_norm值设置为-2，无效点设置，取消gridsample后面的乘法
+    uv_norm[mask] = -2.0
     valid_mem = (z[:, :, 0] > 0).reshape(ego2imgs.shape[0], Z, Y, X).float()
     uv_norm = uv_norm.reshape(ego2imgs.shape[0], -1, X, 2)
 
@@ -93,8 +96,8 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=
         vt_grid_valid = vt_grid_valid.unsqueeze(1)
         values = F.grid_sample(
             rgb_camB, vt_grid.float(), align_corners=False, padding_mode='zeros')
-        values = values.view(V, C, Z, Y, X)
-        bev_feature_batch.append((values * vt_grid_valid).sum(0))
+        # values = values.view(V, C, Z, Y, X)
+        bev_feature_batch.append((values).sum(0).view(C*Z, Y, X))
     a = torch.stack(bev_feature_batch, dim = 0)
     return a
 
@@ -161,9 +164,9 @@ class ODViewTransformer(BaseModule):
             batch_dict=data,
             image_crop_config=self.image_crop_config
         )
-        B, C, Z, H, W = feat_bev.shape
-        feat_bev = feat_bev.view(
-            B, -1, H, W)
+        # B, C*Z, H, W = feat_bev.shape
+        # feat_bev = feat_bev.view(
+        #     B, -1, H, W)
 
         # exit(1)
         return feat_bev
@@ -187,5 +190,3 @@ if __name__ == "__main__":
 
 
     print(ShowDataStruct("y", y))
-    
-    

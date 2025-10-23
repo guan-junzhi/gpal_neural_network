@@ -16,6 +16,8 @@ from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.models.transformers.od_view_transform import GetProjectGridByEgo2Imgs
 from gpal_lightning.utils.deploy_utils import bgr_to_nv12_split, DistGridMap
+from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
+
 from horizon_tc_ui import HBRuntime
 
 class GpNetDeploy(GpNet):
@@ -34,18 +36,11 @@ class GpNetDeploy(GpNet):
         self.model_file = global_config.onnx_path
         self.calib_data_cnt = 0
 
+
     def forward_one_DRIVING_BEV_DYN(self, x, calib, metadata):
         batch_ret = {
-            'with_postprocess': True,
-            'Points_Loss': {
-                'estimation_cen': [],
-                'estimation_z': [],
-                'estimation_dim': [],
-                'estimation_dir': [],
-                'estimation_vel': [],
-                'estimation_score': [],
-                'estimation_score_cls': [],
-            }
+            'head_conv': []
+               
         }
         save_path = f'calib'
         batch_size = len(metadata)
@@ -100,8 +95,10 @@ class GpNetDeploy(GpNet):
                 inputs_dict.update(img_slice)
             inputs_dict.update({"images_grid": images_grid.astype(np.float32)})
             # inputs_dict.update({"ego2imgs": ego2imgs})
+            # inputs_dict.update(
+            #     {"vt_grid": vt_grid.float().detach().cpu().numpy(), "vt_grid_valid": vt_grid_valid.float().detach().cpu().numpy()})
             inputs_dict.update(
-                {"vt_grid": vt_grid.float().detach().cpu().numpy(), "vt_grid_valid": vt_grid_valid.float().detach().cpu().numpy()})
+                {"vt_grid": vt_grid.float().detach().cpu().numpy()})
             # print(ShowDataStruct("inputs_dict", inputs_dict))
             if self.global_config.calib_data_save_path != "None":
                 for k in inputs_dict:
@@ -112,12 +109,12 @@ class GpNetDeploy(GpNet):
 
             self.session = HBRuntime(self.global_config.onnx_path)
             outputs = self.session.run(self.output_names, inputs_dict)
-            for k, o in zip(batch_ret["Points_Loss"], outputs):
-                batch_ret["Points_Loss"][k].append(o)
+            for k, o in zip(batch_ret, outputs):
+                batch_ret[k].append(o)
         # exit(1)
-        for k in batch_ret["Points_Loss"]:
-            batch_ret["Points_Loss"][k] = torch.from_numpy(np.stack(
-                batch_ret["Points_Loss"][k], axis = 0)).cuda()
+        for k in batch_ret:
+            batch_ret[k] = torch.from_numpy(np.stack(
+                batch_ret[k], axis = 0)).cuda()
         # print(ShowDataStruct("batch_ret", batch_ret))
         return [batch_ret]
 

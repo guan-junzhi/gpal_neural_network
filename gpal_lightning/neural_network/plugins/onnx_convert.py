@@ -76,24 +76,25 @@ class WrappedGpNet(GpNet):
         for task_name in self.tasks_to_run.keys():
             if task_name == "DRIVING_BEV_DYN":
                 output = self.model[task_name](bev_feature)
+                output = output[0]
                 # print("DRIVING_BEV_DYN", output[0].shape)
-                BEV_TO_POINTS = dict(
-                            NAME="Bev_To_Points",
-                            NUM_BEV_FEATURES=64,
-                            VOXEL_SIZE=[0.64, 0.64],
-                            SCORE_THRESH=0.28,
-                            DOWN_RATIO=2,
-                            NUM_KEYPOINTS=256,
-                            TRAIN=True,
-                            NUM_OUTPUT_FEATURES=64
-                        )
-                bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,
-                                                  grid_size=[480, 192,  12],
-                                                  voxel_size=[0.32, 0.32, 0.5],
-                                                  point_cloud_range=[-51.2, -
-                                                                     30.72, -1., 102.4, 30.72, 5.],
-                                                  num_bev_features=[64, 64, 128, 64, 128, 128, 128])
-                output = bev_2_points(output[0])
+                # BEV_TO_POINTS = dict(
+                #             NAME="Bev_To_Points",
+                #             NUM_BEV_FEATURES=64,
+                #             VOXEL_SIZE=[0.64, 0.64],
+                #             SCORE_THRESH=0.28,
+                #             DOWN_RATIO=2,
+                #             NUM_KEYPOINTS=256,
+                #             TRAIN=True,
+                #             NUM_OUTPUT_FEATURES=64
+                #         )
+                # bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,
+                #                                   grid_size=[480, 192,  12],
+                #                                   voxel_size=[0.32, 0.32, 0.5],
+                #                                   point_cloud_range=[-51.2, -
+                #                                                      30.72, -1., 102.4, 30.72, 5.],
+                #                                   num_bev_features=[64, 64, 128, 64, 128, 128, 128])
+                # output = bev_2_points(output[0])
                 print(ShowDataStruct("DRIVING_BEV_DYN", output))
 
                 # exit(1)
@@ -187,10 +188,11 @@ class PytorchToOnnx:
         os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
         
         input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
-                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid", "vt_grid_valid"]  # occ_od
+                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid"]  # occ_od
 
-        output_names = ["center", "z",
-                        "size", "heading", "velocity", "score", "score_cls"]
+        # output_names = ["center", "z",
+        #                 "size", "heading", "velocity", "score", "score_cls"]
+        output_names = ["feature"]
 
         with torch.no_grad():
             torch.onnx.export(
