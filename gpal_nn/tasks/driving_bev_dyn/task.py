@@ -220,7 +220,7 @@ class DRIVING_BEV_DYNTask(BaseTask):
                 os.makedirs(file_root, exist_ok=True)
             if const.EVALUATION_FILES_EXTENSION.lower() == ".json":
                 dict_to_json(os.path.join(file_root, uuid +
-                                          const.EVALUATION_FILES_EXTENSION), file_object)
+                                          const.EVALUATION_FILES_EXTENSION), file_object, indent=4)
                 # print(os.path.join(file_root, uuid +
                 #                    const.EVALUATION_FILES_EXTENSION))
             else:

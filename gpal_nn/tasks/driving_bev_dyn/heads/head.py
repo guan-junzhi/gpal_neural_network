@@ -25,7 +25,7 @@ class SeqFeatureFuser(nn.Module):
         nn.BatchNorm2d(self.layers_config["out_channels"]), nn.ReLU(True))
 
     def forward(self, prev_feats, cur_feats, cur2prev):
-        x = torch.cat([cur_feats, cur_feats], dim = 1)
+        x = torch.cat([prev_feats, cur_feats], dim = 1)
         return self.conv_fuser(x)
 
 

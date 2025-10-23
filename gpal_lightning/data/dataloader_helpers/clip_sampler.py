@@ -27,12 +27,15 @@ class ClipSampler(Sampler):
 
     def RandomByClip(self, datalist, length_range=[5, 15], batch_size=8):
         epoch_len = self.default_resample_len
-        datalist_by_clip = DatalistByclip(datalist, "sequence_name", True)
+        
+        datalist_by_clip = DatalistByclip(datalist, "sequence_name", True)  # 按clip分组
         clip_key_list = list(datalist_by_clip.keys())
+        
         flatten_idxs = np.zeros([epoch_len, 2], dtype = np.int32) -1
+        
         for i in range(epoch_len):
             if (flatten_idxs[i, 0] < 0) or (flatten_idxs[i, 1] < 0):
-                clip_idx = randint(0, len(clip_key_list))
+                clip_idx = randint(0, len(clip_key_list))  # 哪个clip的位置索引
                 clip_idx = [randint(0, len(clip_key_list)) for _ in range(self.rank+1)][-1]
                 
                 clip_key = clip_key_list[clip_idx]

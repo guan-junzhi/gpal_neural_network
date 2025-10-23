@@ -133,6 +133,13 @@ Tasks:
 
           root_dir: "bev_park/PointLineData_Test/",
           data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips74_frames2886_key2886.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips74_frames39x5_key39x5.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320_split_to_200.pkl"],  #300  # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips74_frames30_key30.pkl"],  #300  # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips74_frames29_key29.pkl"],  #300  # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips74_frames53_key53.pkl"],  #53  # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips74_frames107_key107.pkl"],  #107  # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: True,
           fast_buffer_path: "./buf_eval_origin_size" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
