@@ -14,14 +14,14 @@ main_class_name_map = {index: name for name, index in main_class_type_map.items(
 # --------------------------- lane_marking -----------------------------------
 lane_marking_type_map = {
     "normal": 0,
-    "guide_line": 0,
-    "fishbone": 0,
-    "stop_line": 0,
-    "cross_guide_line": 0,
-    'cross_guide_ line': 0,
-    "bike_cross_line": 0,
-    "wait_line": 0,    # 兼容老标注规范
-    "waiting_line": 0,
+    "guide_line": 1,
+    "fishbone": 2,
+    "stop_line": 3,
+    "cross_guide_line": 4,
+    'cross_guide_ line': 4,
+    "bike_cross_line": 5,
+    "wait_line": 6,    # 兼容老标注规范
+    "waiting_line": 6,
     "ignore": -1,
     "others": -1,
 }
@@ -29,19 +29,19 @@ lane_marking_type_map = {
 shape_type_map = {
     "single_solid": 0,
     "single_dashed": 1,
-    "double_soild": 0,  # 兼容标注规范拼写错误
-    "double_solid": 0,
-    "double_dashed": 1,
+    "double_soild": 4,  # 兼容标注规范拼写错误
+    "double_solid": 4,
+    "double_dashed": 5,
     "double_left_soild": 2,  # 兼容标注规范拼写错误
     "double_left_solid": 2,
     "double_right_soild": 3,  # 兼容标注规范拼写错误
     "double_right_solid": 3,
-    "thick_dashed": 4,
-    "wide_solid": 0,
-    "colored_three_line": 0,
-    "reversible_line": 0,
-    "variable_line": 0,
-    "point_line": 0,
+    "thick_dashed": 6,
+    "wide_solid": 7,
+    "colored_three_line": 8,
+    "reversible_line": 9,
+    "variable_line": 10,
+    "point_line": 11,
     "others": -1,
 }
 
