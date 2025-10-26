@@ -164,7 +164,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                          worker=worker,
                          pseudo_labels_path=pseudo_labels_path,
                          fast_buffer_path="" if fast_buffer_path == "" else os.path.join(
-                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_buf_by_slice")
+                             LOCAL_DATASETS_ROOT, fast_buffer_path, f"{task_config.name}_960_540")
                          )
 
         self.img_crop_size = self.task_config.image_crop_config['IMAGE_CROP_SIZE']
