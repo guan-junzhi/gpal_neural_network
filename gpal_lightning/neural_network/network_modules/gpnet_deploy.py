@@ -120,6 +120,34 @@ class GpNetDeploy(GpNet):
                 batch_ret["Points_Loss"][k], axis = 0)).cuda()
         # print(ShowDataStruct("batch_ret", batch_ret))
         return [batch_ret]
+    
+    def forward_park_slot(self, x, calib, metadata):
+        batch_size = len(metadata)
+        for i in tqdm(range(batch_size)):
+            img_slice = {k: x[k][i].unsqueeze(0).float().detach().cpu().numpy() for k in x}
+            # print(ShowDataStruct("img_slice", img_slice))
+        inputs_dict = {}
+        if "quantized_model.bc" in self.model_file:
+                # 添加 bgr 2 nv12 转换
+            print("nv12 input ...")
+            img_slice_nv12 = {}
+            for img_name, img_data in img_slice.items():
+                y_data, uv_data = bgr_to_nv12_split(img_data)
+                img_slice_nv12[f"{img_name}_y"] = y_data
+                img_slice_nv12[f"{img_name}_uv"] = uv_data
+            inputs_dict.update(img_slice_nv12)
+        else:
+            inputs_dict.update(img_slice)
+            if self.global_config.calib_data_save_path != "None":
+                for k in inputs_dict:
+                    single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
+                    os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
+                    np.save(single_calib_data_save_path, inputs_dict[k])
+                self.calib_data_cnt+=1
+
+            self.session = HBRuntime(self.global_config.onnx_path)
+            outputs = self.session.run(self.output_names, inputs_dict)
+        
 
     def forward(self, x, calib=None, metadata=None, phase=const.PHASE_TRAINING):
         forward_outputs = []
@@ -130,5 +158,8 @@ class GpNetDeploy(GpNet):
             if "DRIVING_BEV_DYN" == task:
                 output = self.forward_one_DRIVING_BEV_DYN(x, calib, metadata)
                 forward_outputs.append(output)
+            if "PARKING_IPM_STA" == task:
+                output = self.forward_park_slot(x, calib, metadata)
+
 
         return forward_outputs

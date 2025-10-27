@@ -243,6 +243,7 @@ class PytorchToOnnx:
                 merged_input_dict['mask_front'] = torch.rand(1, avm_w, avm_h, 1).cuda()
                 merged_input_dict['mask_left'] = torch.rand(1, avm_w, avm_h, 1).cuda()
                 merged_input_dict['mask_right'] = torch.rand(1, avm_w, avm_h, 1).cuda()
+                ######################################################################3
                 
         return merged_input_dict
 

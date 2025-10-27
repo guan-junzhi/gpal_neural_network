@@ -29,3 +29,9 @@ lightning_logs/*
 experiments/*
 *.jpg
 *.pkl
+.check/
+.hb_compile/
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+*/*/*/.ipynb_checkpoints/
+*/*/*/*/.ipynb_checkpoints/
