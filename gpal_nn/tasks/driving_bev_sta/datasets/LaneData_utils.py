@@ -81,8 +81,8 @@ edge_type_map = {
 centerline_type_map = {
     "normal_lane": 0,
     "emergency_lane": 1,
-    "non_motorized_lane": 0,
-    "turn_waiting_lane": 0,
+    "non_motorized_lane": 2,
+    "turn_waiting_lane": 3,
     "intersection_lane": 0,
     "intersection_virtual_lane": 0,
     "bus_lane": 0,
@@ -91,8 +91,8 @@ centerline_type_map = {
     "rechannel_lane": 0,
     "temporary_lane": 0,
     "toll_station_lane": 0,
-    "variable_lane": 0,
-    "reversible_lane": 0,
+    "variable_lane": 4,
+    "reversible_lane": 5,
     "ramp_lane": 0,
     "others": -1,
 }
