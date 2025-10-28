@@ -19,7 +19,6 @@ import numpy as np
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
 from gpal_nn.tasks.parking_ipm_sta.datasets.parking_ipm_sta_dataset import preprocess_img
-import pdb
 
 
 class WrappedGpNet(GpNet):
@@ -63,23 +62,13 @@ class WrappedGpNet(GpNet):
         mono3d, mono_od, gate_lever, side_od, neck2_in = [], [], [], [], []
 
         for backbone_name, camera_list in self.backbone_camera_mapping.items():
-        
-            print(imgs.shape)
             bb_output = self.model[backbone_name](imgs)
-            print(backbone_name, bb_output[0].shape)
-
             g0_output = self.model['group0'](bb_output)
-            print("group0", backbone_name, g0_output[0].shape)
-
             neck0_output = self.model['neck0'](g0_output)
-            print("neck0", neck0_output[0].shape)
                      
-        print(self._transformers)
         bev_feature = self.model[self._transformers[task]](
             neck0_output,  calib)
 
-        print("transformers", bev_feature.shape)
-        
       
         for task_name in self.tasks_to_run.keys():
             if task_name == "DRIVING_BEV_DYN":
@@ -108,8 +97,6 @@ class WrappedGpNet(GpNet):
         
         return output
     def forward_park(self, input):
-        # print("input ", input)
-        # pdb.set_trace()
         img = input["image"]
         fisheye_rear = img['fisheye_img_rear']
         fisheye_front = img['fisheye_img_front']
@@ -118,7 +105,6 @@ class WrappedGpNet(GpNet):
        
         grid_rear_and_front = input['grid_rear_and_front']
         grid_left_and_right = input['grid_left_and_right']
-        print("grid_rear_and_front device ", grid_rear_and_front.device)
 
         mask_rear = input['mask_rear']
         mask_front = input['mask_front']
@@ -136,13 +122,7 @@ class WrappedGpNet(GpNet):
         fisheye_rear_and_front = fisheye_rear_and_front.permute(0,3,1,2)
         fisheye_left_and_right = fisheye_left_and_right.permute(0,3,1,2)
       
-        # print("model ", self.model)
-        # 任选一个子模块的参数，查看其设备
-        if len(self.model) > 0:
-            # 获取第一个子模块的第一个参数
-            first_param = next(iter(self.model.values())).parameters().__next__()
-            print("设备:", first_param.device)  #
-
+      
         avm_rear_and_front = F.grid_sample(fisheye_rear_and_front, grid_rear_and_front, align_corners=True,padding_mode='zeros') 
         avm_rear_and_front = avm_rear_and_front.sum(0).permute(1,2,0)
 
@@ -155,23 +135,12 @@ class WrappedGpNet(GpNet):
         # out = self.model(avm_input)
 
         bb_output = self.model['backbone0'](avm_input)
-        print('backbone0', bb_output[0].shape)
-        
         g0_output = self.model['group0'](bb_output)
-        # print("group0", backbone_name, g0_output[0].shape)
-
         neck0_output = self.model['neck0'](g0_output)
-        # print("neck0", neck0_output[0].shape)
-                    
-        # print(self._transformers)
-        # bev_feature = self.model[self._transformers[task]](
-        #     neck0_output,  calib)
         bev_feature = neck0_output
-        print("transformers", bev_feature.shape)
             
         for task_name in self.tasks_to_run.keys():
             if task_name == "PARKING_IPM_STA":
-                print("task model ", self.model[task_name])
                 output = self.model[task_name](bev_feature)
         # exit(1)
         return [avm, output]
