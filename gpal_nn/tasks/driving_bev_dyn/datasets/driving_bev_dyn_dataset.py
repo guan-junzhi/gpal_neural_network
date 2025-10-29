@@ -429,6 +429,114 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         dataset = [ele for ele in datalist if ele["sequence_name"] in clip_keys_rank]
         return dataset
 
+    def _preconstruct_test_stream_indices(self, datalist, batch_size, key="sequence_name"):
+        
+        def GroupByclip(datalist, key="sequence_name", ret_idx=False, add_clip_idx=False):
+            datalist_by_clip = {}
+            for ele_i, ele in enumerate(datalist):
+                clip_key = ele[key]  # 获取当前元素所属的clip名称
+                if clip_key not in datalist_by_clip:
+                    datalist_by_clip[clip_key] = []
+                if ret_idx:
+                    datalist_by_clip[clip_key].append(ele_i)  # 存储索引
+                else:
+                    datalist_by_clip[clip_key].append(ele)  # 存储原始元素
+            
+            if add_clip_idx:
+                keys = list(datalist_by_clip.keys())
+                new_datalist = []
+                for clip_idx, clip_key in enumerate(keys):
+                    clip_data = datalist_by_clip[clip_key]
+                    for ele_idx, ele in enumerate(clip_data):
+                        # 创建新字典，避免修改原数据
+                        new_ele = ele.copy() if isinstance(ele, dict) else ele
+                        if isinstance(new_ele, dict):
+                            new_ele['clip_idx'] = clip_idx  # 添加clip索引
+                            new_ele['frame_idx'] = ele_idx  # 添加clip内的顺序索引
+                        new_datalist.append(new_ele)
+                return new_datalist
+            
+            return datalist_by_clip
+
+        NEW_datalist = GroupByclip(datalist, key, ret_idx=False, add_clip_idx=True)  # 添加clip索引和frame索引用于debug
+        datalist_by_clip = GroupByclip(NEW_datalist, key, ret_idx=True, add_clip_idx=False)
+        
+        from collections import Counter
+        len_clip = Counter([len(ele) for ele in datalist_by_clip.values()])
+        
+        if len(len_clip) > 1 or len(NEW_datalist) % (list(len_clip.items())[0][0] * batch_size) != 0:
+            for _ in range(5):
+                print(f'Warning: 不同clip的帧数不同, {len_clip}')
+                print(f'Warning: len % (max_length * batch_size * X) == 0 才可以时序, tot:{len(NEW_datalist)}, ')
+                print(f'max_length:{list(len_clip.items())[0][0]} batch_size:{batch_size}')
+                print(f'不再进行时序推理')
+                print('--------------\n')
+                
+            re_range_idx = [i for i in range(len(NEW_datalist))]
+            """
+            cnt = 0
+            for i in range(0, len(re_range_idx), batch_size):
+                idx_in_batch = re_range_idx[i:i+batch_size]
+                data_info = [f"batch {i//batch_size:05d} flatten_i {i:05d}: {NEW_datalist[idx]['clip_idx']:04d}^{NEW_datalist[idx]['time_stamp']}^{NEW_datalist[idx]['frame_idx']:04d}" for idx in idx_in_batch]
+                cnt += len(idx_in_batch)
+                print(f"  数据: {data_info}")
+            print(f"总样本数: {cnt}")
+            print(f"总clip数: {len(NEW_datalist)}")
+            print(f"最大batch长度(从0开始): {len(NEW_datalist) // batch_size} 最大整数 faltten 索引 {len(NEW_datalist) // batch_size * batch_size}")
+            """
+
+            return [NEW_datalist[i] for i in re_range_idx]
+    
+        print(f'进行时序推理: {len(NEW_datalist)} 个样本, {len(datalist_by_clip)} 个clip')
+        clip_key_list = list(datalist_by_clip.keys())
+        epoch_len = sum(len(frames) for frames in datalist_by_clip.values())
+        
+        current_clip_idx = 0
+        flatten_idxs = np.zeros([epoch_len, 2], dtype = np.int32) - 1
+        for i in range(epoch_len):
+            if (flatten_idxs[i, 0] < 0) or (flatten_idxs[i, 1] < 0):
+                
+                if current_clip_idx >= len(clip_key_list):
+                    break  # 所有clip都用完了
+
+                clip_idx = current_clip_idx
+                current_clip_idx += 1
+
+                clip_key = clip_key_list[clip_idx]
+                frames_in_clip = datalist_by_clip[clip_key]
+                
+                frame_start_idx = 0
+                frame_end_idx = len(frames_in_clip)
+                
+                for j in range(frame_end_idx - frame_start_idx):
+                    if (i + j * batch_size) >= epoch_len:
+                        break
+                    flatten_idxs[i + j * batch_size, 0] = clip_idx
+                    flatten_idxs[i + j * batch_size, 1] = frame_start_idx + j  # 记录帧索引
+
+        NEW_flatten_idxs = [datalist_by_clip[clip_key_list[ele[0]]][ele[1]]
+                            for ele in flatten_idxs]
+        new_datalist = [NEW_datalist[i] for i in NEW_flatten_idxs]
+        
+        """
+        验证信息
+        
+        with open("test_flatten_idxs.log", "w") as f:
+            cnt = 0
+            for i in range(0, len(flatten_idxs), batch_size):
+                idx_in_batch = NEW_flatten_idxs[i:i+batch_size]
+                data_info = [f"batch {i//batch_size:05d} flatten_i {i:05d}: {NEW_datalist[idx]['clip_idx']:04d}^{NEW_datalist[idx]['time_stamp']}^{NEW_datalist[idx]['frame_idx']:04d}" for idx in idx_in_batch]
+                cnt += len(idx_in_batch)
+                # if i < 256:
+                print(f"  数据: {data_info}", file=f)
+
+            print(f"总样本数: {cnt}", file=f)
+            print(f"总clip数: {len(clip_key_list)}", file=f)
+            print(f"最大batch长度(从0开始): {len(NEW_datalist) // batch_size}, 最大整数faltten索引 {len(NEW_datalist) // batch_size * batch_size}", file=f)
+        """
+        
+        return new_datalist
+
     def _distribute_data(self):
         try:
             rank_curr = distributed.get_rank()
@@ -437,7 +545,20 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             rank_curr = 0
             world_size = 1
         
-        return self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=15, rank_curr=rank_curr)
+        if self.phase == const.PHASE_TRAINING:
+            cut_data_list = self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=15, rank_curr=rank_curr)
+        if self.phase == const.PHASE_VALIDATION:
+            """
+            模拟训练时ClipSampler的行为, 但不考虑rank行为, 单卡测试
+            """
+            cut_data_list = cut_and_resample_sorted_data_list = self._preconstruct_test_stream_indices(
+                self.world_data_list, 
+                batch_size=self.global_config.image_per_gpu
+            )
+        else:
+            raise NotImplementedError
+        
+        return cut_data_list
 
     def __len__(self):
         return len(self.dataset)
@@ -895,7 +1016,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['calib']["ego2imgs"] = np.stack([np.concatenate([ele, np.array(
                 [[0, 0, 0, 1]])], axis=0) for ele in data_dict_ret['calib']["ego2imgs"]], axis=0)
 
-
+            data_dict_ret['meta']['is_key'] = info.get('is_key', True)
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
             # data_dict_ret['meta']['img_path'] = img_path
