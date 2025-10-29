@@ -54,16 +54,16 @@ def encode_multibin(alpha):
     v = np.zeros(6)
     alpha = np.remainder(alpha, np.pi * 2)
     if alpha < np.pi / 2 + np.pi / 6.0 or alpha > np.pi / 2 * 3 - np.pi / 6:
-        if alpha < np.pi / 2 + np.pi / 6:
-            alpha = alpha
-        else:
-            alpha = alpha - np.pi * 2
+        # if alpha < np.pi / 2 + np.pi / 6:
+        #     alpha = alpha
+        # else:
+            # pass
         v[0] = 1
         v[2] = np.sin(alpha)
         v[3] = np.cos(alpha)
     if np.pi / 2 - np.pi / 6.0 < alpha < np.pi / 2 * 3 + np.pi / 6:
-        if alpha > np.pi:
-            alpha = alpha - 2 * np.pi
+        # if alpha > np.pi:
+        #     alpha = alpha - 2 * np.pi
         v[1] = 1
         v[4] = np.sin(alpha)
         v[5] = np.cos(alpha)

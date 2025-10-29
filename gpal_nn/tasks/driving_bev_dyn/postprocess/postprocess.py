@@ -271,13 +271,9 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
         
         bin_flag = (pred_dir[:, :, 0] < pred_dir[:, :, 1])
 
-        yaw_0 = torch.atan2(pred_dir[:, :, 2], pred_dir[:, :, 3])
-        yaw_1 = torch.atan2(pred_dir[:, :, 4], pred_dir[:, :, 5])
-        pred_yaw = (yaw_0 * (1.0 - bin_flag.float()) + 
-                    yaw_1 * bin_flag.float()).unsqueeze(-1)
-        
-        # pred_yaw =( torch.atan2(pred_dir[:, :, 2], pred_dir[:, :, 3]) * bin_flag.float() + \
-        #     torch.atan2(pred_dir[:, :, 4], pred_dir[:, :, 5]) * (1.0-bin_flag.float())).unsqueeze(-1)
+
+        pred_yaw =( torch.atan2(pred_dir[:, :, 2], pred_dir[:, :, 3]) * bin_flag.float() + \
+            torch.atan2(pred_dir[:, :, 4], pred_dir[:, :, 5]) * (1.0-bin_flag.float())).unsqueeze(-1)
 
         pred_vel = outputs['estimation_vel'].permute(0, 2, 1)
         pred_score = outputs['estimation_score'].sigmoid().permute(
