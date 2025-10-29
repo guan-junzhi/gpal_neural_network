@@ -108,7 +108,6 @@ class MapAssigner(nn.Module):
         pts_cost_ordered = pts_cost_ordered.view(
             num_preds, num_gts, num_orders)
         pts_cost, order_index = torch.min(pts_cost_ordered, 2)
-
         bboxes = denormalize_2d_bbox(bbox_pred, self.pc_range)
 
         iou_cost = self.iou_cost.cost(bboxes, gt_bboxes) * self.iou_weight

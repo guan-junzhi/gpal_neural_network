@@ -105,7 +105,7 @@ class Bevlane_Evaluator(object):
             if not isinstance(mean_ap, list):
                 mean_ap = [mean_ap]
 
-            header = ['gts', 'dets', 'Recall', 'Precision', 'AP', 'Dist', 'Dist@95', 'LaneTypeAcc', 'LaneColorAcc', 'ShapeTypeAcc', 'CenterlineTypeAcc']
+            header = ['gts', 'dets', 'Recall', 'Precision', 'AP', 'Dist', 'Dist@95', 'LaneTypeAcc', 'LaneColorAcc', 'ShapeTypeAcc', 'CenterlineTypeAcc', 'CenterlineDirectionAcc']
             for i in range(num_scales):
                 table_data = []
                 index = []
@@ -121,6 +121,7 @@ class Bevlane_Evaluator(object):
                         "lane_marking_color_acc": results[j]["lane_marking_color_acc"],
                         "shape_type_acc": results[j]["shape_type_acc"],
                         "centerline_type_acc": results[j]["centerline_type_acc"],
+                        "centerline_direction_acc": results[j]["centerline_direction_acc"],
                     }
 
                     row_data = [
@@ -130,7 +131,8 @@ class Bevlane_Evaluator(object):
                         f'{results[j]["lane_marking_type_acc"]:.3f}',
                         f'{results[j]["lane_marking_color_acc"]:.3f}',
                         f'{results[j]["shape_type_acc"]:.3f}',
-                        f'{results[j]["centerline_type_acc"]:.3f}'
+                        f'{results[j]["centerline_type_acc"]:.3f}',
+                        f'{results[j]["centerline_direction_acc"]:.3f}',
                     ]
                     index.append(rois[j])
                     table_data.append(row_data)

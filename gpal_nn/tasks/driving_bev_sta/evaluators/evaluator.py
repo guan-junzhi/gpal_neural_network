@@ -52,6 +52,7 @@ class DRIVING_BEV_STAEvaluator(BaseEvaluator):
                     'lane_marking_color': gt['lane_marking_color'],
                     'shape_type': gt['shape_type'],
                     'centerline_type': gt['centerline_type'],
+                    'centerline_direction': gt['centerline_direction'],
                 }
                 gt_lanes['vectors'].append(gt_lane)
             gt_all_data.append(gt_lanes)
