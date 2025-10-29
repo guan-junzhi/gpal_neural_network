@@ -12,6 +12,7 @@ import logging
 
 from gpal_lightning import const
 from gpal_lightning.data.dataloader_helpers.gpal_collate import gpal_collate
+from gpal_lightning.data.dataloader_helpers.clip_sampler import ClipSampler
 
 
 class RatioDataloader:
@@ -30,6 +31,11 @@ class RatioDataloader:
         self.task_frequency = {}
         self.collate_fn = collate_fn
 
+        try:
+            self.global_rank = distributed.get_rank()
+        except (RuntimeError, AssertionError):
+            self.global_rank = -1
+
         for task in tasks:
             if not task.task_config.frequency:
                 continue
@@ -43,7 +49,7 @@ class RatioDataloader:
             use_concat_dataset = getattr(
                 task.task_config, 'use_concat_dataset', False)
             if use_concat_dataset:
-                dataset_name_list, concat_list, ratio_list, data_num_list, num_worker = [], [], [], [], 0
+                dataset_name_list, concat_list, ratio_list, data_num_list, num_worker, datalists = [], [], [], [], 0, []
                 for dataset in task.train_datasets:
                     batch_size = global_config.image_per_gpu
                     worker_init_fn = getattr(dataset, "worker_init_fn", None)
@@ -55,6 +61,7 @@ class RatioDataloader:
                     data_num_list.append(len(dataset))
                     num_worker += dataset.worker
                     dataset_name_list.append(dataset.dataset_name)
+                    datalists += dataset.dataset
 
                 default_num_worker_limit = 8
                 num_worker_limit = getattr(
@@ -76,18 +83,23 @@ class RatioDataloader:
                     else:
                         # import pdb;pdb.set_trace()
                         ratio_list[i] = ratio - sum(ratio_list[:i])
-                weighted_list = []
-                for i, ratio in enumerate(ratio_list):
-                    weighted = ratio * sum(data_num_list) / data_num_list[i]
-                    weighted_list.extend([weighted] * data_num_list[i])
-                    rank_zero_info(
-                        f"dataset_name: {dataset_name_list[i]}, "
-                        f"has ratio: {round(ratio, 3)} in concat dataset "
-                    )
                 concat_dataset = ConcatDataset(concat_list)
                 setattr(concat_dataset, 'camera_name', dataset.camera_name)
-                sampler = WeightedRandomSampler(
-                    weighted_list, len(weighted_list), replacement = (len(ratio_list) > 1))
+                if task.name not in ["DRIVING_BEV_DYN"]:
+                    weighted_list = []
+                    for i, ratio in enumerate(ratio_list):
+                        weighted = ratio * sum(data_num_list) / data_num_list[i]
+                        weighted_list.extend([weighted] * data_num_list[i])
+                        rank_zero_info(
+                            f"dataset_name: {dataset_name_list[i]}, "
+                            f"has ratio: {round(ratio, 3)} in concat dataset "
+                        )
+                    sampler = WeightedRandomSampler(
+                        weighted_list, len(weighted_list), replacement = (len(ratio_list) > 1))
+                else:
+                    sampler = ClipSampler(
+                        datalists, default_resample_len=150000, batch_size=batch_size, length_range=[5, 25], rank = self.global_rank)
+
                 dataloader = DataLoader(
                     dataset=concat_dataset,
                     batch_size=batch_size,

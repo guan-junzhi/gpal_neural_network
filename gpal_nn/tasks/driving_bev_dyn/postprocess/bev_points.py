@@ -82,9 +82,9 @@ class Bev_To_Points(nn.Module):
         _, indice_topk = torch.topk(score, k=256, dim=-1)
         indice_topk = indice_topk.view(B, -1)
 
-        features_topk = features.view(B, features.shape[1], -1)[torch.arange(B)[:, None, None],
-                                                                torch.arange(features.shape[1])[
-            None, :, None],
+        features_topk = features.view(B, features.shape[1], -1)[
+            torch.arange(B)[:, None, None],
+            torch.arange(features.shape[1])[None, :, None],
             indice_topk.reshape(B, 1, -1).repeat(1, features.shape[1], 1)]
 
         xys_topk = xys[torch.arange(B)[:, None, None],
@@ -111,9 +111,9 @@ class Bev_To_Points(nn.Module):
 
             hm = batch_dict['hm_cen'].reshape(batch_size, C, -1)
             score_gt_topk = hm[torch.arange(B)[:, None, None],
-                               torch.arange(hm.shape[1])[
-                None, :, None],
-                indice_topk.reshape(B, 1, -1).repeat(1, hm.shape[1], 1)]
+                               torch.arange(hm.shape[1])[None, :, None],
+                               indice_topk.reshape(B, 1, -1).repeat(1, hm.shape[1], 1)
+            ]
             batch_dict['score'] = score_gt_topk.reshape(
                 batch_size, -1, 1, self.num_key_points)  # -> [1, 4, 1, 256]  # 只是用当前帧的
 
@@ -159,10 +159,10 @@ class Bev_To_Points(nn.Module):
                                                                          mode_pred="pred_curr_",
                                                                          features=batch_dict['head_conv'])
 
-        pred_curr_track_point_features = batch_dict['pred_curr_track_point_features'].permute(0, 2, 1)
+        pred_curr_track_point_features = batch_dict['pred_curr_track_point_features'].permute(0, 2, 1)  # -> B 15 256
         pred_curr_track_score = batch_dict['pred_curr_track_score'].permute(0, 2, 1)
 
-        estimation_cen = pred_curr_track_point_features[:,:2,:]
+        estimation_cen = pred_curr_track_point_features[:,:2,:] #  -> B C 256
         estimation_z = pred_curr_track_point_features[:,2:3,:]
         estimation_dim = pred_curr_track_point_features[:,3:6,:]
         estimation_dir = pred_curr_track_point_features[:,6:12,:]
@@ -170,11 +170,11 @@ class Bev_To_Points(nn.Module):
         # estimation_score = pred_curr_track_point_features[:,10:11,:]
 
         template_xyz = torch.cat([batch_dict['pred_curr_track_point_coords'][:, :, :2],
-                                 batch_dict['pred_curr_track_score']], dim=-1)  # -> [1, 256, 3]
+                                  batch_dict['pred_curr_track_score']], dim=-1)  # -> [B, 256, 3]
         
         _, label = batch_dict['score'].max(dim=1)  # 原始的score含通道
-        batch_dict['batch_pred_labels'] = label.view(
-            batch_dict['score'].shape[0], -1) + 1
+        
+        batch_dict['batch_pred_labels'] = label.view(batch_dict['score'].shape[0], -1) + 1
 
         
         # estimation_dim[:, 0, :] = estimation_dim[:, 0, :] * 0.0 + 2.0
@@ -182,7 +182,7 @@ class Bev_To_Points(nn.Module):
         # estimation_dim[:, 2, :] = estimation_dim[:, 2, :] * 0.0 + 2.0
         # exit(1)
         batch_dict['Points_Loss'] = {
-            'estimation_cen': estimation_cen + template_xyz.permute(0, 2, 1)[:,0:2,:].flip(1),
+            'estimation_cen': estimation_cen + template_xyz.permute(0, 2, 1)[:,0:2,:].flip(1),  # 函数内是ys,xs
             'estimation_z': estimation_z,
             'estimation_dim': estimation_dim,
             'estimation_dir': estimation_dir,

@@ -33,6 +33,7 @@ class GpNetDeploy(GpNet):
 
         self.model_file = global_config.onnx_path
         self.calib_data_cnt = 0
+        self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
 
     def forward_one_DRIVING_BEV_DYN(self, x, calib, metadata):
         batch_ret = {
@@ -57,16 +58,16 @@ class GpNetDeploy(GpNet):
             # print(ShowDataStruct("img_slice", img_slice))
             intrins = calib["intrinsic"][i].detach().cpu().numpy()
             cam_dists = calib["cam_dist"][i].detach().cpu().numpy()
-            img_crop_dict = calib["img_crop_dict"]
+            img_crop_dict = self.image_crop_config
             images_grid = np.stack([DistGridMap(img_slice[k].shape[2],
                                                 img_slice[k].shape[1],
                                                 cam_dists[ki],
                                                 intrins[ki],
-                                                int(img_crop_dict["IMAGE_RESIZE"][1][i]),
-                                                int(img_crop_dict["IMAGE_RESIZE"][0][i]),
-                                                int(img_crop_dict["IMAGE_CROP_H_LEN"][i]),
+                                                int(img_crop_dict["IMAGE_RESIZE"][1]),
+                                                int(img_crop_dict["IMAGE_RESIZE"][0]),
+                                                int(img_crop_dict["IMAGE_CROP_H_LEN"]),
                                                 int(img_crop_dict["CROP_HeSai_ID4"]
-                                                    ["CROP_START"][ki][i])
+                                                    ["CROP_START"][ki])
                                                 )
                                    for ki, k in enumerate(img_slice)], axis=0)
 
