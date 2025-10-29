@@ -547,7 +547,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         
         if self.phase == const.PHASE_TRAINING:
             cut_data_list = self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=15, rank_curr=rank_curr)
-        if self.phase == const.PHASE_VALIDATION:
+        elif self.phase == const.PHASE_VALIDATION:
             """
             模拟训练时ClipSampler的行为, 但不考虑rank行为, 单卡测试
             """
