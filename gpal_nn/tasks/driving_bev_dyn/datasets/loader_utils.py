@@ -844,7 +844,8 @@ class InitJsonFile:
     
     def _init(self):
         self.cameras: Dict[str, CameraInfo] = {}
-        self.bounding_boxes: List[BoundingBox3D] = []
+        # self.bounding_boxes: List[BoundingBox3D] = []
+        self.freespace = []
         self.meta_info = {}
         self.special_labels = []
 
@@ -854,6 +855,33 @@ class InitJsonFile:
         return json_data
 
     def parse_json(self, json_data):
+        
+        self._init()  # 重置
+        
+        # 加载元信息
+        self.meta_info = json_data.get('meta_infos', {})
+        
+        # 加载相机信息
+        camera_infos = self.meta_info.get('camera_infos', {})
+        for camera_name, camera_data in camera_infos.items():
+            try:
+                self.cameras[camera_name] = CameraInfo(camera_name, camera_data)
+            except Exception as e:
+                print(f"警告: 加载相机 {camera_name} 失败: {e}")
+        
+      
+            freespace_str = json_data["3d_attributes"]["position"]
+            self.freespace = np.array(freespace_str, dtype=np.float32)
+
+
+        
+        # 加载特殊标签
+        # special_labels_data = json_data.get('special_labels', {})
+        # self.special_labels = json_data.get('special_labels', [])
+        
+        return self.meta_info, self.cameras, self.freespace
+    
+    def parse_json_freespace(self, json_data):
         
         self._init()  # 重置
         

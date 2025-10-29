@@ -427,17 +427,17 @@ class DRIVING_BEV_DYNHead(BaseHead):
         #     num_bev_features=[64, 64, 128, 64, 128, 128, 128]
         # )
         self.head_config = {"in_channels": 256,
-                            "num_stages": 6, "out_channels": 21, "upsample": 4}
+                            "num_stages": 6, "out_channels": 1, "upsample": 4}
 
         super(DRIVING_BEV_DYNHead, self).__init__(
             global_config, task_config, loss_func)
 
     def _setup(self):
         self.head = nn.ModuleDict()
-        self.head["center_head"] = FastDecoderHead(self.head_config)
+        self.head["seg_head"] = FastDecoderHead(self.head_config)
     def load_state_dict(self, state_dict, strict=True):
         if len(self.head) == 1:
-            self.head["center_head"].load_state_dict(state_dict, strict)
+            self.head["seg_head"].load_state_dict(state_dict, strict)
         else:
             for head_name, head in self.head.items():
                 state_dict_sub = {k.replace(f"{head_name}.", ""): state_dict[k]
@@ -445,8 +445,9 @@ class DRIVING_BEV_DYNHead(BaseHead):
                 head.load_state_dict(state_dict_sub, strict)
 
     def forward(self, x: torch.Tensor, calib=None) -> torch.Tensor:
+        print(x.shape)
         # B,HW,C = x.shape
         # x = x.permute(0,2,1).reshape(B,C,96,240)
-        x = self.head["center_head"](x)
-        batch_dict = {'head_conv': x[:, 6:], "hm_cen": x[:, :6]}
+        x = self.head["seg_head"](x)
+        batch_dict = {'seg': x}
         return [batch_dict]

@@ -78,7 +78,6 @@ class EpochModelCheckpoint(ModelCheckpoint):
             print(trainer.fit_loop.epoch_loop.global_step)
 
         elif self.load_from:
-            print(self.checkpoint)
             if "state_dict" in self.checkpoint:
                 state_dict = self.checkpoint["state_dict"]
             elif "model_weights" in self.checkpoint:

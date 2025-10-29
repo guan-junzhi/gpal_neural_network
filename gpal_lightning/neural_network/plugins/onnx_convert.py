@@ -19,7 +19,6 @@ import numpy as np
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
 from gpal_nn.tasks.parking_ipm_sta.datasets.parking_ipm_sta_dataset import preprocess_img
-import pdb
 
 
 class WrappedGpNet(GpNet):

@@ -534,6 +534,24 @@ class DataProcessor(object):
             data_dict['vel'] = vel
 
         return data_dict
+    
+    def build_freespace_targets(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.build_freespace_targets, config=config)
+
+        if config.TARGET_ENABLED[self.mode]:
+            det_range = self.point_cloud_range  # det-range 从dataset传过来的
+            minX, maxX, minY, maxY, minZ, maxZ = det_range[0], det_range[3], det_range[1], \
+                det_range[4], det_range[2], det_range[5]
+            freespace_points = data_dict['freespace']  # 在getlabel那里需要规则需要设计清除
+
+            hm_w, hm_l = config.hm_size  # 小, 大  Y X
+            hm_w, hm_l = int(hm_w), int(hm_l)  # img space
+            bound_size_x, bound_size_y = maxX - minX, maxY - minY  # lidar space
+            freespace_poly = np.zeros((1, hm_w, hm_l), dtype=np.float32)
+
+            data_dict['freespace'] = freespace_poly
+        return data_dict
 
     def transform_points_to_voxels(self, data_dict=None, config=None):
         if data_dict is None:

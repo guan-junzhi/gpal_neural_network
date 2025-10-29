@@ -8,6 +8,8 @@ import pickle
 from typing import List, Union
 from torch import distributed
 import numpy as np
+import sys
+sys.path.append("/home/jovyan/gpal_neural_network")
 
 from gpal_lightning import const
 from gpal_lightning.neural_network.tasks.builder import DATASETS
@@ -102,23 +104,21 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         # pkl.dump(inputs, open("inputs.pkl", 'wb'))
         # exit(1)
 
-        DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT")
+        # DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT")
         LOCAL_DATASETS_ROOT = os.getenv(
             "ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT")
 
-        WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
-        DATA_COLLECT_ROOT = os.getenv(
-            "ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT")
+        # WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
+        # DATA_COLLECT_ROOT = os.getenv(
+        #     "ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT")
 
-        self.root_dir = os.path.join(DATASETS_ROOT, root_dir)
-        self.json_dir = os.path.join(WORKDIRS_ROOT, json_dir)
-        self.image_dir = os.path.join(
-            WORKDIRS_ROOT if is_manual_label else DATA_COLLECT_ROOT, image_dir)
+        # self.root_dir = root_dir
+        self.json_dir = json_dir
+        self.image_dir = image_dir
         # self.image_dir = "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/2025-09-23_16-40-52-312.4"
-        self.middle_json_str = middle_json_str
 
         self.id_to_type = task_config.class_dict
-        self.have_prev_label = have_prev_label
+        # self.have_prev_label = have_prev_label
         self.camera_names = camera_name
         self.task = task_config.name
 
@@ -147,8 +147,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.image_view = camera_name
 
         # self.fusion_infos = []
-        self.data_list = [os.path.join(WORKDIRS_ROOT, ele)
-                          for ele in data_list]
 
         super().__init__(global_config=global_config,
                          task_config=task_config,
@@ -175,9 +173,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         self.json_data = InitJsonFile(
             self.class_names, self.task_config.od_range)
-        OD_HEATMAP_VOXEL_SIZE = [0.64, 0.64, 0.5]
-        OCC_RANGE = [-40.96, -25.6, -1.0, 81.92, 25.6, 5.0]
-        RADAR_PREPROCESS_VOXEL_SIZE = [0.32, 0.32, 0.5]
+        OD_HEATMAP_VOXEL_SIZE = [0.20, 0.20, 0.5]
+        # OCC_RANGE = [-40.96, -25.6, -1.0, 81.92, 25.6, 5.0]
+        OCC_RANGE = [-10, -10, -1.0, 10, 10, 1.0]
+        # RADAR_PREPROCESS_VOXEL_SIZE = [0.32, 0.32, 0.5]
         OD_HEATMAP_OUT_HW = [
             int((self.task_config.od_range[4] -
                 self.task_config.od_range[1])/OD_HEATMAP_VOXEL_SIZE[1]),
@@ -185,89 +184,26 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 self.task_config.od_range[0])/OD_HEATMAP_VOXEL_SIZE[0]),
         ]  # [96, 240]  # YX
         CLASS_NAMES_LIST = self.class_names
-        MAX_OBJ_NUMS = 256
+        MAX_OBJ_NUMS = 1
 
         DATA_PROCESSOR = [
-            # dict(
-            #     NAME='makeBEVMap',
-            #     POINT_CLOUD_RANGE=OD_RANGE,
-            #     OCC_RANGE=OCC_RANGE,
-            #     VOXEL_SIZE=BEV_MAP_VOXEL_SIZE,
-            #     BEV_ENABLED=True
-            # ),
             dict(
-                NAME='mask_points_and_boxes_outside_range',
-                OCC_RANGE=OCC_RANGE,
-                REMOVE_OUTSIDE_BOXES=True
-            ),
-            # dict(
-            #     NAME='shuffle_points',
-            #     SHUFFLE_ENABLED=dict(train=True, test=False)
-            # ),
-            # dict(
-            #     NAME='transform_points_to_voxels',
-            #     VOXEL_SIZE=RADAR_PREPROCESS_VOXEL_SIZE,
-            #     MAX_POINTS_PER_VOXEL=32,
-            #     VOXEL_FEATURES=8,
-            #     MAX_NUMBER_OF_VOXELS=dict(train=100000, test=100000)
-            # ),
-            # dict(
-            #     NAME='build_od_gt_targets',
-            #     hm_size=OD_HEATMAP_OUT_HW,
-            #     num_classes=len(CLASS_NAMES_LIST),
-            #     max_objects=MAX_OBJ_NUMS,
-            #     TARGET_ENABLED=dict(train=True, test=False)
-            # ),
-            dict(
-                NAME='build_targets_track',
+                NAME='build_freespace_targets',
                 hm_size=OD_HEATMAP_OUT_HW,
                 num_classes=len(CLASS_NAMES_LIST),
                 max_objects=MAX_OBJ_NUMS,
                 TARGET_ENABLED=dict(train=True, test=False)
-            ),
-            # dict(
-            #     NAME='build_targets_former',
-            #     hm_size=OD_HEATMAP_OUT_HW,
-            #     num_classes=len(CLASS_NAMES_LIST),
-            #     max_objects=MAX_OBJ_NUMS,
-            #     TARGET_ENABLED=dict(train=True, test=False)
-            # ),
-            # dict(
-            #     NAME='build_occ',
-            #     voxel_size=OCC_OUT_VOXEL_SIZE,
-            #     pcr=OCC_RANGE,
-            #     OCC_ENABLED=dict(train=True, test=False)
-            # ),
-            # dict(
-            #     NAME='build_2d_targets',
-            #     sample_size=[40, 96],
-            #     max_objects=MAX_OBJ_NUMS,
-            #     TARGET_ENABLED=dict(train=True, test=False)
-            # )
+            )
         ]
 
-        POINT_FEATURE_ENCODING = dict(
-            encoding_type="absolute_coordinates_encoding",
-            used_feature_list=["x", "y", "z",
-                               "vr", "cv_ground", "power", "snr"],
-            src_feature_list=["x", "y", "z", "vr",
-                              "cv_ground", "power", "snr"],
-        )
         self.data_processor = DataProcessor(
             DATA_PROCESSOR, point_cloud_range=np.array(
                 self.task_config.od_range),
             training=phase == const.PHASE_TRAINING, num_point_features=0
         )
 
-        # self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
-        # self.root_split_path = self.dataset_cfg.DATA_PATH_LIST
-        # self.class_names = class_names
-        # self.logger = logger
-
-        # if self.dataset_cfg.USE_CAMERA_YAML:
-
-        cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
-        if True:
+        # cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
+        if False:
             intrinsic = []
             distort_coeff = []
             r_mat = []
@@ -300,103 +236,103 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.deploy_eval = (phase != const.PHASE_TRAINING) and (global_config.onnx_path != None)
 
 
-    def include_fusion_data(self, phase):
+    # def include_fusion_data(self, phase):
 
-        print('Loading HeSai dataset ...')
+    #     print('Loading HeSai dataset ...')
 
-        fusion_infos = []
-        for info_path in self.data_list:
-            # info_path = self.root_path / info_path
-            if not os.path.exists(info_path):
-                print(info_path, f' is not exists')
-                continue
-            with open(info_path, 'rb') as f:
-                infos = pickle.load(f)
-                # infos = infos[:100]
-                fusion_infos.extend(infos)
+    #     fusion_infos = []
+    #     for info_path in self.data_list:
+    #         # info_path = self.root_path / info_path
+    #         if not os.path.exists(info_path):
+    #             print(info_path, f' is not exists')
+    #             continue
+    #         with open(info_path, 'rb') as f:
+    #             infos = pickle.load(f)
+    #             # infos = infos[:100]
+    #             fusion_infos.extend(infos)
 
-        print('Total samples for HeSai dataset: %d' %
-              (len(fusion_infos)))
+    #     print('Total samples for HeSai dataset: %d' %
+    #           (len(fusion_infos)))
 
-        skip_subday_list = [
-            '2025-07-10_13-44-15-069',
-            '2025-07-10_13-52-15-068',
-            '2025-07-10_13-50-15-068',
-            '2025-07-10_13-43-15-071',
-            '2025-07-10_13-57-15-069',
-            '2025-07-10_13-53-15-071',
-            '2025-07-10_13-54-15-072',
-            '2025-07-10_13-58-15-068',
-            '2025-07-10_13-45-15-071',
-            '2025-07-10_13-41-15-068',
-            '2025-07-10_13-48-15-068',
-            '2025-07-10_13-42-15-069',
-            '2025-07-10_13-56-15-068',
-            '2025-07-10_10-35-52-674',
-            '2025-07-10_10-32-52-674',
-            '2025-07-10_11-36-52-674',
-            '2025-07-10_10-41-52-675',
-            '2025-07-10_11-03-52-676',
-            '2025-07-10_11-49-52-674',
-            '2025-07-10_11-46-52-674',
-            '2025-07-10_10-52-52-674',
-            '2025-07-10_10-56-52-676',
-            '2025-07-10_11-52-52-674',
-            '2025-07-10_11-34-52-675',
-            '2025-07-10_11-02-52-675',
-            '2025-07-10_10-25-52-675',
-            '2025-07-10_11-38-52-674',
-            '2025-07-10_10-46-52-674',
-            '2025-07-10_10-55-52-676',
-            '2025-07-10_11-33-52-674',
-            '2025-07-10_11-12-52-674',
-            '2025-07-10_10-49-52-675',
-        ]
+    #     skip_subday_list = [
+    #         '2025-07-10_13-44-15-069',
+    #         '2025-07-10_13-52-15-068',
+    #         '2025-07-10_13-50-15-068',
+    #         '2025-07-10_13-43-15-071',
+    #         '2025-07-10_13-57-15-069',
+    #         '2025-07-10_13-53-15-071',
+    #         '2025-07-10_13-54-15-072',
+    #         '2025-07-10_13-58-15-068',
+    #         '2025-07-10_13-45-15-071',
+    #         '2025-07-10_13-41-15-068',
+    #         '2025-07-10_13-48-15-068',
+    #         '2025-07-10_13-42-15-069',
+    #         '2025-07-10_13-56-15-068',
+    #         '2025-07-10_10-35-52-674',
+    #         '2025-07-10_10-32-52-674',
+    #         '2025-07-10_11-36-52-674',
+    #         '2025-07-10_10-41-52-675',
+    #         '2025-07-10_11-03-52-676',
+    #         '2025-07-10_11-49-52-674',
+    #         '2025-07-10_11-46-52-674',
+    #         '2025-07-10_10-52-52-674',
+    #         '2025-07-10_10-56-52-676',
+    #         '2025-07-10_11-52-52-674',
+    #         '2025-07-10_11-34-52-675',
+    #         '2025-07-10_11-02-52-675',
+    #         '2025-07-10_10-25-52-675',
+    #         '2025-07-10_11-38-52-674',
+    #         '2025-07-10_10-46-52-674',
+    #         '2025-07-10_10-55-52-676',
+    #         '2025-07-10_11-33-52-674',
+    #         '2025-07-10_11-12-52-674',
+    #         '2025-07-10_10-49-52-675',
+    #     ]
 
-        fusion_infos = [i for i in fusion_infos if i['sequence_name'].split(
-            '/')[-1] not in skip_subday_list]
+    #     fusion_infos = [i for i in fusion_infos if i['sequence_name'].split(
+    #         '/')[-1] not in skip_subday_list]
 
-        if phase != const.PHASE_TRAINING:
-            skip_subday_list = [
-                "EKART_ID4001_2025-07-01-13-18-12",
-                "EKART_ID4001_2025-07-01-15-45-23",
-                "EKART_ID4001_2025-07-01-17-13-05",
-                "EKART_ID4001_2025-07-05-12-56-38",
-                "EKART_ID4001_2025-07-06-13-19-04",
-                "EKART_ID4001_2025-07-06-13-48-04",
-                "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-36-52-674",
-                "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-46-52-674",
-                "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-52-52-674",
-                "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-38-52-674",
-                "EKART_ID4001_2025-07-10-09-30-00/2025-07-10_09-46-14-102",
-            ]
-            fusion_infos_new = []
-            for info in fusion_infos:
-                flag_name_0 = info['sequence_name'].split('/')[0]
-                flag_name_1 = info['sequence_name']
-                # if flag_name_1 == 'EKART_ID4001_2025-07-10-09-30-00/2025-07-10_09-46-14-102':
-                #     breakpoint()
-                if flag_name_0 in skip_subday_list:
-                    continue
-                if flag_name_1 in skip_subday_list:
-                    continue
-                fusion_infos_new.append(info)
+    #     if phase != const.PHASE_TRAINING:
+    #         skip_subday_list = [
+    #             "EKART_ID4001_2025-07-01-13-18-12",
+    #             "EKART_ID4001_2025-07-01-15-45-23",
+    #             "EKART_ID4001_2025-07-01-17-13-05",
+    #             "EKART_ID4001_2025-07-05-12-56-38",
+    #             "EKART_ID4001_2025-07-06-13-19-04",
+    #             "EKART_ID4001_2025-07-06-13-48-04",
+    #             "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-36-52-674",
+    #             "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-46-52-674",
+    #             "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-52-52-674",
+    #             "EKART_ID4001_2025-07-10-10-20-59/2025-07-10_11-38-52-674",
+    #             "EKART_ID4001_2025-07-10-09-30-00/2025-07-10_09-46-14-102",
+    #         ]
+    #         fusion_infos_new = []
+    #         for info in fusion_infos:
+    #             flag_name_0 = info['sequence_name'].split('/')[0]
+    #             flag_name_1 = info['sequence_name']
+    #             # if flag_name_1 == 'EKART_ID4001_2025-07-10-09-30-00/2025-07-10_09-46-14-102':
+    #             #     breakpoint()
+    #             if flag_name_0 in skip_subday_list:
+    #                 continue
+    #             if flag_name_1 in skip_subday_list:
+    #                 continue
+    #             fusion_infos_new.append(info)
 
-            fusion_infos = fusion_infos_new
-            self.fusion_infos = []
-        # fusion_infos = [fusion_infos[100]] * 6
-        # if phase == const.PHASE_TRAINING:
-        #     fusion_infos_ext = []
-        #     for ele in fusion_infos:
-        #         fusion_infos_ext.append(copy.deepcopy(ele))
-        #         ele["curr_index"], ele["next_index"] = ele["next_index"], ele["curr_index"]
-        #         ele["curr_timestamp"], ele["next_timestamp"] = ele["next_timestamp"], ele["curr_timestamp"]
-        #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
-        #         fusion_infos_ext.append(copy.deepcopy(ele))
-        #     fusion_infos = fusion_infos_ext
-        print('Total samples for HeSai dataset: %d' %
-              (len(fusion_infos)))
-        return fusion_infos
+    #         fusion_infos = fusion_infos_new
+    #         self.fusion_infos = []
+    #     # fusion_infos = [fusion_infos[100]] * 6
+    #     # if phase == const.PHASE_TRAINING:
+    #     #     fusion_infos_ext = []
+    #     #     for ele in fusion_infos:
+    #     #         fusion_infos_ext.append(copy.deepcopy(ele))
+    #     #         ele["curr_index"], ele["next_index"] = ele["next_index"], ele["curr_index"]
+    #     #         ele["curr_timestamp"], ele["next_timestamp"] = ele["next_timestamp"], ele["curr_timestamp"]
+    #     #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
+    #     #         fusion_infos_ext.append(copy.deepcopy(ele))
+    #     #     fusion_infos = fusion_infos_ext
+    #     print('Total samples for HeSai dataset: %d' %
+    #           (len(fusion_infos)))
+    #     return fusion_infos
 
     def _build_world_data_list(self):
         try:
@@ -407,35 +343,33 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             rank_curr = 0
             self.rank_local = 0
 
-        self.world_data_list = self.include_fusion_data(self.phase)
-
     def __len__(self):
         return len(self.dataset)
 
-    def save_all_heatmap(self, savePath):
-        if not os.path.exists(savePath):
-            os.makedirs(savePath)
-        for idx, data in enumerate(self.dataset):
-            anno_f, image_f = data
-            if idx > 10:
-                break
-            image = self.pull_img(image_f)
-            # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            anno = self.pull_anno(anno_f)
-            gtmap = self.assigner.assign(anno)
+    # def save_all_heatmap(self, savePath):
+    #     if not os.path.exists(savePath):
+    #         os.makedirs(savePath)
+    #     for idx, data in enumerate(self.dataset):
+    #         anno_f, image_f = data
+    #         if idx > 10:
+    #             break
+    #         image = self.pull_img(image_f)
+    #         # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    #         anno = self.pull_anno(anno_f)
+    #         gtmap = self.assigner.assign(anno)
 
-            # kmap = np.zeros((self.h, self.w, 1), np.uint8)
-            # lmap = np.zeros((self.h, self.w, 1), np.uint8)
-            # for j in range(self.h):
-            #     for i in range(self.w):
-            #         kmap[j][i] = int(gtmap[0][j][i] * 255)
-            #         lmap[j][i] = int(gtmap[1][j][i] * 255)
-            # print("kmap value ", kmap[j][i])
+    #         # kmap = np.zeros((self.h, self.w, 1), np.uint8)
+    #         # lmap = np.zeros((self.h, self.w, 1), np.uint8)
+    #         # for j in range(self.h):
+    #         #     for i in range(self.w):
+    #         #         kmap[j][i] = int(gtmap[0][j][i] * 255)
+    #         #         lmap[j][i] = int(gtmap[1][j][i] * 255)
+    #         # print("kmap value ", kmap[j][i])
 
-            res_img = overlay_heatmap(image, gtmap[0], point_radius=3)
-            line_img = overlay_heatmap(image, gtmap[1], point_radius=3)
-            cv2.imwrite(savePath + '/' + str(idx) + '_pt.jpg', res_img)
-            cv2.imwrite(savePath + '/' + str(idx) + '_line.jpg', line_img)
+    #         res_img = overlay_heatmap(image, gtmap[0], point_radius=3)
+    #         line_img = overlay_heatmap(image, gtmap[1], point_radius=3)
+    #         cv2.imwrite(savePath + '/' + str(idx) + '_pt.jpg', res_img)
+    #         cv2.imwrite(savePath + '/' + str(idx) + '_line.jpg', line_img)
 
     def get_camera_parameters(self, cam_infos):
         # === 内外参 === #
@@ -460,39 +394,39 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         #     'camera_names': self.image_view,
         # }
 
-        intrinsic = np.array(intrinsic).reshape(7, 3, 3)
-        cam_dist = np.array(cam_dist).reshape(7, 1, 5)
-        extrinsic = np.array(extrinsic).reshape(7, 4, 4)  # 4*4
+        intrinsic = np.array(intrinsic).reshape(-1, 3, 3)
+        cam_dist = np.array(cam_dist).reshape(-1,1,5)
+        extrinsic = np.array(extrinsic).reshape(-1, 4, 4)  # 4*4
 
         return intrinsic, cam_dist, extrinsic, camera_sizes
 
-    def get_box(self, bounding_boxes):
-        obj_list = []
-        gt_names_list = []
-        is_visible_list = []
+    # def get_box(self, bounding_boxes):
+    #     obj_list = []
+    #     gt_names_list = []
+    #     is_visible_list = []
 
-        for i, bbox in enumerate(bounding_boxes):
-            x, y, z = bbox.position
-            l, w, h = bbox.size
-            heading = bbox.rotation[2]
-            object_type = bbox.object_type
-            trackid = bbox.track_id
-            # vx, vy = 0.0, 0.0
-            vx, vy = bbox.velocity[0], bbox.velocity[1]
-            is_visible = bbox.image_visible
+    #     for i, bbox in enumerate(bounding_boxes):
+    #         x, y, z = bbox.position
+    #         l, w, h = bbox.size
+    #         heading = bbox.rotation[2]
+    #         object_type = bbox.object_type
+    #         trackid = bbox.track_id
+    #         # vx, vy = 0.0, 0.0
+    #         vx, vy = bbox.velocity[0], bbox.velocity[1]
+    #         is_visible = bbox.image_visible
 
-            obj = [x, y, z, l, w, h, heading, 0.0, vx, vy]
-            obj_list.append(obj)
-            gt_names_list.append(object_type)
-            is_visible_list.append(is_visible)
+    #         obj = [x, y, z, l, w, h, heading, 0.0, vx, vy]
+    #         obj_list.append(obj)
+    #         gt_names_list.append(object_type)
+    #         is_visible_list.append(is_visible)
 
-        gt_boxes = np.array(obj_list)
-        gt_names = np.array(gt_names_list)
-        is_visible = np.array(is_visible_list).astype(np.bool_)
-        gt_boxes = gt_boxes[is_visible]
-        gt_names = gt_names[is_visible]
+    #     gt_boxes = np.array(obj_list)
+    #     gt_names = np.array(gt_names_list)
+    #     is_visible = np.array(is_visible_list).astype(np.bool_)
+    #     gt_boxes = gt_boxes[is_visible]
+    #     gt_names = gt_names[is_visible]
 
-        return gt_boxes, gt_names
+    #     return gt_boxes, gt_names
 
     def get_image(self, filepath, view_idx):
         """统一处理不同视角的图像"""
@@ -530,86 +464,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         return image
 
-    def prepare_data(self, data_dict):
-        """
-        Args:
-            data_dict:
-                points: optional, (N, 3 + C_in)
-                gt_boxes: optional, (N, 7 + C) [x, y, z, dx, dy, dz, heading, ...]
-                gt_names: optional, (N), string
-                ...
-
-        Returns:
-            data_dict:
-                frame_id: string
-                points: (N, 3 + C_in)
-                gt_boxes: optional, (N, 7 + C) [x, y, z, dx, dy, dz, heading, ...]
-                gt_names: optional, (N), string
-                use_lead_xyz: bool
-                voxels: optional (num_voxels, max_points_per_voxel, 3 + C)
-                voxel_coords: optional (num_voxels, 3)
-                voxel_num_points: optional (num_voxels)
-                ...
-        """
-        if self.phase == const.PHASE_TRAINING:
-            assert 'gt_boxes' in data_dict, 'gt_boxes should be provided for training'
-            gt_boxes_mask = np.array(
-                [n in self.class_names for n in data_dict['gt_names']], dtype=np.bool_)
-
-            '''data_dict = self.data_augmentor.forward(
-                data_dict={
-                    **data_dict,
-                    'gt_boxes_mask': gt_boxes_mask
-                }
-            )'''
-
-        # print(data_dict['gt_names'], self.class_names)
-        if data_dict.get('gt_boxes', None) is not None:
-            selected = common_utils.keep_arrays_by_name(
-                data_dict['gt_names'], self.class_names)
-
-            not_selected = [i for i in range(
-                len(data_dict['gt_names'])) if i not in selected]
-
-            if not_selected != []:
-                print(len(data_dict['gt_names'][selected]),
-                      data_dict['gt_names'][not_selected])
-                # exit(1)
-            data_dict['gt_boxes'] = data_dict['gt_boxes'][selected]
-            data_dict['gt_names'] = data_dict['gt_names'][selected]
-            gt_classes = np.array([self.type_to_id[n]
-                                  for n in data_dict['gt_names']], dtype=np.int32)
-            gt_boxes = np.concatenate((data_dict['gt_boxes'].reshape(-1, 10),
-                                       gt_classes.reshape(-1, 1).astype(np.float32)), axis=1)
-            data_dict['gt_boxes'] = gt_boxes
-
-        if data_dict.get('gt_boxes_former', None) is not None:
-            selected = common_utils.keep_arrays_by_name(
-                data_dict['gt_names_former'], self.class_names)
-            data_dict['gt_boxes_former'] = data_dict['gt_boxes_former'][selected]
-            data_dict['gt_names_former'] = data_dict['gt_names_former'][selected]
-            gt_classes = np.array(
-                [self.type_to_id[n] for n in data_dict['gt_names_former']], dtype=np.int32)
-            gt_boxes = np.concatenate((data_dict['gt_boxes_former'].reshape(-1, 10),
-                                       gt_classes.reshape(-1, 1).astype(np.float32)), axis=1)
-            data_dict['gt_boxes_former'] = gt_boxes
-
-        if data_dict.get('points', None) is not None:
-            data_dict = self.point_feature_encoder.forward(data_dict)
-
-        data_dict = self.data_processor.forward(
-            data_dict=data_dict
-        )
-
-        # if (self.phase == const.PHASE_TRAINING) and (len(data_dict['gt_boxes']) == 0):
-        #     new_index = np.random.randint(self.__len__())
-        #     print(f"resample trig {new_index}")
-        #     return self.__getitem__(new_index)
-
-        data_dict.pop('gt_names', None)
-        if data_dict.get('gt_names_former', None) is not None:
-            data_dict.pop('gt_names_former', None)
-        return data_dict
 
     def ClearFastBufCnt(self):
         self.fast_buf_try_cnt = 0
@@ -712,9 +566,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         try:
             info = copy.deepcopy(self.dataset[idx])
-
-            # print(f"__getitem__ {idx}")
-            # print(info)
+            print(info)
             input_dict = {}
 
             # 总起
@@ -722,28 +574,21 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             curr_time_stamp, prev_time_stamp = info['time_stamp'].split('/')
 
             # === 当前帧 格式必须统一
-            curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
+            curr_json_file = f'{self.json_dir}/{sequence_name}/{curr_time_stamp}.json'
             # curr_json_file = "/data/ai_group/workdirs/od_occ_group/huiquyang/data/Obstacle_3DModelResult_/EKART_ID4001_2025-08-15-18-20-39/2025-08-15_18-34-44-232/3d_detection_json/1755254118.200182.json"
             curr_json_data = self.json_data.load(curr_json_file)
-            re_curr_infos = self.json_data.parse_json(curr_json_data)
-            meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
+            meta_info, cameras, freespace_points = self.json_data.parse_json(curr_json_data)
+            
+            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
 
-            gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
-            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(
-                cam_infos=cameras)
-
-            input_dict['gt_names'] = gt_names
-            input_dict['gt_boxes'] = gt_boxes
-
-            time_dp.Duration("cur_json", "begin")
-
-            time_dp.Duration("prev_json", "cur_json")
+            # input_dict['gt_names'] = gt_names
+            # input_dict['gt_boxes'] = gt_boxes
 
             # === 共同信息
             input_dict['frame_id'] = info['time_stamp']
 
             # if self.dataset_cfg.USE_CAMERA_YAML:
-            if True:
+            if False:
                 intrinsic = self.intrinsic
                 cam_dist = self.cam_dist
                 temp = np.stack([np.eye(4) for i in range(7)], axis=0)
@@ -815,8 +660,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     np.float32) / 255.0
 
             time_dp.Duration("image", "prev_json")
-
-            data_dict = self.prepare_data(data_dict=input_dict)
+            data_dict = self.data_processor.forward(data_dict=input_dict)
+    
             time_dp.Duration("prepare_data", "image")
 
             data_dict_ret = {
@@ -829,12 +674,12 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     data_dict_ret['image'][data_dict["camera_names"]
                                            [i]] = data_dict[f"origin_images_input{i}"]
 
-            for key in data_dict:
-                if "gt_curr_" in key:
-                    data_dict_ret["label"][key] = data_dict[key]
-                if "gt_prev_" in key:
-                    data_dict_ret["label"][key] = data_dict[key]
-            data_dict_ret["label"]["gt_boxes"] = data_dict["gt_boxes"]
+            # for key in data_dict:
+            #     if "gt_curr_" in key:
+            #         data_dict_ret["label"][key] = data_dict[key]
+            #     if "gt_prev_" in key:
+            #         data_dict_ret["label"][key] = data_dict[key]
+            data_dict_ret["label"]["freespace_mask"] = data_dict["freespace"]
 
             for key in ["intrinsic", "cam_dist", "extrinsic"]:
                 data_dict_ret["calib"][key] = data_dict[key]
@@ -888,7 +733,8 @@ def Get(dataset_temp, i, j):
 
 if __name__ == "__main__":
     import pickle as pkl
-    inputs = pkl.load(open("ssd/inputs.pkl", 'rb'))
+    inputs = pkl.load(open("inputs.pkl", 'rb'))
+    print(inputs)
 
     random.seed(555)
     os.environ['MASTER_ADDR'] = '127.0.0.1'
@@ -930,4 +776,4 @@ if __name__ == "__main__":
     print(ShowDataStruct("image_gt", d["image"]))
     print(ShowDataStruct("slot_maps", d["label"]))
 
-    train_dataset.save_all_heatmap('experiments/data_visual')
+    # train_dataset.save_all_heatmap('experiments/data_visual')

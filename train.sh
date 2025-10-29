@@ -59,7 +59,7 @@ then
     tasks=driving_bev_dyn 
     # load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250911_12_22_22/checkpoint/epoch=16-step=30000_checkpoint.pth
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20250924_15_00_27/checkpoint/epoch=2-step=18000_checkpoint.pth
-    config=configs_for_develop/driving_bev_dyn_config.yaml
+    config=configs_for_develop/driving_bev_freespace_config.yaml
 elif [[ $1 == "radar4d_nn_sdk" ]];
 then
     tasks=radar4d_nn_sdk 

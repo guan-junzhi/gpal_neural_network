@@ -12,7 +12,8 @@ __all__ = [
     "DRIVING_BEV_DYNPostProcessing",
     "DRIVING_BEV_DYNreProcessing",
     "DRIVING_BEV_DYNTask",
-    "DRIVING_BEV_DYNHead",
+    "DRIVING_BEV_DYNHead"
+    # "DRIVING_BEV_FREESPACEHead",
     # "DRIVING_BEV_DYNLoss",
     "DRIVING_BEV_DYNLogger",
     "DRIVING_BEV_DYNConfigParser",
