@@ -173,6 +173,7 @@ class BaseDataset(Dataset, ABC):
     def _build_dataset(self):
         logging.info("Building distirbuted data list.")
         self.dataset = self._distribute_data()
+        logging.info(f"Built distirbuted data list {len(self.dataset)}")
         # TODO: support upsample, skip and other features in furture
 
     def __len__(self):

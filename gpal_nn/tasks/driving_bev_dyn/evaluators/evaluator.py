@@ -185,6 +185,10 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     for i in range(len(gts)):
         det_annos[i].update(gts[i])
     
+    logger.info(f'det_annos: len: {len(det_annos)}')
+    key_det_annos = [det_annos[i] for i in range(len(det_annos)) if metas[i]['is_key']]
+    det_annos = key_det_annos
+    logger.info(f'key_det_annos: len{len(key_det_annos)}')
     # det_annox = evaluator.load_det_annos(
     #     det_annos)  # 文件路径 or list[dict, dict, ...]
     
@@ -324,5 +328,12 @@ if __name__ == "__main__":
     # print(inputs[-1])
     # evaluation(*inputs)
     evaluation(preds, gts, metas, inputs[3])
-
-    
+    # class_names = [
+    #     "vehicle_car",
+    #     "vehicle_truck",
+    #     "vehicle_construction_vehicle",
+    #     "vehicle_cyclist",
+    #     "vehicle_tricycle",
+    #     "human_pedestrian",
+    # ]
+    # evaluation(preds, gts, metas, class_names)
