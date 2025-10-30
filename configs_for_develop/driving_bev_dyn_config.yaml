@@ -23,7 +23,7 @@ Backbones:
     # freeze: all
     out_channels: 64
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
-    
+  
 Groups:
   group0: {load: all, freeze: all, type: DummyBackbone, input_source: backbone0}
 Necks:

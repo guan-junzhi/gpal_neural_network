@@ -386,6 +386,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             fusion_infos = fusion_infos_new
             # self.fusion_infos = []
         # fusion_infos = [fusion_infos[100]] * 6
+        fusion_infos = fusion_infos[::20]
         # if phase == const.PHASE_TRAINING:
         #     fusion_infos_ext = []
         #     for ele in fusion_infos:
