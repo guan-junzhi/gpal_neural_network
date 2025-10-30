@@ -47,8 +47,6 @@ class GpNetDeploy(GpNet):
         save_path = f'calib'
         batch_size = len(metadata)
         for i in tqdm(range(batch_size)):
-            # img_slice = torch.stack(
-            #     [x[k][i] for k in x], dim=0).float().detach().cpu().numpy()
 
             img_slice = {k: x[k][i].unsqueeze(0).float().detach().cpu().numpy() for k in x}
             # print(ShowDataStruct("img_slice", img_slice))
@@ -68,20 +66,12 @@ class GpNetDeploy(GpNet):
                                    for ki, k in enumerate(img_slice)], axis=0)
 
 
-            # for ki, k in enumerate(img_slice):
-            #     # cv2.imwrite(f"img_{k}.jpg", (img_slice[k].squeeze(0)).astype(np.uint8))
-            #     src = torch.from_numpy(img_slice[k]).float().cuda().permute(0, 3, 1, 2)
-            #     grid = torch.from_numpy(images_grid[ki:ki+1]).float().cuda()
-            #     udist_img8ms = F.grid_sample(
-            #         src, grid, align_corners=True, padding_mode='border', mode="nearest")
-            #     cv2.imwrite(
-            #         f"eval_imgs/eval_imgs_{i}_{k}_u2.jpg", (udist_img8ms.squeeze(0)).permute(1, 2, 0).cpu().numpy().astype(np.uint8))
-
             ego2imgs = calib["ego2imgs"][i]
             xyz_camAX = self.model[self._transformers["DRIVING_BEV_DYN"]].xyz_camA.clone()
-            vt_grid, vt_grid_valid = GetProjectGridByEgo2Imgs(
+            vt_grid, _ = GetProjectGridByEgo2Imgs(
                 ego2imgs, H=40, W=96, div=8, Z=4, Y=96, X=240, sample_pts_3d=xyz_camAX.to(ego2imgs.device).clone())
             vt_grid = torch.clip(vt_grid, -1.1, 1.1)
+
 
             inputs_dict = {}
             if "quantized_model.bc" in self.model_file:
@@ -95,13 +85,9 @@ class GpNetDeploy(GpNet):
                 inputs_dict.update(img_slice_nv12)
             else:
                 inputs_dict.update(img_slice)
-            inputs_dict.update({"images_grid": images_grid.astype(np.float32)})
-            # inputs_dict.update({"ego2imgs": ego2imgs})
-            # inputs_dict.update(
-            #     {"vt_grid": vt_grid.float().detach().cpu().numpy(), "vt_grid_valid": vt_grid_valid.float().detach().cpu().numpy()})
-            inputs_dict.update(
-                {"vt_grid": vt_grid.float().detach().cpu().numpy()})
-            # print(ShowDataStruct("inputs_dict", inputs_dict))
+            inputs_dict.update({"images_grid": images_grid.astype(np.float32),
+                                "vt_grid": vt_grid.float().detach().cpu().numpy()})
+
             if self.global_config.calib_data_save_path != "None":
                 for k in inputs_dict:
                     single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
@@ -113,11 +99,9 @@ class GpNetDeploy(GpNet):
             outputs = self.session.run(self.output_names, inputs_dict)
             for k, o in zip(batch_ret, outputs):
                 batch_ret[k].append(o)
-        # exit(1)
         for k in batch_ret:
             batch_ret[k] = torch.from_numpy(np.concatenate(
                 batch_ret[k], axis = 0)).cuda()
-        # print(ShowDataStruct("batch_ret", batch_ret))
         return [batch_ret]
 
     def forward(self, x, calib=None, metadata=None, phase=const.PHASE_TRAINING):

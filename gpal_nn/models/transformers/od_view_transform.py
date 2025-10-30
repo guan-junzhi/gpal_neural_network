@@ -86,17 +86,13 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=
         rgb_camB = rgb_camBX[i]
         V, C, H, W = list(rgb_camB.shape)
         if torch.onnx.is_in_onnx_export():
-            vt_grid, vt_grid_valid = batch_dict["vt_grid"], batch_dict["vt_grid_valid"]
+            vt_grid= batch_dict["vt_grid"]
         else:
             vt_grid, vt_grid_valid = GetProjectGridByEgo2Imgs(
                 batch_dict["ego2imgs"][i], H, W, div, Z, Y, X, xyz_camAX.to(rgb_camBX.device).clone())
-        # print(ShowDataStruct("vt_grid", vt_grid))
-        # print(ShowDataStruct("vt_grid_valid", vt_grid_valid))
         
-        vt_grid_valid = vt_grid_valid.unsqueeze(1)
         values = F.grid_sample(
             rgb_camB, vt_grid.float(), align_corners=False, padding_mode='zeros')
-        # values = values.view(V, C, Z, Y, X)
         bev_feature_batch.append((values).sum(0).view(C*Z, Y, X))
     a = torch.stack(bev_feature_batch, dim = 0)
     return a
