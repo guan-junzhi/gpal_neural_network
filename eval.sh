@@ -77,5 +77,5 @@ fi
 echo load_from=$load_from
 echo config=$config
 
-python3 eval.py --load_from $load_from --onnx_path $onnx_path  --calib_data_save_path $calib_data_save_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
-# python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+# python3 eval.py --load_from $load_from --onnx_path $onnx_path  --calib_data_save_path $calib_data_save_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
