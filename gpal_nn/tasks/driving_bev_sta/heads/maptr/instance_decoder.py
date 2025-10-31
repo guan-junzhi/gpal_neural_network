@@ -102,6 +102,8 @@ class MapInstanceDetectorHead(nn.Module):
 
         super(MapInstanceDetectorHead, self).__init__()
         self.compatible_with_MVLane_loss = layers_config['compatible_with_MVLane_loss']
+        self.lane_marking_type_num = max(lane_marking_type_map.values()) + 1
+        self.lane_marking_color_num = max(color_type_map.values()) + 1
         self.shape_type_num = max(shape_type_map.values()) + 1
         self.centerline_type_num = max(centerline_type_map.values()) + 1
         self.in_channels = layers_config['in_channels']
@@ -198,6 +200,14 @@ class MapInstanceDetectorHead(nn.Module):
             Linear(self.embed_dims, self.cls_out_channels)
         )
 
+        lane_marking_type_branch = nn.Sequential(
+            Linear(self.embed_dims, self.lane_marking_type_num)
+        )
+
+        lane_marking_color_branch = nn.Sequential(
+            Linear(self.embed_dims, self.lane_marking_color_num)
+        )
+
         shape_type_branch = nn.Sequential(
             Linear(self.embed_dims, self.shape_type_num)
         )
@@ -239,6 +249,8 @@ class MapInstanceDetectorHead(nn.Module):
         num_layers = self.decoder.num_layers
         cls_branches = nn.ModuleList([cls_branch for _ in range(num_layers)])
         reg_branches = nn.ModuleList([reg_branch for _ in range(num_layers)])
+        lane_marking_type_branches = nn.ModuleList([lane_marking_type_branch for _ in range(num_layers)])
+        lane_marking_color_branches = nn.ModuleList([lane_marking_color_branch for _ in range(num_layers)])
         shape_type_branches = nn.ModuleList([shape_type_branch for _ in range(num_layers)])
         centerline_type_branches = nn.ModuleList([centerline_type_branch for _ in range(num_layers)])
         keypoint_cls_branches = nn.ModuleList([keypoint_cls_branch for _ in range(num_layers)])
@@ -246,6 +258,8 @@ class MapInstanceDetectorHead(nn.Module):
 
         self.reg_branches = reg_branches
         self.cls_branches = cls_branches
+        self.lane_marking_type_branches = lane_marking_type_branches
+        self.lane_marking_color_branches = lane_marking_color_branches
         self.shape_type_branches = shape_type_branches
 
         self.keypoint_cls_branches = keypoint_cls_branches
@@ -301,6 +315,8 @@ class MapInstanceDetectorHead(nn.Module):
 
         self.quant_object_query_embed = QuantStub()
         self.dequant = DeQuantStub()
+        self.dequant_lane_marking_type = DeQuantStub()
+        self.dequant_lane_marking_color = DeQuantStub()
         self.dequant_shape_type = DeQuantStub()
         self.dequant_centerline_type = DeQuantStub()
         self.dequant_keypoint_cls = DeQuantStub()
@@ -331,6 +347,22 @@ class MapInstanceDetectorHead(nn.Module):
                     nn.init.constant_(m.bias, bias_init)
         else:
             m = self.cls_branches
+            nn.init.constant_(m.bias, bias_init)
+
+        if isinstance(self.lane_marking_type_branches, nn.ModuleList):
+            for m in self.lane_marking_type_branches:
+                if hasattr(m, "bias"):
+                    nn.init.constant_(m.bias, bias_init)
+        else:
+            m = self.lane_marking_type_branches
+            nn.init.constant_(m.bias, bias_init)
+
+        if isinstance(self.lane_marking_color_branches, nn.ModuleList):
+            for m in self.lane_marking_color_branches:
+                if hasattr(m, "bias"):
+                    nn.init.constant_(m.bias, bias_init)
+        else:
+            m = self.lane_marking_color_branches
             nn.init.constant_(m.bias, bias_init)
 
         if isinstance(self.shape_type_branches, nn.ModuleList):
@@ -431,6 +463,8 @@ class MapInstanceDetectorHead(nn.Module):
         self,
         outputs_classes: List[Tensor],
         reference_out: List[Tensor],
+        outputs_lane_marking_types: List[Tensor],
+        outputs_lane_marking_colors: List[Tensor],
         outputs_shape_types: List[Tensor],
         outputs_centerline_types: List[Tensor],
         outputs_keypoint_classes: List[Tensor],
@@ -440,6 +474,8 @@ class MapInstanceDetectorHead(nn.Module):
     ) -> Dict:
 
         outputs_classes_one2one = []
+        outputs_lane_marking_types_one2one = []
+        outputs_lane_marking_colors_one2one = []
         outputs_shape_types_one2one = []
         outputs_centerline_types_one2one = []
         outputs_keypoint_classes_one2one = []
@@ -448,6 +484,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_pts_coords_one2one = []
 
         outputs_classes_one2many = []
+        outputs_lane_marking_types_one2many = []
+        outputs_lane_marking_colors_one2many = []
         outputs_shape_types_one2many = []
         outputs_centerline_types_one2many = []
         outputs_keypoint_classes_one2many = []
@@ -460,6 +498,8 @@ class MapInstanceDetectorHead(nn.Module):
 
             outputs_coord, outputs_pts_coord = self.transform_box(tmp)
             outputs_class = outputs_classes[lvl].float()
+            outputs_lane_marking_type = outputs_lane_marking_types[lvl].float()
+            outputs_lane_marking_color = outputs_lane_marking_colors[lvl].float()
             outputs_shape_type = outputs_shape_types[lvl].float()
             outputs_centerline_type = outputs_centerline_types[lvl].float()
             outputs_keypoint_class = outputs_keypoint_classes[lvl].float()
@@ -473,6 +513,12 @@ class MapInstanceDetectorHead(nn.Module):
             )
             outputs_pts_coords_one2one.append(
                 outputs_pts_coord[:, 0: self.num_vec_one2one]
+            )
+            outputs_lane_marking_types_one2one.append(
+                outputs_lane_marking_type[:, 0 : self.num_vec_one2one]
+            )
+            outputs_lane_marking_colors_one2one.append(
+                outputs_lane_marking_color[:, 0 : self.num_vec_one2one]
             )
             outputs_shape_types_one2one.append(
                 outputs_shape_type[:, 0 : self.num_vec_one2one]
@@ -496,6 +542,12 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_pts_coords_one2many.append(
                 outputs_pts_coord[:, self.num_vec_one2one:]
             )
+            outputs_lane_marking_types_one2many.append(
+                outputs_lane_marking_type[:, 0 : self.num_vec_one2one]
+            )
+            outputs_lane_marking_colors_one2many.append(
+                outputs_lane_marking_color[:, 0 : self.num_vec_one2one]
+            )
             outputs_shape_types_one2many.append(
                 outputs_shape_type[:, self.num_vec_one2one :]
             )
@@ -512,6 +564,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_classes_one2one = torch.stack(outputs_classes_one2one)
         outputs_coords_one2one = torch.stack(outputs_coords_one2one)
         outputs_pts_coords_one2one = torch.stack(outputs_pts_coords_one2one)
+        outputs_lane_marking_types_one2one = torch.stack(outputs_lane_marking_types_one2one)
+        outputs_lane_marking_colors_one2one = torch.stack(outputs_lane_marking_colors_one2one)
         outputs_shape_types_one2one = torch.stack(outputs_shape_types_one2one)
         outputs_centerline_types_one2one = torch.stack(outputs_centerline_types_one2one)
         outputs_keypoint_classes_one2one = torch.stack(outputs_keypoint_classes_one2one)
@@ -520,6 +574,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_classes_one2many = torch.stack(outputs_classes_one2many)
         outputs_coords_one2many = torch.stack(outputs_coords_one2many)
         outputs_pts_coords_one2many = torch.stack(outputs_pts_coords_one2many)
+        outputs_lane_marking_types_one2many = torch.stack(outputs_lane_marking_types_one2many)
+        outputs_lane_marking_colors_one2many = torch.stack(outputs_lane_marking_colors_one2many)
         outputs_shape_types_one2many = torch.stack(outputs_shape_types_one2many)
         outputs_centerline_types_one2many = torch.stack(outputs_centerline_types_one2many)
         outputs_keypoint_classes_one2many = torch.stack(outputs_keypoint_classes_one2many)
@@ -529,6 +585,8 @@ class MapInstanceDetectorHead(nn.Module):
             "all_cls_scores": outputs_classes_one2one,
             "all_bbox_preds": outputs_coords_one2one,
             "all_pts_preds": outputs_pts_coords_one2one,
+            "all_lane_marking_types_preds": outputs_lane_marking_types_one2one,
+            "all_lane_marking_colors_preds": outputs_lane_marking_colors_one2one,
             "all_shape_types_preds": outputs_shape_types_one2one,
             "all_centerline_types_preds": outputs_centerline_types_one2one,
             "all_keypoint_classes_preds": outputs_keypoint_classes_one2one,
@@ -544,6 +602,8 @@ class MapInstanceDetectorHead(nn.Module):
                 "all_cls_scores": outputs_classes_one2many,
                 "all_bbox_preds": outputs_coords_one2many,
                 "all_pts_preds": outputs_pts_coords_one2many,
+                "all_lane_marking_types_preds": outputs_lane_marking_types_one2many,
+                "all_lane_marking_colors_pred": outputs_lane_marking_colors_one2many,
                 "all_shape_types_preds": outputs_shape_types_one2many,
                 "all_centerline_types_preds": outputs_centerline_types_one2many,
                 "all_keypoint_classes_preds": outputs_keypoint_classes_one2many,
@@ -678,6 +738,8 @@ class MapInstanceDetectorHead(nn.Module):
         )
 
         outputs_classes = []
+        outputs_lane_marking_types = []
+        outputs_lane_marking_colors = []
         outputs_shape_types = []
         reference_out = []
         outputs_centerline_types = []
@@ -686,12 +748,16 @@ class MapInstanceDetectorHead(nn.Module):
         for lvl in range(len(inter_states)):
             reg_points = inter_references[lvl]
             outputs_class = self.cls_branches[lvl](inter_states[lvl])
+            outputs_lane_marking_type = self.lane_marking_type_branches[lvl](inter_states[lvl])
+            outputs_lane_marking_color = self.lane_marking_color_branches[lvl](inter_states[lvl])
             output_shape_type = self.shape_type_branches[lvl](inter_states[lvl])
             outputs_centerline_type = self.centerline_type_branches[lvl](inter_states[lvl])
             outputs_keypoint_class = self.keypoint_cls_branches[lvl](inter_states[lvl])
             outputs_keypoint_reg = self.keypoint_reg_branches[lvl](inter_states[lvl])
             outputs_classes.append(self.dequant(outputs_class))
             reference_out.append(self.dequant(reg_points))
+            outputs_lane_marking_types.append(self.dequant_lane_marking_type(outputs_lane_marking_type))
+            outputs_lane_marking_colors.append(self.dequant_lane_marking_color(outputs_lane_marking_color))
             outputs_shape_types.append(self.dequant_shape_type(output_shape_type))
             outputs_centerline_types.append(self.dequant_centerline_type(outputs_centerline_type))
             outputs_keypoint_classes.append(self.dequant_keypoint_cls(outputs_keypoint_class))
@@ -731,6 +797,8 @@ class MapInstanceDetectorHead(nn.Module):
             return (
                 outputs_classes[-1],
                 reference_out[-1],
+                outputs_lane_marking_types[-1],
+                outputs_lane_marking_colors[-1],
                 outputs_shape_types[-1],
                 outputs_centerline_types[-1],
                 outputs_keypoint_classes[-1],
@@ -740,6 +808,8 @@ class MapInstanceDetectorHead(nn.Module):
             return (
                 outputs_classes,
                 reference_out,
+                outputs_lane_marking_types,
+                outputs_lane_marking_colors,
                 outputs_shape_types,
                 outputs_centerline_types,
                 outputs_keypoint_classes,
@@ -757,6 +827,8 @@ class MapInstanceDetectorHead(nn.Module):
         (
             outputs_classes,
             reference_out,
+            outputs_lane_marking_types,
+            outputs_lane_marking_colors,
             outputs_shape_types,
             outputs_centerline_types,
             outputs_keypoint_classes,
@@ -767,6 +839,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs = self.get_outputs(
             outputs_classes,
             reference_out,
+            outputs_lane_marking_types,
+            outputs_lane_marking_colors,
             outputs_shape_types,
             outputs_centerline_types,
             outputs_keypoint_classes,

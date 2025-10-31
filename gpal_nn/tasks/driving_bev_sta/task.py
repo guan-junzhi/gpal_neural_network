@@ -27,39 +27,39 @@ class DRIVING_BEV_STATask(BaseTask):
         pass
 
     def GetVis(self, preds, gts, idx, clips, timestamps):
-
         from tools_scripts.vis_2d import Vis2D
         linetype_list = ['solid', 'dashed']
         vis1 = Vis2D([-30, 130], [-20, 20], 0.1)
         try:
             for l in gts[idx]['edges']['points']:
                 vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
-                vis1.DrawPolyline(l, [0, 255, 255], 2, 'solid')
+                vis1.DrawPolyline(l, [0, 255, 255], 2)
             for i,l in enumerate(gts[idx]['polylines']['points']):
                 vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
                 shape_type = gts[idx]['polylines']['shape_type'][i]
-                if shape_type == 0 or shape_type == 1:
-                    vis1.DrawPolyline(l, [0, 255, 0], 2, linetype_list[shape_type])
-                elif shape_type == 2:
-                    vis1.DrawPolyline(l, [250, 51, 153], 2, 'dashed', 20)
-                elif shape_type == 3:
-                    vis1.DrawPolyline(l, [203, 192, 255], 2, 'dashed', 20)
-                else:
-                    print("shape_type error:", shape_type)
-                    vis1.DrawPolyline(l, [192, 192, 192], 2, 'solid')
+                vis1.DrawPolyline(l, [0, 255, 0], 2, shape_type, 20)
+                # if shape_type == 0 or shape_type == 1:
+                #     vis1.DrawPolyline(l, [0, 255, 0], 2, linetype_list[shape_type])
+                # elif shape_type == 2:
+                #     vis1.DrawPolyline(l, [250, 51, 153], 2, 'dashed', 20)
+                # elif shape_type == 3:
+                #     vis1.DrawPolyline(l, [203, 192, 255], 2, 'dashed', 20)
+                # else:
+                #     print("shape_type error:", shape_type)
             if 'centerlines' in gts[idx]:
                 for i,l in enumerate(gts[idx]['centerlines']['points']):
                 # for l in gts[idx]['centerlines']['points']:
                     vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
                     if gts[idx]['centerlines']['classes'][i] == 1:
-                        vis1.DrawPolyline(l, [158, 168, 3], 2, 'solid') #应急车道：青色
+                        vis1.DrawPolyline(l, [158, 168, 3], 2) #应急车道：青色
                     else:
-                        vis1.DrawPolyline(l, [0, 165, 255], 2, 'solid')
+                        vis1.DrawPolyline(l, [0, 165, 255], 2)
                     if gts[idx]['centerlines']['is_split_merge'][i]:
                         # print(ShowDataStruct("gts keypoint", gts[idx]['centerlines']['keypoint']))
                         vis1.DrawKeypoint(gts[idx]['centerlines']['keypoint'][i], 5, [135, 138, 128])
-        except:
-            pass
+        except Exception as e:
+            print(f"Error: {e}")
+
         vis_draw1 = vis1.Draw()
         pre_pts = preds['all_pts_preds']
         # print(ShowDataStruct("preds", preds))
@@ -80,29 +80,34 @@ class DRIVING_BEV_STATask(BaseTask):
                 # color = [random.randint(0, 255), random.randint(
                 #     0, 255), random.randint(0, 255)]
                 try:
-                    #画起始点（亮蓝色）
+                    # 画起始点（亮蓝色）
                     vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
                     _, shape_type = shape_type.max(-1)
                     _, centerline_type = centerline_type.max(-1)
                     # vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
                     if cls_pred != 0:
                         if cls_pred == 2 and centerline_type == 1:
-                            vis2.DrawPolyline(l.detach().cpu().numpy(), [158, 168, 3], 2, 'solid') #应急车道：青色
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), [158, 168, 3], 2) #应急车道：青色
                         else:
-                            vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, 'solid')
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2)
                         if is_split_merge_pred.values > 0.5:
                             split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
                             vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
                     else:
-                        if shape_type == 0 or shape_type == 1:
-                            vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
-                        elif shape_type == 2:
-                            vis2.DrawPolyline(l.detach().cpu().numpy(), [250, 51, 153], 2, 'dashed', 20)
-                        elif shape_type == 3:
-                            vis2.DrawPolyline(l.detach().cpu().numpy(), [203, 192, 255], 2, 'dashed', 20)
-                        else:
-                            print("shape_type error:", shape_type)
-                            vis2.DrawPolyline(l.detach().cpu().numpy(), [192, 192, 192], 2, 'solid')
+                        # if shape_type == 0 or shape_type == 1:
+                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
+                        # elif shape_type == 2:
+                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [250, 51, 153], 2, 'dashed', 20)
+                        # elif shape_type == 3:
+                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [203, 192, 255], 2, 'dashed', 20)
+                        # else:
+                        #     print("shape_type error:", shape_type)
+                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [192, 192, 192], 2, 'solid')
+                        # print("shape_type:", shape_type)
+                        if isinstance(shape_type, torch.Tensor):
+                            # 确保张量是标量且在 CUDA 上，转为 CPU 并提取整数
+                            shape_type = shape_type.item() 
+                        vis2.DrawPolyline(l.detach().cpu().numpy(), [0, 0, 255], 2, shape_type, 20)
                 except:
                     pass
         # exit()
