@@ -432,6 +432,14 @@ def Get(dataset_temp, i, j):
     for k in range(i, j):
         print(k, dataset_temp[k]["dataloader_time"])
 
+def preprocess_img(avm_img):
+    img_tensor = avm_img.clone().detach() / 255.0
+    img_tensor = img_tensor.permute(2, 0, 1)
+    # mean = torch.tensor([0.481093804, 0.457524588, 0.407870549]).view(3, 1, 1)
+    # std = torch.tensor([1.0, 1.0, 1.0]).view(3, 1, 1)
+    # normalized_tensor = (img_tensor - mean) / std  # 应用归一化公式
+  
+    return img_tensor
 
 if __name__ == "__main__":
     import pickle as pkl
@@ -455,7 +463,7 @@ if __name__ == "__main__":
     from tools_scripts.data_format_cvt import ShowDataStruct
     from tools_scripts.vis_2d import Vis2D
 
-    print(ShowDataStruct("image_gt", d["image"]))
-    print(ShowDataStruct("slot_maps", d["label"]))
+    # print(ShowDataStruct("image_gt", d["image"]))
+    # print(ShowDataStruct("slot_maps", d["label"]))
 
     train_dataset.save_all_heatmap('experiments/data_visual')

@@ -90,6 +90,8 @@ class TXTLabelLoader(object):
                 dx = endP[0] - point[0]
                 dy = endP[1] - point[1]
                 norm = math.sqrt(dx*dx + dy*dy)
+                if norm == 0:
+                    continue
                 sinr = dx / norm
                 cosr = dy / norm
                 orients.append([sinr, cosr])

@@ -1,7 +1,7 @@
 image_per_gpu: 24
 workers_per_gpu: 12
 skip_sanity_check: true
-max_iterations: 60000
+max_iterations: 150000
 save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
@@ -11,7 +11,7 @@ Train:
   log_every: 1
   visualize_every: 200
   max_visu_img_num: 10
-  optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
+  optimizer: {type: AdamW, lr: 0.0001, weight_decay: 1.0e-04}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
     after_scheduler: CosineAnnealingLR, T_max: 30000}
 
@@ -65,7 +65,7 @@ Tasks:
     datasets:
       training:
       - { dataset_name: 'xxx', 
-          root_dir: "bev_park/PointLine_train/",
+          root_dir: "bev_park/train_test_dataset/PointLineData_Train/",
           data_list: "train_all.txt",
           camera_name: ['ipm'],
           shuffle: False,
@@ -74,8 +74,8 @@ Tasks:
         }
       validation:
       - { dataset_name: 'xxx', 
-          root_dir: "bev_park/PointLineData_Test/",
-          data_list: "test_all.txt",
+          root_dir: "bev_park/train_test_dataset/PointLineData_Test/",
+          data_list: "pointline.txt",
           camera_name: ['ipm'],
           shuffle: True,
           # fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
