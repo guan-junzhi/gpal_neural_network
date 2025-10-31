@@ -76,6 +76,10 @@ tensorboard
     bash resolve.sh
     tar -zxvf gcc-12.2.0-compiled.tgz
 
+    cp /data/ai_group/workdirs/gpal_neural_network_group/zww/hbdk4_compiler-4.2.5-cp310-cp310-manylinux_2_17_x86_64.whl .
+    pip install hbdk4_compiler-4.2.5-cp310-cp310-manylinux_2_17_x86_64.whl 
+
+
 安装基础环境：
 
     conda create -n torch23_deploy python==3.10 pytorch==2.3.0 torchvision==0.18.0 torchaudio==2.3.0 pytorch-cuda=11.8 -c pytorch -c nvidia
@@ -110,7 +114,7 @@ tensorboard
     pip install terminaltables
     pip install similaritymeasures
 
-
+    
 装完后可能存在以下incompatible, 集中在horizon-torch-samples和jupter，可能不影响主体业务，先不管
 
     ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.

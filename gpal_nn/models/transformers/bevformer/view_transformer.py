@@ -1030,12 +1030,12 @@ class SingleBevFormerViewTransformer(BevFormerViewTransformer):
                 bev_pillar_counts=bev_pillar_counts,
             )
         else:
-            B = feats[0].shape[0]
-            ref2d, _ = self.export_reference_points(B, device=feats[0].device)
-            queries_rebatch_grid = data["queries_rebatch_grid"]
-            restore_bev_grid = data["restore_bev_grid"]
-            reference_points_rebatch = data["reference_points_rebatch"]
-            bev_pillar_counts = data["bev_pillar_counts"]
+            reference_points_rebatch = data['reference_points_rebatch'].cuda()
+            queries_rebatch_grid = data['queries_rebatch_grid'].cuda()
+            restore_bev_grid = data['restore_bev_grid'].cuda()
+            bev_pillar_counts = data['bev_pillar_counts'].cuda()
+            ref2d = self.gen_reference_points(
+            self.bev_h, self.bev_w, dim="2d", bs=feats[0].shape[0], device=feats[0].device)
             bev_emb = self.get_bev_embed(
                 feats=feats,
                 ref2d=ref2d,

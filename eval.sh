@@ -58,8 +58,8 @@ echo ENV_GPAL_NEURAL_NETWORK_GPUS=$ENV_GPAL_NEURAL_NETWORK_GPUS
 echo $1
 if [[ $1 == "parking_ipm_sta" ]];
 then
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/checkpoint/epoch=4-step=1000_checkpoint_weiwei.pth
-    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/config.yaml
+    load_from=/home/jovyan/gpal_neural_network/workspace/20251021_09_58_35/checkpoint/epoch=146-step=150000_checkpoint.pth
+    config=/home/jovyan/gpal_neural_network/workspace/20251021_09_58_35/config.yaml
 elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
@@ -68,14 +68,19 @@ then
     # onnx_path="/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet_calibration_hbm/tools/ptq/model_output/single_frame_moldel_v1_int16_random_calib_data_1021/single_frame_moldel_v1_int16_quantized_model.bc"
     config=configs_for_develop/driving_bev_dyn_config.yaml
     calib_data_save_path="None" 
-else 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth
-    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/config.yaml
-
+else
+    tasks=driving_bev_sta
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/checkpoint/epoch=0-step=22000_checkpoint.pth
+    # config=configs_for_develop/driving_bev_sta_config.yaml
+    config=/data/ai_group/workdirs/gpal_neural_network_group/airflow_workspace/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/config.yaml
+    # config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251023_05_35_20/config.yaml
+    onnx_path=/data/ai_group/workdirs/multitask_lanenet_group/taojin/gpal-airflow/bc/2025102901/model_int16_quantized_model.bc
+    # onnx_path=/data/ai_group/workdirs/multitask_lanenet_group/taojin/gpal-airflow/bc/model_int16.hbm
+    calib_data_save_path="None"
 fi
 
 echo load_from=$load_from
 echo config=$config
 
-python3 eval.py --load_from $load_from --onnx_path $onnx_path  --calib_data_save_path $calib_data_save_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
-# python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+# python3 eval.py --load_from $load_from --onnx_path $onnx_path  --calib_data_save_path $calib_data_save_path --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config
+python3 eval.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE  --config $config

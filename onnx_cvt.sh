@@ -58,17 +58,17 @@ echo ENV_GPAL_NEURAL_NETWORK_GPUS=$ENV_GPAL_NEURAL_NETWORK_GPUS
 echo $1
 if [[ $1 == "parking_ipm_sta" ]];
 then
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/checkpoint/epoch=4-step=1000_checkpoint_weiwei.pth
-    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/config.yaml
+    load_from=/home/jovyan/gpal_neural_network/workspace/20251021_09_58_35/checkpoint/epoch=78-step=80000_checkpoint.pth
+    config=/home/jovyan/gpal_neural_network/workspace/20251021_09_58_35/config.yaml
 elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_for_huiqu_20251023_11_35_43/checkpoint/epoch=9-step=49500_checkpoint.pth
     config=configs_for_develop/driving_bev_dyn_config.yaml
-else 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth
-    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/config.yaml
-
+else
+    tasks=driving_bev_sta
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/checkpoint/epoch=0-step=22000_checkpoint.pth
+    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/config.yaml
 fi
 
 echo load_from=$load_from
