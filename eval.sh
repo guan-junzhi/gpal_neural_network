@@ -68,10 +68,15 @@ then
     onnx_path="/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet_calibration_hbm/tools/ptq/model_output/single_frame_moldel_v1_int8_/single_frame_moldel_v1_int8_quantized_model.bc"
     config=configs_for_develop/driving_bev_dyn_config.yaml
     calib_data_save_path="None" 
-else 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth
-    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/config.yaml
-
+else
+    tasks=driving_bev_sta
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/checkpoint/epoch=0-step=22000_checkpoint.pth
+    # config=configs_for_develop/driving_bev_sta_config.yaml
+    config=/data/ai_group/workdirs/gpal_neural_network_group/airflow_workspace/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/config.yaml
+    # config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251023_05_35_20/config.yaml
+    onnx_path=/data/ai_group/workdirs/multitask_lanenet_group/taojin/gpal-airflow/bc/2025102901/model_int16_quantized_model.bc
+    # onnx_path=/data/ai_group/workdirs/multitask_lanenet_group/taojin/gpal-airflow/bc/model_int16.hbm
+    calib_data_save_path="None"
 fi
 
 echo load_from=$load_from

@@ -693,14 +693,15 @@ class MapInstanceDetectorHead(nn.Module):
             .bool()
             .to(bev_features.device)
         )
-        self_attn_mask[
-            self.num_vec_one2one:,
-            0: self.num_vec_one2one,
-        ] = True
-        self_attn_mask[
-            0: self.num_vec_one2one,
-            self.num_vec_one2one:,
-        ] = True
+        if self.num_vec_one2one < num_vec:
+            self_attn_mask[
+                self.num_vec_one2one:,
+                0: self.num_vec_one2one,
+            ] = True
+            self_attn_mask[
+                0: self.num_vec_one2one,
+                self.num_vec_one2one:,
+            ] = True
 
         pos_embed = None
         query_embedding = (

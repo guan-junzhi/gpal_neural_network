@@ -25,36 +25,33 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
 
     def process_pred(self, vectors, metadata: dict) -> dict:
         vectors = vectors[0]
+        out_k = ['all_cls_scores', 'all_pts_preds', 
+                 'all_lane_marking_types_preds', 'all_lane_marking_colors_preds',
+                 'all_shape_types_preds', 'all_centerline_types_preds',
+                 'all_keypoint_classes_preds', 'all_keypoint_regs_preds']
         # print(ShowDataStruct("vectors", vectors))
         # print(ShowDataStruct("metadata", metadata))
         # print("DRIVING_BEV_STAPostProcessing process")
         # pass
 
         # print(ShowDataStruct("static_3d_output", vectors))
-        _vectors = {'lane_3d_output':
-                    [
-                        vectors['all_cls_scores'],
-                        vectors['all_pts_preds'],
-                        vectors['all_lane_marking_types_preds'],
-                        vectors['all_lane_marking_colors_preds'],
-                        vectors['all_shape_types_preds'],
-                        vectors['all_centerline_types_preds'],
-                        vectors['all_keypoint_classes_preds'],
-                        vectors['all_keypoint_regs_preds']
-                    ]
-                    }
-
         # print(ShowDataStruct("_vectors", _vectors))
         outputs = {}
-        if 'lane_3d_output' in _vectors:
-            outputs_classes, intermediate_reference_points, lane_marking_types, lane_marking_colors, shape_types, centerline_types, keypoint_classes, keypoint_regs = _vectors['lane_3d_output']
-            cls_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred = outputs_classes[self.num_decode_layer - 1], \
+        onnx_path = self.global_config.config['onnx_path'] if 'onnx_path' in self.global_config.config else ''
+        if 'onnx_path' in self.global_config.config and ('.bc' in onnx_path  or '.onnx' in onnx_path or '.hbm' in onnx_path):
+            outputs['lane_3d_output'] = [vectors[key] for key in out_k]
+        else:
+            _vectors = {'lane_3d_output': [vectors[key] for key in out_k]}
+            if 'lane_3d_output' in _vectors:
+                outputs_classes, intermediate_reference_points, lane_marking_types, lane_marking_colors, shape_types, centerline_types, keypoint_classes, keypoint_regs = _vectors['lane_3d_output']
+                cls_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred = outputs_classes[self.num_decode_layer - 1], \
                                      intermediate_reference_points[self.num_decode_layer - 1], \
                                      lane_marking_types[self.num_decode_layer - 1], lane_marking_colors[self.num_decode_layer - 1], \
                                      shape_types[self.num_decode_layer - 1], centerline_types[self.num_decode_layer - 1], keypoint_classes[self.num_decode_layer - 1], \
                                      keypoint_regs[self.num_decode_layer - 1]
-            # bbox_pred, points_pred = self.lane_map_head.transform_box(points_pred)
-            outputs['lane_3d_output'] = cls_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred
+                # bbox_pred, points_pred = self.lane_map_head.transform_box(points_pred)
+                outputs['lane_3d_output'] = cls_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, keypoint_cls_pred, keypoint_reg_pred
+
 
         outputs2 = {}
         outputs2['static_3d_pred'] = outputs

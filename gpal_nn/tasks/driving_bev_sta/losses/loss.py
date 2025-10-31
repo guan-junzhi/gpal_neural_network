@@ -104,6 +104,8 @@ def pack_polyline_gt_points(data):
     return annos, classes, lane_marking_types, lane_marking_colors, shape_types, centerline_types, is_split_merges, keypoint_norms
 
 def lane_loss_computation(preds, trues, loss_func, centerline_dataset):
+    if "all_bbox_preds" not in preds:
+        return {}
     all_cls_scores, all_bbox_pred, all_pts_pred, \
         all_lane_marking_types_pred, all_lane_marking_colors_pred, \
         all_shape_types_pred, all_centerline_types_preds, all_keypoint_classes_preds, all_keypoint_regs_pred = \
