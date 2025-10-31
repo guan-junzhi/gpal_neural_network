@@ -181,19 +181,19 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                              )
                          )
         self.cut_start_h = cut_start_h
-        mean = (0., 0., 0.)
-        std = (255., 255., 255.)
+        self.mean = (0., 0., 0.)
+        self.std = (255., 255., 255.)
         if phase == const.PHASE_TRAINING:
             self.transforms = [
                 CutImageUpper(cut_start_h),
                 MultiViewRandomCutOut(0.65, 6, [[40, 40]]),
                 MultiViewPhotoMetricDistortion(),
-                Normalize(mean=mean, std=std),
+                Normalize(mean=self.mean, std=self.std),
             ]
         else:
             self.transforms = [
                 CutImageUpper(cut_start_h),
-                Normalize(mean=mean, std=std),
+                Normalize(mean=self.mean, std=self.std),
             ]
         self.task = task_config.name
         self.rpy_aug = rpy_aug
@@ -215,7 +215,15 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
         if self.lmdb_path_local != '':
             self.label_buffer = FastLoaderBuffer(self.lmdb_path_local)
-        
+        self.eval_phase = ""
+        self.onnx_path = self.global_config.config['onnx_path'] if 'onnx_path' in self.global_config.config else ''
+        if self.phase != const.PHASE_TRAINING and self.onnx_path != '':
+            if self.onnx_path[-3:] == '.bc' or self.onnx_path[-4:] == '.hbm':
+                self.eval_phase = "EVAL_BC"
+            elif self.onnx_path[-5:] == '.onnx':
+                self.eval_phase = "EVAL_ONNX"
+        print(f"Dataset phase: {self.phase}")
+        print(f"Dataset eval_phase: {self.eval_phase}")
 
     def _build_world_data_list(self):
         try:
@@ -288,16 +296,20 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         ists_norm = []
         dists = []
         ori_shape = []
+        _Ks, _dists = [], []
         time_dp = DetailProf()
         time_dp.Tic("begin")
         for camera_name in self.camera_names:
-            img_src, img, K, norm_K, ext, dist, ori_img_h, ori_img_w, img_path, time_dp_sub = self.read_single_camera(
+            img_src, img, K, norm_K, ext, dist, ori_img_h, ori_img_w, img_path, _K, _dist, time_dp_sub = self.read_single_camera(
                 data_info['sensor'], camera_name)
             time_dp.AddSubProf(
                 f"{camera_name}_read_single_camera", time_dp_sub)
             if img is None:
                 return None, time_dp
-            imgs[camera_name] = img
+            elif self.eval_phase in ["EVAL_ONNX", "EVAL_BC"]:
+                imgs[camera_name] = img_src  # onnx中直接使用rgb原图; bc推理使用rgb_to_nv12_split
+            else:
+                imgs[camera_name] = img
             ego2cam.append(ext)
             cam2ego.append(np.linalg.inv(np.concatenate(
                 [ext, np.array([[0, 0, 0, 1]])], axis=0)))
@@ -305,6 +317,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             ists_norm.append(norm_K)
             dists.append(dist)
             ori_shape.append([ori_img_h, ori_img_w])
+            _Ks.append(_K)
+            _dists.append(_dist)
 
         data_dict['image'] = imgs
         data_dict['calib'] = {'exts': np.stack(ego2cam), 'cam2egos': np.stack(
@@ -314,7 +328,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['meta']['camera_name'] = self.camera_names
         data_dict['meta']['task_name'] = self.task
         data_dict['meta']['clip_id'] = '_'.join(img_path.split('/')[:2])
-
+        data_dict['calib'].update({'_Ks': np.stack(_Ks), '_dists': np.stack(_dists)})
         return data_dict, time_dp
 
     def read_single_camera(self, sensor, camera_name):
@@ -330,35 +344,41 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         T = camera['extr']['T']
         K = camera['intr']['K']
         dist = camera['intr']['dist']
-
+        _K, _dist = copy.deepcopy(K), copy.deepcopy(dist)
         # read img
         root_path = self.root_dir
         img_path = os.path.join(root_path, img_name)
         time_dp = DetailProf()
         time_dp.Tic("begin")
         try:
-            self.fast_buf_try_cnt += 1
-            database_key = "_".join(img_path.split('/')[-4:])
-            image, hw_origin = self._image_buffer_access(
-                database_key)
-            if image is None:
+            if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
                 image = cv2.undistort(image, K, dist)
-                self._image_cache(
-                    database_key, image, pre_resize=(960, 540), quality=95)
-                # print("cache")
+                assert image is not None, f"image is None: {img_path}"
             else:
-                self.fast_buf_sec_cnt += 1
-                # print("fast load")
-                K[0, :] *= image.shape[1]/hw_origin[1]
-                K[1, :] *= image.shape[0]/hw_origin[0]
+                self.fast_buf_try_cnt += 1
+                database_key = "_".join(img_path.split('/')[-4:])
+                image, hw_origin = self._image_buffer_access(
+                    database_key)
+                if image is None:
+                    image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+                    image = cv2.undistort(image, K, dist)
+                    self._image_cache(
+                        database_key, image, pre_resize=(960, 540), quality=95)
+                    # print("cache")
+                else:
+                    self.fast_buf_sec_cnt += 1
+                    # print("fast load")
+                    K[0, :] *= image.shape[1]/hw_origin[1]
+                    K[1, :] *= image.shape[0]/hw_origin[0]
 
             time_dp.Duration("imread", "begin")
             ori_img_h, ori_img_w, _ = image.shape
             resize_image, K = letterbox_image(image, self.in_shape, K=K)
             if self.is_random_scale_and_translate:
                 resize_image, K = random_scale_and_translate(resize_image, self.in_shape, K=K, scale=0.1,
-                                                             offset=0.1)
+                                                            offset=0.1)
+
 
             if self.rpy_aug:
                 aug_r, aug_p, aug_y = random.uniform(-self.rpy_aug_rad[0], self.rpy_aug_rad[0]), \
@@ -403,7 +423,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         ext[:3, :3] = rot
         ext[:3, 3:] = T.reshape(3, 1)
 
-        return image, resize_image, K, norm_K, ext[:3, :], dist, ori_img_h, ori_img_w, img_name, time_dp
+        return image, resize_image, K, norm_K, ext[:3, :], dist, ori_img_h, ori_img_w, img_name, _K, _dist, time_dp
 
     def parse_annotations(self, data_info, data_dict, bev_real2aug):
         annot = data_info['annotation']
@@ -731,13 +751,20 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 continue
 
             if self.transforms is not None:
+                if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
+                    # 保留cut_h更新的meta信息，但不实际cut图像
+                    self.transforms = [CutImageUpper(self.cut_start_h, just_update_meta=True)]
                 for transform in self.transforms:
                     data = transform(data)
 
             time_dp.Duration("transform", "prepare_data")
+            if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
+                data['image'] = {k: data['image'][k] for k in data['image']}
+            else:
+                data['image'] = {k: data['image'][k].transpose(
+                    2, 0, 1) for k in data['image']}
+            data['meta']['eval_phase'] = self.eval_phase
 
-            data['image'] = {k: data['image'][k].transpose(
-                2, 0, 1) for k in data['image']}
             data['calib']["ego2imgs"] = np.stack(
                 [i@e for e, i in zip(data['calib']['exts'], data['calib']['ists'])], axis=0)
             data['calib']["ego2imgs"] = np.stack([np.concatenate([ele, np.array(

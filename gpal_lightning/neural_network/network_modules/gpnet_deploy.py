@@ -15,10 +15,12 @@ from gpal_lightning.neural_network.global_config import GlobalConfig
 from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.models.transformers.od_view_transform import GetProjectGridByEgo2Imgs
-from gpal_lightning.utils.deploy_utils import bgr_to_nv12_split, DistGridMap
-from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
-
+from gpal_lightning.utils.deploy_utils import bgr_to_nv12_split, rgb_to_nv12_split, DistGridMap
 from horizon_tc_ui import HBRuntime
+
+from tools_scripts.driving_bev_sta.create_images_grid import PreproModule
+from gpal_nn.models.transformers.bevformer.view_transformer import SingleBevFormerViewTransformer
+
 
 class GpNetDeploy(GpNet):
     def __init__(
@@ -148,6 +150,137 @@ class GpNetDeploy(GpNet):
             outputs = self.session.run(self.output_names, inputs_dict)
         
 
+    def forward_one_DRIVING_BEV_STA(self, x, calib, metadata):
+        """Single-frame STA deploy forward.
+        Builds images_grid and BEV sampling grids using the same logic as
+        tools_scripts/driving_bev_sta/to_npy_for_calib.py, then runs ONNX.
+        """
+        self.phase = metadata[0]['eval_phase']
+        out_keys = [
+                'all_cls_scores',
+                'all_pts_preds',
+                'all_lane_marking_types_preds',
+                'all_lane_marking_colors_preds',
+                'all_shape_types_preds',
+                'all_centerline_types_preds',
+                'all_keypoint_classes_preds',
+                'all_keypoint_regs_preds',
+            ]
+        batch_ret ={}
+        for k in out_keys:
+            batch_ret[k] = []
+        batch_size = len(metadata)
+        for i in tqdm(range(batch_size)):
+            img_slice = {k: x[k][i].unsqueeze(0).float().detach().cpu().numpy() * 255.0 for k in x}
+            # Intrinsics and distortions
+            ks = calib['_Ks'][i].detach().cpu().numpy()
+            dists = calib['_dists'][i].detach().cpu().numpy()
+            cut_start_h = self.global_config.Tasks[self.global_config.tasks[0]]['datasets']['validation'][0]['cut_start_h']
+            ori_h, ori_w = int(metadata[i]['ori_shape'][0][0]), int(metadata[i]['ori_shape'][0][1])
+            dst_h, dst_w = 540, 960
+            # images_grid
+            pp = PreproModule()
+            images_grid = pp.export_input(
+                batch_size=1,
+                K1=ks[0], dists1=dists[0],
+                K2=ks[1], dists2=dists[1],
+                ori_shape=(ori_h, ori_w),
+                dst_h=dst_h, dst_w=dst_w,
+                cut_start_h=cut_start_h
+            ).detach().cpu().numpy()
+
+            if not hasattr(self, '_sta_vt'):
+                transformer_cfg = self.global_config.Transformer.get('transformer_config', {})
+                self._sta_vt = SingleBevFormerViewTransformer(self.global_config, transformer_cfg)
+                self._sta_vt_device = torch.device('cpu')
+                self._sta_vt.to(self._sta_vt_device)
+                self._sta_vt.eval()
+                _, self._sta_ref3d = self._sta_vt.export_reference_points(bs=1, device=self._sta_vt_device)
+
+            ego2imgs = calib['ego2imgs'][i]
+            if isinstance(ego2imgs, np.ndarray):
+                ego2imgs_t = torch.from_numpy(ego2imgs)
+            else:
+                ego2imgs_t = ego2imgs
+
+            if ego2imgs_t.dim() == 2 and tuple(ego2imgs_t.shape) == (4, 4):
+                ego2imgs_t = ego2imgs_t.view(1, 1, 4, 4)
+            elif ego2imgs_t.dim() == 1 and ego2imgs_t.numel() == 16:
+                ego2imgs_t = ego2imgs_t.view(1, 1, 4, 4)
+            elif ego2imgs_t.dim() == 3:
+                # (N_cam, 4, 4)
+                if tuple(ego2imgs_t.shape[-2:]) == (4, 4):
+                    ego2imgs_t = ego2imgs_t.unsqueeze(0)
+                else:
+                    n_cam = ego2imgs_t.numel() // 16
+                    ego2imgs_t = ego2imgs_t.view(1, n_cam, 4, 4)
+            elif ego2imgs_t.dim() == 4:
+                # Expect (B, N_cam, 4, 4); if channels-first by mistake, try to fix
+                if tuple(ego2imgs_t.shape[-2:]) != (4, 4):
+                    # Fallback infer N_cam from numel with B=1
+                    n_cam = ego2imgs_t.numel() // 16
+                    ego2imgs_t = ego2imgs_t.view(1, n_cam, 4, 4)
+            else:
+                # Generic fallback: infer from numel with B=1
+                n_cam = ego2imgs_t.numel() // 16
+                ego2imgs_t = ego2imgs_t.view(1, n_cam, 4, 4)
+
+            ego2imgs_t = ego2imgs_t.to(device=self._sta_vt_device, dtype=torch.float32)
+
+            bev_real2aug_t = torch.eye(4, dtype=torch.float32, device=self._sta_vt_device)
+
+            (
+                reference_points_rebatch,
+                queries_rebatch_grid,
+                restore_bev_grid,
+                bev_pillar_counts,
+            ) = self._sta_vt.point_sampling(
+                reference_points=self._sta_ref3d,
+                pc_range=self._sta_vt.pc_range,
+                img_metas={'ego2imgs': ego2imgs_t},
+                im_shape=(dst_h - cut_start_h, dst_w),
+                bev_real2aug=bev_real2aug_t,
+            )
+            inputs_dict = {}
+            img_input = {'img_front_30': 'img_30', 'img_front_120': 'img_120'}
+            if ".bc" in self.model_file or '.hbm' in self.model_file:
+                img_slice_nv12 = {}
+                for img_name, img_data in img_slice.items():
+                    y_data, uv_data = rgb_to_nv12_split(img_data)
+                    img_slice_nv12[f"{img_input[img_name]}_y"] = y_data
+                    img_slice_nv12[f"{img_input[img_name]}_uv"] = uv_data
+                inputs_dict.update(img_slice_nv12)
+            elif ".onnx" in self.model_file:
+                for img_name, img_data in img_slice.items():
+                    inputs_dict.update({f"{img_input[img_name]}": img_data})
+
+            inputs_dict.update({
+                'images_grid': images_grid.astype(np.float32),
+                'queries_rebatch_grid': queries_rebatch_grid.detach().cpu().numpy(),
+                'reference_points_rebatch': reference_points_rebatch.detach().cpu().numpy(),
+                'restore_bev_grid': restore_bev_grid.detach().cpu().numpy(),
+                'bev_pillar_counts': bev_pillar_counts.detach().cpu().numpy(),
+            })
+
+            if getattr(self.global_config, 'calib_data_save_path', "None") != "None":
+                for k in inputs_dict:
+                    single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
+                    os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
+                    np.save(single_calib_data_save_path, inputs_dict[k])
+                self.calib_data_cnt += 1
+            # self.session = ort.InferenceSession(self.global_config.onnx_path)
+            # outputs = self.session.run(self.session.output_names, inputs_dict)
+            self.session = HBRuntime(self.global_config.onnx_path)
+            outputs = self.session.run(self.output_names, inputs_dict)
+
+            for k, o in zip(out_keys, outputs):
+                batch_ret[k].append(o)
+
+        # Stack to tensors
+        for k in out_keys:
+            batch_ret[k] = torch.from_numpy(np.stack(batch_ret[k], axis=0)).cuda()
+        return [batch_ret]
+
     def forward(self, x, calib=None, metadata=None, phase=const.PHASE_TRAINING):
         forward_outputs = []
         for task in self.tasks:
@@ -157,8 +290,11 @@ class GpNetDeploy(GpNet):
             if "DRIVING_BEV_DYN" == task:
                 output = self.forward_one_DRIVING_BEV_DYN(x, calib, metadata)
                 forward_outputs.append(output)
-            if "PARKING_IPM_STA" == task:
+            elif "DRIVING_BEV_STA" == task:
+                output = self.forward_one_DRIVING_BEV_STA(x, calib, metadata)
+                forward_outputs.append(output)
+            elif "PARKING_IPM_STA" == task:
                 output = self.forward_park_slot(x, calib, metadata)
-
+                forward_outputs.append(output)
 
         return forward_outputs

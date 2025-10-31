@@ -36,8 +36,10 @@ class WrappedGpNet(GpNet):
     def forward(self, input):
         if input["task"] == "DRIVING_BEV_DYN":
             return self.forward_dyn(input) 
-        if input["task"] == "PARKING_IPM_STA":
+        elif input["task"] == "PARKING_IPM_STA":
             return self.forward_park(input)
+        elif input["task"] == "DRIVING_BEV_STA":
+            return self.forward_sta(input)
         
     def forward_dyn(self, input):
         outputs = []
@@ -45,7 +47,6 @@ class WrappedGpNet(GpNet):
         calib = input["calib"]
         task = input["task"]
         images_grid = calib["images_grid"]
-
         cam8m_set = ["img_front_120", "img_front_30"]
         cam2m_set = ["img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
 
@@ -58,17 +59,14 @@ class WrappedGpNet(GpNet):
             img2ms, images_grid[len(cam8m_set):].float(), align_corners=True, padding_mode='border', mode="nearest")
 
         imgs = torch.cat([udist_img8ms, udist_img2ms], dim = 0) / 255.0
-
         mono3d, mono_od, gate_lever, side_od, neck2_in = [], [], [], [], []
 
         for backbone_name, camera_list in self.backbone_camera_mapping.items():
             bb_output = self.model[backbone_name](imgs)
             g0_output = self.model['group0'](bb_output)
             neck0_output = self.model['neck0'](g0_output)
-                     
-        bev_feature = self.model[self._transformers[task]](
-            neck0_output,  calib)
 
+        bev_feature = self.model[self._transformers[task]](neck0_output, calib)
       
         for task_name in self.tasks_to_run.keys():
             if task_name == "DRIVING_BEV_DYN":
@@ -97,6 +95,43 @@ class WrappedGpNet(GpNet):
                 # exit(1)
         
         return output
+
+    def forward_sta(self, input):
+        outputs = []
+        x = input["image"]
+        calib = input["calib"]
+        task = input["task"]
+        images_grid = calib["images_grid"]
+        cam8m_set = ["img_front_30", "img_front_120"]
+        image_30 = x["img_front_30"].permute(0, 3, 1, 2).contiguous()
+        image_120 = x["img_front_120"].permute(0, 3, 1, 2).contiguous()
+        images = torch.cat([image_30, image_120], dim=0)  # 2,3,2160,3840
+        udist_img8ms = F.grid_sample(images, images_grid.float(), align_corners=True, padding_mode='border', mode="nearest")
+        imgs = udist_img8ms / 255.0
+
+        for backbone_name, camera_list in self.backbone_camera_mapping.items():
+            bb_output = self.model[backbone_name](imgs)
+            g0_output = self.model['group0'](bb_output)
+            neck0_output = self.model['neck0'](g0_output)
+        
+        neck0_output = {'img_front_30': [neck0_output[0][0:1, ...]], 'img_front_120': [neck0_output[0][1:2, ...]]}
+        self.model[self._transformers[task]].is_compile = True
+        print(self._transformers)
+        bev_feature = self.model[self._transformers[task]](neck0_output, calib)
+      
+        for task_name in self.tasks_to_run.keys():
+            outputs = self.model[task_name](bev_feature)[0]
+            print(ShowDataStruct("DRIVING_BEV_STA", outputs))
+            outputs_classes, intermediate_reference_points = outputs['all_cls_scores'].detach(), outputs['all_pts_preds'].detach()
+            lane_marking_types_preds, lane_marking_colors_preds = outputs['all_lane_marking_types_preds'].detach(), outputs['all_lane_marking_colors_preds'].detach()
+            shape_types, centerline_types = outputs['all_shape_types_preds'].detach(), outputs['all_centerline_types_preds'].detach()
+            keypoint_classes, keypoint_regs = outputs['all_keypoint_classes_preds'].detach(), outputs['all_keypoint_regs_preds'].detach()
+
+        return (outputs_classes[-1], intermediate_reference_points[-1],
+                lane_marking_types_preds[-1], lane_marking_colors_preds[-1],
+                shape_types[-1], centerline_types[-1], keypoint_classes[-1], keypoint_regs[-1])
+        
+
     def forward_park(self, input):
         img = input["image"]
         fisheye_rear = img['fisheye_img_rear']
@@ -169,6 +204,11 @@ class PytorchToOnnx:
                 "img_rear_left": [1920, 1080, 3],
                 "img_rear_right": [1920, 1080, 3],
             }
+        elif task_name in ["DRIVING_BEV_STA"]:
+            used_image_shapes: dict = {
+                "img_front_30": [3840, 2160, 3],
+                "img_front_120": [3840, 2160, 3],
+            }
 
             return used_image_shapes
         elif task_name in ["PARKING_IPM_STA"]:
@@ -201,7 +241,16 @@ class PytorchToOnnx:
                     7, 384, 240, 2).cuda()
                 merged_input_dict["calib"]["vt_grid_valid"] = torch.rand(
                     7, 4, 96, 240).cuda()
-            if task.name == "PARKING_IPM_STA":
+            elif task.name == "DRIVING_BEV_STA":
+                merged_input_dict = {"task": tasks[0].name, "image": input_dict}
+                merged_input_dict["calib"]={}
+                merged_input_dict["calib"]["images_grid"] = torch.rand(2, 512, 960, 2).cuda()
+                merged_input_dict["calib"]["reference_points_rebatch"] = torch.rand(2, 5000, 4, 2).cuda()
+                merged_input_dict["calib"]["queries_rebatch_grid"] = torch.rand(2, 50, 100,2).cuda()
+                merged_input_dict["calib"]["restore_bev_grid"] = torch.rand(1, 100, 100, 2).cuda()
+                merged_input_dict["calib"]["bev_pillar_counts"] = torch.rand(1, 5000, 1).cuda()
+
+            elif task.name == "PARKING_IPM_STA":
                 avm_w = 768
                 avm_h = 768
                 merged_input_dict = {"task": task.name, "image": input_dict}
@@ -252,6 +301,7 @@ class PytorchToOnnx:
         os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
 
         for task in tasks:
+            do_constant_folding = True
             if task.name == "DRIVING_BEV_DYN":
                 input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
                        "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid", "vt_grid_valid"]  # occ_od
@@ -262,17 +312,23 @@ class PytorchToOnnx:
                 input_names=["img_rear", "img_front","img_left", "img_right",  "grid_rear_and_front", "grid_left_and_right","mask_rear", "mask_front", "mask_left", "mask_right"]
                 output_names=['avm', 'slot_point', 'slot_line']
 
-        with torch.no_grad():
-            torch.onnx.export(
-                net,
-                (input_dummy, {}),
-                onnx_path,
-                verbose=False,
-                opset_version=16,
-                # keep_initializers_as_inputs=False,
-                input_names=input_names,
-                output_names=output_names
-            )
+            if task.name == "DRIVING_BEV_STA":
+                input_names = ["img_30", "img_120", "images_grid", "reference_points_rebatch", "queries_rebatch_grid", "restore_bev_grid", "bev_pillar_counts"]
+                output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "keypoint_classes_preds", "keypoint_regs_preds"]
+                do_constant_folding = False
+            with torch.no_grad():
+                torch.onnx.export(
+                    net,
+                    (input_dummy, {}),
+                    onnx_path,
+                    verbose=False,
+                    opset_version=16,
+                    # keep_initializers_as_inputs=False,
+                    input_names=input_names,
+                    output_names=output_names,
+                    do_constant_folding=do_constant_folding
+                )
+            
     
         onnx_sim_path = onnx_path.replace(".onnx", "_sim.onnx")
         model = onnx.load(onnx_path)

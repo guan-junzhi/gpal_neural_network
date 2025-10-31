@@ -65,10 +65,10 @@ then
     tasks=driving_bev_dyn 
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20251011_02_12_25/checkpoint/epoch=5-step=50000_checkpoint.pth
     config=configs_for_develop/driving_bev_dyn_config.yaml
-else 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/checkpoint/epoch=1-step=3500_checkpoint_wangtong.pth
-    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250728_13_04_38_2epoch_ckpt/config.yaml
-
+else
+    tasks=driving_bev_sta
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/checkpoint/epoch=0-step=22000_checkpoint.pth
+    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/config.yaml
 fi
 
 echo load_from=$load_from
