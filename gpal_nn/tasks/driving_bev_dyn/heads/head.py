@@ -130,9 +130,9 @@ class DRIVING_BEV_DYNHead(BaseHead):
         # bev2feat
         grid_x = (grid[..., 0, 0].clone() - self.point_cloud_range[0]) / bev_w_resolution
         grid_y = (grid[..., 1, 0].clone() - self.point_cloud_range[1]) / bev_h_resolution
-        # grid[..., 0, 0] = grid_x.clone()
-        # grid[..., 1, 0] = grid_y.clone()
-        grid = torch.cat([grid_x.clone(), grid_y.clone()], dim = -1).unsqueeze(-1)
+        grid[..., 0, 0] = grid_x.clone()
+        grid[..., 1, 0] = grid_y.clone()
+        # grid = torch.cat([grid_x.clone(), grid_y.clone()], dim = -1).unsqueeze(-1)
         # todo 需要仔细分辨一下应该用哪个
         normalize_factor = torch.tensor([w, h],
                                         dtype=prev_feat.dtype,
