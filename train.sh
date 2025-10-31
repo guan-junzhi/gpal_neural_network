@@ -52,7 +52,7 @@ export ENV_GPAL_NEURAL_NETWORK_GPUS=1
 if [[ $1 == "parking_ipm_sta" ]];
 then
     tasks=parking_ipm_sta 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/checkpoint/epoch=4-step=1000_checkpoint_weiwei.pth
+    load_from=/data/ai_group/workdirs/gpal_neural_network_group/zww/slot_pretrained/best.pth
     config=configs_for_develop/parking_ipm_sta_config.yaml
 elif [[ $1 == "driving_bev_dyn" ]];
 then

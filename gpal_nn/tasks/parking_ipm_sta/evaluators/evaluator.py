@@ -151,7 +151,7 @@ class PARKING_IPM_STAEvaluator(BaseEvaluator):
     def generate_kpi(self) -> dict:
         StatPackage = initStatPack()
         for pred, gt, meta in zip(self.pread_all, self.gt_all, self.meta_all):
-            DrawVe(gt, pred, meta, self.save)
+            # DrawVe(gt, pred, meta, self.save)
             evaloator = TXTLabelLoader(self.sw, self.sh)
             heatmapResultPack = evaloator.errorCaculate(pred, gt)
             updatePack(StatPackage, heatmapResultPack)
