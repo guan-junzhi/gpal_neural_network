@@ -162,11 +162,12 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
         prev_feats = feats_shifted.clone() * seq_flag
 
-        self.feature_bank = x.detach().clone()
+        # self.feature_bank = x.detach().clone()
         self.prev_metas = copy.deepcopy(metadata)
 
         cur2prev = torch.from_numpy(np.eye(3)).to(x.device).unsqueeze(0).repeat(x.shape[0], 1, 1)
         x_fuser = self.head["fuser"](prev_feats, x, cur2prev)
+        self.feature_bank = x_fuser.detach().clone()
         x_decode = self.head["center_head"](x_fuser)
         batch_dict = {'head_conv': x_decode[:, 6:], "hm_cen": x_decode[:, :6]}
         return [batch_dict]
