@@ -597,7 +597,17 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         extrinsic = []
         camera_sizes = []
 
-        for cur_view in self.image_view:
+        # for cur_view in self.image_view:
+        actual_views = list(self.json_data.cameras.keys())
+        
+        for cur_ref_view in self.image_view:
+            ref_view_short = cur_ref_view.replace('img_', '')
+            
+            if ref_view_short in actual_views:
+                cur_view = ref_view_short
+            else:
+                cur_view = cur_ref_view
+                
             assert cur_view == self.json_data.cameras[cur_view].name
             intrinsic.append(
                 self.json_data.cameras[cur_view].intrinsic.to_matrix())
@@ -901,7 +911,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['frame_id'] = info['time_stamp']
 
             # if self.dataset_cfg.USE_CAMERA_YAML:
-            if True:
+            if self.phase == const.PHASE_VALIDATION:
                 intrinsic = self.intrinsic
                 cam_dist = self.cam_dist
                 temp = np.stack([np.eye(4) for i in range(7)], axis=0)

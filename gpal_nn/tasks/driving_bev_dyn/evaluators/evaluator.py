@@ -53,7 +53,12 @@ def test_dynamic_thresholds(loggerinfo=print, restricted_ratio=[0.05, 0.005]):
 
 
 def create_logger(log_file=None, rank=0, log_level=logging.INFO, use_console=True):
-    logger = logging.getLogger(__name__)
+    logger_name = __name__ if log_file is None else f"{__name__}.{log_file}"
+    logger = logging.getLogger(logger_name)
+
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
     # 根据 rank 设置日志级别（仅 rank=0 时记录指定级别，否则 ERROR）
     logger.setLevel(log_level if rank == 0 else logging.ERROR)
     

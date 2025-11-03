@@ -161,7 +161,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
                     self.feature_bank.dtype), align_corners=False)
             prev_feats = feats_shifted.clone() * seq_flag
             
-        self.feature_bank = x.detach().clone()
+        # self.feature_bank = x.detach().clone()
         self.prev_metas = copy.deepcopy(metadata)
 
         cur2prev = torch.from_numpy(np.eye(3)).to(x.device).unsqueeze(0).repeat(x.shape[0], 1, 1)
