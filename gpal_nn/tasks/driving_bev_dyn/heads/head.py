@@ -119,7 +119,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
                 dt[i] = (ts_c - ts_p)
         return seq_flag, dt
 
-    def shift_feature(self, grid, cur2prev, prev_feat, bev_h_resolution, bev_w_resolution):
+    def gen_shift_feature_grid(self, grid, cur2prev, prev_feat, bev_h_resolution, bev_w_resolution):
         bs, _, h, w = prev_feat.shape
         grid = grid.view(bs, h, w, 3, 1)
         if torch.onnx.is_in_onnx_export():
@@ -132,22 +132,15 @@ class DRIVING_BEV_DYNHead(BaseHead):
         grid_y = (grid[..., 1, 0].clone() - self.point_cloud_range[1]) / bev_h_resolution
         grid[..., 0, 0] = grid_x.clone()
         grid[..., 1, 0] = grid_y.clone()
+        # grid = torch.cat([grid_x.clone(), grid_y.clone()], dim = -1).unsqueeze(-1)
         # todo 需要仔细分辨一下应该用哪个
-        if True:
-            normalize_factor = torch.tensor([w, h],
-                                            dtype=prev_feat.dtype,
-                                            device=prev_feat.device)
-            grid = grid[:, :, :, :2, 0] / normalize_factor.view(1, 1, 1, 2) * 2.0 - 1.0
-            output = F.grid_sample(prev_feat, grid.to(
-                prev_feat.dtype), align_corners=False)
-        else:
-            normalize_factor = torch.tensor([w - 1.0, h - 1.0],
-                                            dtype=prev_feat.dtype,
-                                            device=prev_feat.device)
-            grid = grid[:, :, :, :2, 0] / normalize_factor.view(1, 1, 1, 2) * 2.0 - 1.0
-            output = F.grid_sample(prev_feat, grid.to(
-                prev_feat.dtype), align_corners=True)
-        return output
+        normalize_factor = torch.tensor([w, h],
+                                        dtype=prev_feat.dtype,
+                                        device=prev_feat.device)
+        grid = grid[:, :, :, :2, 0] / normalize_factor.view(1, 1, 1, 2) * 2.0 - 1.0
+        # output = F.grid_sample(prev_feat, grid.to(
+        #     prev_feat.dtype), align_corners=False)
+        return grid
 
 
     def forward(self, x: torch.Tensor, calib=None, metadata=None) -> torch.Tensor:
@@ -155,19 +148,25 @@ class DRIVING_BEV_DYNHead(BaseHead):
         if (self.feature_bank == None):
             self.feature_bank = torch.zeros_like(x).detach()
         B = len(metadata)
-        seq_flag, dts = self.SeqCheck(self.prev_metas, metadata)
-        rts = self.GetCur2Prev(metadata, dts)
-        feats_shifted = self.shift_feature(self.xyz_camA.repeat(B, 1, 1, 1).to(x.device).clone(), rts.to(x.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
-        seq_flag = seq_flag.to(x.device).float().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)#.unsqueeze(-1)
-
-        prev_feats = feats_shifted.clone() * seq_flag
-
-        # self.feature_bank = x.detach().clone()
+        if torch.onnx.is_in_onnx_export():
+            seq_flag = torch.ones(B, device = "cpu", dtype = torch.bool)
+            B = 1
+            prev_feats = F.grid_sample(metadata["prev_feats"], metadata["prev_feats_grid"], align_corners=False)
+        else:
+            seq_flag, dts = self.SeqCheck(self.prev_metas, metadata)
+            rts = self.GetCur2Prev(metadata, dts)
+            feats_shifted_grid = self.gen_shift_feature_grid(self.xyz_camA.repeat(B, 1, 1, 1).to(x.device).clone(), rts.to(x.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
+            seq_flag = seq_flag.to(x.device).float().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)#.unsqueeze(-1)
+            feats_shifted = F.grid_sample( self.feature_bank.clone(), feats_shifted_grid.to(
+                    self.feature_bank.dtype), align_corners=False)
+            prev_feats = feats_shifted.clone() * seq_flag
+            
+        self.feature_bank = x.detach().clone()
         self.prev_metas = copy.deepcopy(metadata)
 
         cur2prev = torch.from_numpy(np.eye(3)).to(x.device).unsqueeze(0).repeat(x.shape[0], 1, 1)
         x_fuser = self.head["fuser"](prev_feats, x, cur2prev)
         self.feature_bank = x_fuser.detach().clone()
         x_decode = self.head["center_head"](x_fuser)
-        batch_dict = {'head_conv': x_decode[:, 6:], "hm_cen": x_decode[:, :6]}
+        batch_dict = {'head_conv': x_decode[:, 6:], "hm_cen": x_decode[:, :6], "cur_feats": x.detach().clone()}
         return [batch_dict]

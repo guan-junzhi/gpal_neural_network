@@ -47,6 +47,8 @@ class WrappedGpNet(GpNet):
         calib = input["calib"]
         task = input["task"]
         images_grid = calib["images_grid"]
+        metadata = input["metadata"]
+
         cam8m_set = ["img_front_120", "img_front_30"]
         cam2m_set = ["img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
 
@@ -70,7 +72,7 @@ class WrappedGpNet(GpNet):
       
         for task_name in self.tasks_to_run.keys():
             if task_name == "DRIVING_BEV_DYN":
-                output = self.model[task_name](bev_feature)
+                output = self.model[task_name](bev_feature,metadata = metadata )
                 output = output[0]
                 # print("DRIVING_BEV_DYN", output[0].shape)
                 # BEV_TO_POINTS = dict(
@@ -238,9 +240,11 @@ class PytorchToOnnx:
                 merged_input_dict["calib"]["images_grid"] = torch.rand(
                     7, 320, 768, 2).cuda()
                 merged_input_dict["calib"]["vt_grid"] = torch.rand(
-                    7, 384, 240, 2).cuda()
-                merged_input_dict["calib"]["vt_grid_valid"] = torch.rand(
-                    7, 4, 96, 240).cuda()
+                    7, 192, 120, 2).cuda()
+                merged_input_dict["metadata"] = {}
+                merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 120).cuda()
+                merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 120, 2).cuda()
+
             elif task.name == "DRIVING_BEV_STA":
                 merged_input_dict = {"task": tasks[0].name, "image": input_dict}
                 merged_input_dict["calib"]={}
@@ -299,15 +303,15 @@ class PytorchToOnnx:
 
         
         os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
+        
 
         for task in tasks:
             do_constant_folding = True
             if task.name == "DRIVING_BEV_DYN":
                 input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
-                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid", "vt_grid_valid"]  # occ_od
+                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid",  "prev_feats","prev_feats_grid"]  # occ_od
 
-                output_names = ["head_conv", "hm_center"]
-               
+                output_names = ["head_conv", "hm_center","prev_feats_output"]
             if task.name == "PARKING_IPM_STA":
                 input_names=["img_rear", "img_front","img_left", "img_right",  "grid_rear_and_front", "grid_left_and_right","mask_rear", "mask_front", "mask_left", "mask_right"]
                 output_names=['avm', 'slot_point', 'slot_line']
