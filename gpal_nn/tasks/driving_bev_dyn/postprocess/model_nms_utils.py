@@ -199,7 +199,7 @@ def class_agnostic_nms(box_scores, box_preds, nms_config, score_thresh=None):
         box_scores_nms_np = box_scores_nms.detach().cpu().numpy()
 
         selected_idx, selected_box, selected_scores = oriented_nms(boxes_for_nms_np[:, 0:7],
-                                                     box_scores_nms_np, nms_config['NMS_THRESH'])
+                                                                   box_scores_nms_np, nms_config['NMS_THRESH'])
         
         selected_idx = torch.from_numpy(selected_idx).to(boxes_for_nms.device)
         selected_box = torch.from_numpy(selected_box).to(boxes_for_nms.device)

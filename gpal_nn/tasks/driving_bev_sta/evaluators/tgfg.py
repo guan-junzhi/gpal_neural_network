@@ -85,39 +85,63 @@ def tpfp_gen(gen_lines,
         tuple[np.ndarray]: (tp, fp) whose elements are 0 and 1. The shape of
         each array is (num_scales, m).
     """
-
     num_gens = gen_lines.shape[0]
     num_gts = gt_lines.shape[0]
 
     # tp and fp
     tp = np.zeros((num_gens), dtype=np.float32)
     fp = np.ones((num_gens), dtype=np.float32)
+    centerline_type_acc = []
+    lane_marking_type_acc = []
+    lane_marking_color_acc = []
     shape_type_acc = []
     dist_error_list = []
+    pred_shapes = []  # 新增：存储预测的形状类型
+    true_shapes = []  # 新增：存储真实的形状类型
 
     # if there is no gt bboxes in this image, then all det bboxes
     # within area range are false positives
     if num_gts == 0:
         fp[...] = 1
-        return tp, fp, dist_error_list, shape_type_acc
+        return tp, fp, dist_error_list, lane_marking_type_acc, lane_marking_color_acc, shape_type_acc, pred_shapes, true_shapes, centerline_type_acc
     
     if num_gens == 0:
-        return tp, fp, dist_error_list, shape_type_acc
+        return tp, fp, dist_error_list, lane_marking_type_acc, lane_marking_color_acc, shape_type_acc, pred_shapes, true_shapes, centerline_type_acc
     
     gen_scores = gen_lines[:,-1] # n
     # distance matrix: n x m
     matrix = polyline_score(
-            gen_lines[:,:-2].reshape(num_gens,-1,coord_dim), 
-            gt_lines[:,:-1].reshape(num_gts,-1,coord_dim),linewidth=2.,metric=metric)
+            gen_lines[:,:-5].reshape(num_gens,-1,coord_dim), 
+            gt_lines[:,:-4].reshape(num_gts,-1,coord_dim),linewidth=2.,metric=metric)
 
     row_ind, col_ind = linear_sum_assignment(-matrix)
     for pred_idx, gt_idx in zip(row_ind, col_ind):
         if matrix[pred_idx, gt_idx] >= threshold:
             tp[pred_idx] = 1
             fp[pred_idx] = 0
-            dist_error = get_dis_error(gen_lines[pred_idx,:-2].reshape(-1, 2), gt_lines[gt_idx,:-1].reshape(-1, 2))
+            dist_error = get_dis_error(gen_lines[pred_idx,:-5].reshape(-1, 2), gt_lines[gt_idx,:-4].reshape(-1, 2))
             dist_error_list.append(dist_error)
-            shape_type_acc.append(gen_lines[pred_idx,-1] == gt_lines[gt_idx,-1])
+            # shape_type_acc.append(gen_lines[pred_idx,-1] == gt_lines[gt_idx,-1])
+            pred_lane_marking_type = gen_lines[pred_idx, -4]  # 预测的车道线类别
+            true_lane_marking_type = gt_lines[gt_idx, -4]     # 真实的车道线类别
+            lane_marking_type_acc.append(pred_lane_marking_type == true_lane_marking_type)
+            pred_lane_marking_color = gen_lines[pred_idx, -3]  # 预测的车道线颜色
+            true_lane_marking_color = gt_lines[gt_idx, -3]     # 真实的车道线颜色
+            lane_marking_color_acc.append(pred_lane_marking_color == true_lane_marking_color)
+
+            # 获取形状类型并判断是否正确
+            pred_shape = gen_lines[pred_idx, -2]  # 预测的形状类型
+            true_shape = gt_lines[gt_idx, -2]     # 真实的形状类型
+            shape_type_acc.append(pred_shape == true_shape)
+            
+            # 新增：记录形状类型用于混淆矩阵
+            pred_shapes.append(pred_shape)
+            true_shapes.append(true_shape)
+
+            # 获取中心线类型并判断是否正确
+            pred_centerline_type = gen_lines[pred_idx, -1]  # 预测的形状类型
+            true_centerline_type = gt_lines[gt_idx, -1]     # 真实的形状类型
+            centerline_type_acc.append(pred_centerline_type == true_centerline_type)
     # # for each det, the max iou with all gts
     # matrix_max = matrix.max(axis=1)
     # # for each det, which gt overlaps most with it
@@ -138,8 +162,7 @@ def tpfp_gen(gen_lines,
     #             fp[i] = 1
     #     else:
     #         fp[i] = 1
-
-    return tp, fp, dist_error_list, shape_type_acc
+    return tp, fp, dist_error_list, lane_marking_type_acc, lane_marking_color_acc, shape_type_acc, pred_shapes, true_shapes, centerline_type_acc
 
 
 def polyline_score(pred_lines, gt_lines, linewidth=1., metric='POR'):

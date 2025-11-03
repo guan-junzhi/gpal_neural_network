@@ -264,12 +264,14 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
     @torch.no_grad()
     def generate_predicted_boxes(self, outputs, batch_size, **kwargs):
         # template_xyz = outputs['template_xyz'][:, :, :2].view(-1, 2)
-        pred_cen = outputs['estimation_cen'].permute(0, 2, 1)
+        pred_cen = outputs['estimation_cen'].permute(0, 2, 1)  # -> B 256 2
         pred_z = outputs['estimation_z'].permute(0, 2, 1)
         pred_dim = outputs['estimation_dim'].permute(0, 2, 1)
         pred_dir = outputs['estimation_dir'].permute(0, 2, 1)
         
         bin_flag = (pred_dir[:, :, 0] < pred_dir[:, :, 1])
+
+
         pred_yaw =( torch.atan2(pred_dir[:, :, 2], pred_dir[:, :, 3]) * bin_flag.float() + \
             torch.atan2(pred_dir[:, :, 4], pred_dir[:, :, 5]) * (1.0-bin_flag.float())).unsqueeze(-1)
 

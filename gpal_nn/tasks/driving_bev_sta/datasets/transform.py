@@ -17,14 +17,16 @@ class CutImageUpper(object):
         - images (np.uint8)/(np.float32)
     """
 
-    def __init__(self, start_h=112):
+    def __init__(self, start_h=112, just_update_meta=False):
         self.start_h = start_h
+        # onnx使用原图输入时just_update_meta=True
+        self.just_update_meta = just_update_meta
 
-    def __call__(self, data):
+    def __call__(self, data) -> dict:
         assert 'image' in data, '`image` is not found in results'
-
-        data['image'] = {k: data['image'][k][self.start_h:, :, :]
-                         for k in data['image']}
+        if not self.just_update_meta:
+            data['image'] = {k: data['image'][k][self.start_h:, :, :]
+                            for k in data['image']}
         data['calib']['ists'][:, 1, 2] -= self.start_h
         data['meta']['cut_h'] = True
         data['meta']['cut_h_value'] = self.start_h
