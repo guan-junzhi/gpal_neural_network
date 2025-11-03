@@ -766,6 +766,7 @@ class MapInstanceDetectorHead(nn.Module):
                 dtype=torch.long,
             ),
             self_attn_mask=self_attn_mask,
+            mlvl_feats=mlvl_feats,
         )
 
         outputs_classes = []
@@ -968,6 +969,7 @@ class MapInstanceDecoder(nn.Module):
                 query_pos=query_pos,
                 spatial_shapes=spatial_shapes,
                 attn_masks=kwargs["self_attn_mask"],
+                navi_info=kwargs["mlvl_feats"]['navi_info'],
             )
             if reg_branches is not None:
                 reg_points = reg_branches[lid](output.permute(1, 0, 2))

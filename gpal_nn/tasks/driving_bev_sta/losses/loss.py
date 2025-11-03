@@ -96,6 +96,17 @@ def pack_polyline_gt_points(data):
             keypoint_norm.append(projected_point_norm)
         keypoint_norms.append(np.array(keypoint_norm, dtype=np.float32))
 
+    assert 'guideline' in data, "guideline must be in data"
+    annos.append(data['guideline']['ego_path'])
+    lane_marking_types.append(np.ones(1) * (-1))
+    lane_marking_colors.append(np.ones(1) * (-1))
+    shape_types.append(np.ones(1) * (-1))
+    centerline_types.append(np.ones(1) * (-1))
+    centerline_directions.append(np.ones(1) * (-1))
+    classes.append(np.ones(1) * main_class_type_map['guideline_ego_path'])
+    is_split_merges.append(np.zeros(1, dtype=np.int32))
+    keypoint_norms.append(np.array([0] * 1, dtype=np.float32))
+
     if len(annos) > 0:
         annos = np.concatenate(annos, axis=0)
         classes = np.concatenate(classes, axis=0)

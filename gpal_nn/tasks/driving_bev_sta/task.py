@@ -31,6 +31,8 @@ class DRIVING_BEV_STATask(BaseTask):
         linetype_list = ['solid', 'dashed']
         vis1 = Vis2D([-30, 130], [-20, 20], 0.1)
         try:
+            vis1.DrawPolyline(gts[idx]['navi_info']['points'], [0, 165, 255], 2)
+            vis1.DrawPolyline(gts[idx]['guideline']['ego_path'][0], [235, 206, 135], 2)
             for l in gts[idx]['edges']['points']:
                 vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
                 vis1.DrawPolyline(l, [0, 255, 255], 2)
@@ -89,6 +91,8 @@ class DRIVING_BEV_STATask(BaseTask):
                     if cls_pred != 0:
                         if cls_pred == 2 and centerline_type == 1:
                             vis2.DrawPolyline(l.detach().cpu().numpy(), [158, 168, 3], 2) #应急车道：青色
+                        elif cls_pred == 3:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), [235, 206, 135], 2) #引导线：天蓝色
                         else:
                             vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2)
                         if is_split_merge_pred.values > 0.5:

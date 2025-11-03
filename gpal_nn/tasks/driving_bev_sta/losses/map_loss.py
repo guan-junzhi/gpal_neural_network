@@ -133,7 +133,7 @@ class BaseMapLossCost(nn.Module):
     def loss_single_group(self, score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, centerline_direction_pred, \
                           keypoint_cls_pred, keypoint_reg_pred, \
                           cls_gt, bbox_gt, points_gt, lane_marking_types_gt, lane_marking_colors_gt, shape_types_gt, centerline_type_gt, centerline_direction_gt, \
-                           keypoint_cls_gt, keypoint_reg_gt, valid_masks, valid_lens, center_line_flags, is_centerline):
+                           keypoint_cls_gt, keypoint_reg_gt, valid_masks, valid_lens, center_line_flags, is_centerline, is_guideline):
         loss_list = []
         avg_factor = []
         pred_mask_all = []
@@ -207,7 +207,7 @@ class BaseMapLossCost(nn.Module):
                                   _keypoint_cls_pred, _keypoint_reg_pred,
                                 pred_to_gt_label_all, _bbox_gt, _points_gt, \
                                     _lane_marking_type_gt, _lane_marking_color_gt, _shape_type_gt, _centerline_type_gt, _centerline_direction_gt, \
-                                _keypoint_cls_gt, _keypoint_reg_gt, is_centerline)
+                                _keypoint_cls_gt, _keypoint_reg_gt, is_centerline, is_guideline)
 
 
         avg_factor = avg_factor.unsqueeze(-1)
@@ -296,6 +296,7 @@ class BaseMapLossCost(nn.Module):
             center_line_flags = gt_items[group_flag]["center_line_flag"]
 
             is_centerline = main_class_type_map["centerline"] in group[0]
+            is_guideline = main_class_type_map["guideline_ego_path"] in group[0]
             start_vec_idx = group[1][0]
             end_vec_idx = group[1][1]
             cur_score_pred = score_pred[:, start_vec_idx:end_vec_idx]
@@ -315,14 +316,19 @@ class BaseMapLossCost(nn.Module):
                                                cur_keypoint_cls_pred, cur_keypoint_reg_pred, \
                                                cls_gt, bbox_gt, points_gt, \
                                                 lane_marking_types_gt, lane_marking_colors_gt, shape_types_gt, centerline_types_gt, centerline_directions_gt, \
-                                               keypoint_cls_gt, keypoint_reg_gt, valid_mask, valid_len, center_line_flags, is_centerline)
+                                               keypoint_cls_gt, keypoint_reg_gt, valid_mask, valid_len, center_line_flags, is_centerline, is_guideline)
             for loss_dict in loss_dict_list:
                 for key in loss_dict:
                     total_loss_dict[key] += loss_dict[key]
         return total_loss_dict
 
     def loss_single(self, score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, centerline_direction_pred, keypoint_cls_pred, keypoint_reg_pred,
-                    cls_gt, bbox_gt, points_gt, lane_marking_type_gt, lane_marking_color_gt, shape_type_gt, centerline_type_gt, centerline_direction_gt, keypoint_cls_gt, keypoint_reg_gt, is_centerline):
+                    cls_gt, bbox_gt, points_gt, lane_marking_type_gt, lane_marking_color_gt, shape_type_gt, centerline_type_gt, centerline_direction_gt, keypoint_cls_gt, keypoint_reg_gt, is_centerline, is_guideline):
+        reg_weight = None
+        if is_guideline:
+            x_valid = (torch.abs(points_gt[:, :, 0] - points_gt[:, 0:1, 0]) > 1e-3).any(-1)
+            y_valid = (torch.abs(points_gt[:, :, 1] - points_gt[:, 0:1, 1]) > 1e-3).any(-1)
+            reg_weight = (x_valid & y_valid).float()
 
         cls_weight = torch.ones_like(score_pred)
         cls_valid_mask = cls_gt >= 0
@@ -350,18 +356,30 @@ class BaseMapLossCost(nn.Module):
 
         normalized_bbox_gt = normalize_2d_bbox(bbox_gt, self.pc_range)
         denormalized_bbox_pred = denormalize_2d_bbox(bbox_pred, self.pc_range)
-        box_l1_loss = self.bbox_loss(
-            bbox_pred, normalized_bbox_gt).sum() * self.l1_loss_weight
-        box_iou_loss = self.iou_loss(
-            denormalized_bbox_pred, bbox_gt).sum() * self.giou_loss_weight
-
         normalized_points_gt = normalize_2d_pts(points_gt, self.pc_range)
         denormalized_points_pred = denormalize_2d_pts(
             points_pred, self.pc_range)
-        points_l1_loss = self.pts_l1_loss(points_pred,
-                                        normalized_points_gt).sum() * self.pts_l1_loss_weight
-        points_dir_loss = self.pts_dir_loss(
-            denormalized_points_pred, points_gt).sum() * self.pts_dir_loss_weight
+        if reg_weight is not None:
+            box_l1_loss = self.bbox_loss(
+                bbox_pred, normalized_bbox_gt, weight=reg_weight[:, None]).sum() * self.l1_loss_weight
+            
+            box_iou_loss = (self.iou_loss(denormalized_bbox_pred, bbox_gt) * 
+                            reg_weight[:, None]).sum() * self.giou_loss_weight
+            
+            points_l1_loss = (self.pts_l1_loss(points_pred, normalized_points_gt) * 
+                              reg_weight).sum() * self.pts_l1_loss_weight
+            points_dir_loss = (self.pts_dir_loss(denormalized_points_pred, points_gt) *
+                               reg_weight).sum() * self.pts_dir_loss_weight
+        else:
+            box_l1_loss = self.bbox_loss(
+                bbox_pred, normalized_bbox_gt).sum() * self.l1_loss_weight
+            box_iou_loss = self.iou_loss(
+                denormalized_bbox_pred, bbox_gt).sum() * self.giou_loss_weight
+            points_l1_loss = self.pts_l1_loss(points_pred,
+                                            normalized_points_gt).sum() * self.pts_l1_loss_weight
+            points_dir_loss = self.pts_dir_loss(
+                denormalized_points_pred, points_gt).sum() * self.pts_dir_loss_weight
+            
         centerline_type_weight = torch.ones_like(centerline_type_pred)
         centerline_type_valid_mask = centerline_type_gt >= 0
         centerline_type_gt_valid = torch.where(centerline_type_valid_mask, centerline_type_gt, torch.zeros_like(centerline_type_gt))
