@@ -173,6 +173,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.img_h_len = self.task_config.image_crop_config['IMAGE_CROP_H_LEN']
         self.img_crop_dict = self.task_config.image_crop_config
         self.img_crop_start = self.task_config.image_crop_config['CROP_HeSai_ID4']['CROP_START']
+        self.camera_raw_size = self.task_config.image_crop_config['CAMERA_RAW_SIZE']
 
         self.json_data = InitJsonFile(
             self.class_names, self.task_config.od_range)
@@ -316,7 +317,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 # infos = infos[:100]
                 fusion_infos.extend(infos)
 
-        print('Total samples for HeSai dataset: %d' %
+        print('Total samples for HeSai dataset [原始数据]: %d' %
               (len(fusion_infos)))
 
         skip_subday_list = [
@@ -396,7 +397,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
         #         fusion_infos_ext.append(copy.deepcopy(ele))
         #     fusion_infos = fusion_infos_ext
-        print('Total samples for HeSai dataset: %d' %
+        print('Total samples for HeSai dataset [指定日期过滤]: %d' %
               (len(fusion_infos)))
         return fusion_infos
 
@@ -426,8 +427,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         end_index = start_index + clip_keys_per_rank
         clip_keys_rank = pkl.loads(pkl.dumps(
             clip_key_list[rank_curr::world_size][:clip_keys_per_rank]))
-
-        dataset = [ele for ele in datalist if ele["sequence_name"] in clip_keys_rank]
+        from tqdm import tqdm
+        dataset = [ele for ele in tqdm(datalist, desc=f'初筛数据[补全rank]') if ele["sequence_name"] in clip_keys_rank]
         return dataset
 
     def _preconstruct_test_stream_indices(self, datalist, batch_size, key="sequence_name"):
@@ -608,14 +609,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             else:
                 cur_view = cur_ref_view
                 
-            assert cur_view == self.json_data.cameras[cur_view].name
+            # assert cur_view == self.json_data.cameras[cur_view].name
             intrinsic.append(
                 self.json_data.cameras[cur_view].intrinsic.to_matrix())
             cam_dist.append(
                 self.json_data.cameras[cur_view].intrinsic.get_distortion_coeffs())
             extrinsic.append(
                 self.json_data.cameras[cur_view].extrinsic.to_matrix())
-            camera_sizes.append(self.json_data.cameras[cur_view].image_size)
+            # camera_sizes.append(self.json_data.cameras[cur_view].image_size)
+            camera_sizes.append(self.camera_raw_size[self.image_view.index(cur_ref_view)])
 
         # json_data_dict[cur_view] = {
         #     'image_size': camera_sizes,
