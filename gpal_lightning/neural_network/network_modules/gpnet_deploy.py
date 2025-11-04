@@ -166,6 +166,7 @@ class GpNetDeploy(GpNet):
                 'all_lane_marking_colors_preds',
                 'all_shape_types_preds',
                 'all_centerline_types_preds',
+                'all_centerline_directions_preds',
                 'all_keypoint_classes_preds',
                 'all_keypoint_regs_preds',
             ]
