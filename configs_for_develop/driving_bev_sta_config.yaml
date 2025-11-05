@@ -308,7 +308,7 @@ Tasks:
           # root_dir:  "../lane_data",
           root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # pkl_infos: ["gpal_songbiao_no_stop_20250604_tiny_test"],
-          pkl_infos: ["1010_combined_samples_1600frames"],
+          pkl_infos: ["1010_combined_samples_1600frames"], # 1105_calib_key, 1010_combined_samples_1600frames
           pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
           # in_shape: [432, 768],
           in_shape: [540, 960],

@@ -499,9 +499,10 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         navi_points_homo = np.concatenate([navi_points, np.ones((navi_points.shape[0],1))], axis=-1)
 
         noise_matrix = np.eye(4, dtype=np.float32)
-        noise_matrix[:3,:3] = yaw_rotation_matrix(random.uniform(-np.deg2rad(1.0), np.deg2rad(1.0)))
-        noise_matrix[0,3] = random.uniform(-6, 6)
-        noise_matrix[1,3] = random.uniform(-6, 6)
+        if self.phase == const.PHASE_TRAINING:
+            noise_matrix[:3,:3] = yaw_rotation_matrix(random.uniform(-np.deg2rad(3.0), np.deg2rad(3.0)))
+            noise_matrix[0,3] = random.uniform(-6, 6)
+            noise_matrix[1,3] = random.uniform(-6, 6)
 
         navi_points_noise = (noise_matrix @ bev_real2aug @ navi_points_homo.T).T[:,:2]
         navi_points_noise_ls = filter_linestring_by_x_positive(LineString(navi_points_noise))
@@ -540,7 +541,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['guideline'] = {}
         navi_points = np.zeros((self.pts_per_vector, 2), dtype=np.float32)
         guideline_ego_path = np.zeros((1, self.pts_per_vector, 3), dtype=np.float32)
-        if random.random() < self.navi_info_ratio:
+        if self.phase != const.PHASE_TRAINING or random.random() < self.navi_info_ratio:
             navi_points = self.process_navi_points(data_info['annotation']['navi_info']['points'][0], bev_real2aug)
             guideline_ego_path = self.process_guideline(annot['ego_path']['points'][0], bev_real2aug)[None]
         data_dict['navi_info']['points'] = navi_points
