@@ -45,7 +45,7 @@ Transformer:
   transformer_config:
     task_name: DRIVING_BEV_DYN
     bev_map_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-    bev_map_voxel_size: [1.28, 1.28, 0.5]
+    bev_map_voxel_size: [1.28, 1.28, 1.5]
     image_down_div: 8
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
     in_channels: 128
@@ -99,8 +99,7 @@ Tasks:
   
     build_gt:
       "max_objects": 256
-      "od_heatmap_voxel_size": [0.64, 0.64, 0.5]
-
+      "od_heatmap_voxel_size": [0.64, 0.64]
 
     od_range:
       [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
@@ -149,7 +148,6 @@ Tasks:
     Evaluator: {}
     datasets:
       training:
-
       - { dataset_name: 'xxx', 
           # is_manual_label == true,
           # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
@@ -171,6 +169,7 @@ Tasks:
           fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
+      
       validation:
       - { dataset_name: 'xxx', 
           is_manual_label: true,
