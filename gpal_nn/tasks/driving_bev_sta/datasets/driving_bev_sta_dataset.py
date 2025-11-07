@@ -500,9 +500,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
         noise_matrix = np.eye(4, dtype=np.float32)
         if self.phase == const.PHASE_TRAINING:
-            noise_matrix[:3,:3] = yaw_rotation_matrix(random.uniform(-np.deg2rad(3.0), np.deg2rad(3.0)))
-            noise_matrix[0,3] = random.uniform(-6, 6)
-            noise_matrix[1,3] = random.uniform(-6, 6)
+            noise_matrix[:3,:3] = yaw_rotation_matrix(random.uniform(-np.deg2rad(5.0), np.deg2rad(5.0)))
+            noise_matrix[0,3] = random.uniform(-10, 10)
+            noise_matrix[1,3] = random.uniform(-10, 10)
 
         navi_points_noise = (noise_matrix @ bev_real2aug @ navi_points_homo.T).T[:,:2]
         navi_points_noise_ls = filter_linestring_by_x_positive(LineString(navi_points_noise))
