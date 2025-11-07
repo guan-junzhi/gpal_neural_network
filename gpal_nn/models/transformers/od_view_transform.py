@@ -49,7 +49,7 @@ def gridcloud3d(B, Z, Y, X, norm=False, device='cuda'):
     return xyz
 
 def project_ego_pts_to_image(pts, ego2img):
-    B, N, _, _ = pts.shape
+    V, N, _, _ = pts.shape
     reference_points = pts
     ego2img = ego2img.unsqueeze(1).repeat(1, N, 1, 1)  # b,n,4，4
     eps = 1e-5  # 创建体素遮罩
@@ -58,8 +58,7 @@ def project_ego_pts_to_image(pts, ego2img):
     reference_points_img = torch.matmul(ego2img.to(torch.float32),
                                         reference_points.to(torch.float32)).permute(0, 1, 3, 2)  # B,N,1,4
     # 透视投影
-    reference_points_img_uv = reference_points_img[..., 0:2] / (
-        eps+reference_points_img[..., 2:3])  # B,N,1,2
+    reference_points_img_uv = reference_points_img[..., 0:2] / (eps+reference_points_img[..., 2:3])  # B,N,1,2
 
     return reference_points_img_uv, reference_points_img[..., 2].clone()
 
@@ -67,34 +66,42 @@ def project_ego_pts_to_image(pts, ego2img):
 def GetProjectGridByEgo2Imgs(ego2imgs, H, W, div, Z, Y, X, sample_pts_3d):
     sample_pts_3d = sample_pts_3d.repeat(ego2imgs.shape[0], 1, 1, 1)
     uvs, z = project_ego_pts_to_image(sample_pts_3d, ego2imgs)
-    WH = torch.tensor([[[[(W-1) * div, (H-1) * div]]]], device=ego2imgs.device,
-                      dtype=ego2imgs.dtype)
+    WH = torch.tensor(
+        [[[[(W-1) * div, (H-1) * div]]]], 
+        device=ego2imgs.device,
+        dtype=ego2imgs.dtype
+    )
     uv_norm = (2.0 * (uvs / WH) - 1.0)
     mask = (z <= 0).unsqueeze(-1).expand_as(uv_norm)
     # 将mask对应位置的uv_norm值设置为-2，无效点设置，取消gridsample后面的乘法
     uv_norm[mask] = -2.0
     valid_mem = (z[:, :, 0] > 0).reshape(ego2imgs.shape[0], Z, Y, X).float()
-    uv_norm = uv_norm.reshape(ego2imgs.shape[0], -1, X, 2)
+    uv_norm = uv_norm.reshape(ego2imgs.shape[0], -1, X, 2)  # Z*Y
 
     return uv_norm, valid_mem
 
-def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, scale_tensor=None, xyz_camAX=None, mask=None, batch_dict=None, image_crop_config=None):
-    div = 8
+def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, image_down_div=None, xyz_camAX=None, mask=None, batch_dict=None, image_crop_config=None):
+    div = image_down_div
 
     bev_feature_batch = []
     for i in range(rgb_camBX.shape[0]):
         rgb_camB = rgb_camBX[i]
         V, C, H, W = list(rgb_camB.shape)
+        
         if torch.onnx.is_in_onnx_export():
             vt_grid= batch_dict["vt_grid"]
         else:
             vt_grid, vt_grid_valid = GetProjectGridByEgo2Imgs(
-                batch_dict["ego2imgs"][i], H, W, div, Z, Y, X, xyz_camAX.to(rgb_camBX.device).clone())
+                batch_dict["ego2imgs"][i],
+                H, W, div, Z, Y, X,
+                xyz_camAX.to(rgb_camBX.device).clone()
+            )
         
-        values = F.grid_sample(
-            rgb_camB, vt_grid.float(), align_corners=False, padding_mode='zeros')
+        values = F.grid_sample(rgb_camB, vt_grid.float(), align_corners=False, padding_mode='zeros')
         bev_feature_batch.append((values).sum(0).view(C*Z, Y, X))
+    
     a = torch.stack(bev_feature_batch, dim = 0)
+    
     return a
 
 
@@ -104,35 +111,33 @@ class ODViewTransformer(BaseModule):
 
     def __init__(self, global_config, transformer_config, freeze_module: bool = False):
         super(ODViewTransformer, self).__init__(global_config)
-        z_layer_num = 4
+        # z_layer_num = 4
         self.input_source = transformer_config["input_source"]
         self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
-        self.voxel_size[2] = (self.point_cloud_range[5] -
-                              self.point_cloud_range[2])/z_layer_num
+        self.image_down_div = transformer_config["image_down_div"]
+        # self.voxel_size[2] = (self.point_cloud_range[5] - self.point_cloud_range[2]) / z_layer_num
 
         self.grid_size = [int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
-                          int((
-                              self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1]),
+                          int((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1]),
                           int((self.point_cloud_range[5]-self.point_cloud_range[2])/self.voxel_size[2])]
 
-        xyz_camA = gridcloud3d(
-            1, self.grid_size[2], self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
-        xyz_camA[:, :, 0] = xyz_camA[:, :, 0] * self.voxel_size[0] + \
-            self.voxel_size[0]/2 + self.point_cloud_range[0]
-        xyz_camA[:, :, 1] = xyz_camA[:, :, 1] * self.voxel_size[1] + \
-            self.voxel_size[1]/2 + self.point_cloud_range[1]
-        xyz_camA[:, :, 2] = xyz_camA[:, :, 2] * self.voxel_size[2] + \
-            self.voxel_size[2]/2 + self.point_cloud_range[2]
-
+        z_layer_num = self.grid_size[2]
+        
+        xyz_camA = gridcloud3d(1, self.grid_size[2], self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
+        xyz_camA[:, :, 0] = xyz_camA[:, :, 0] * self.voxel_size[0] + self.voxel_size[0]/2 + self.point_cloud_range[0]
+        xyz_camA[:, :, 1] = xyz_camA[:, :, 1] * self.voxel_size[1] + self.voxel_size[1]/2 + self.point_cloud_range[1]
+        xyz_camA[:, :, 2] = xyz_camA[:, :, 2] * self.voxel_size[2] + self.voxel_size[2]/2 + self.point_cloud_range[2]
         self.xyz_camA = xyz_camA
+        
         self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
 
         self.conv_out = nn.Sequential(
-            nn.Conv2d(
-                transformer_config["in_channels"] * z_layer_num, transformer_config["out_channels"], kernel_size=1, stride=1, padding=0, bias=False
-            ),
-            nn.BatchNorm2d(transformer_config["out_channels"]), nn.ReLU(True))
+            nn.Conv2d(transformer_config["in_channels"] * z_layer_num,
+                      transformer_config["out_channels"], kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(transformer_config["out_channels"]),
+            nn.ReLU(True)
+        )
 
 
     def forward(
@@ -161,8 +166,7 @@ class ODViewTransformer(BaseModule):
             self.grid_size[1],
             self.grid_size[0],
             B,
-            # scale_tensor=[input_1, input_2, input_3,
-            #               input_4, input_5, input_6, input_7],
+            image_down_div=self.image_down_div,
             xyz_camAX=xyz_camA,
             mask=None,
             batch_dict=data,

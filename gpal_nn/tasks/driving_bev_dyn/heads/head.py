@@ -19,10 +19,9 @@ class SeqFeatureFuser(nn.Module):
         self.layers_config = layers_config
 
         self.conv_fuser = nn.Sequential(
-            nn.Conv2d(
-            self.layers_config["in_channels"], self.layers_config["out_channels"], kernel_size=3, stride=1, padding=1, bias=False
-        ), 
-        nn.BatchNorm2d(self.layers_config["out_channels"]), nn.ReLU(True))
+            nn.Conv2d(self.layers_config["in_channels"], self.layers_config["out_channels"],
+                      kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(self.layers_config["out_channels"]), nn.ReLU(True))
 
     def forward(self, prev_feats, cur_feats, cur2prev):
         x = torch.cat([prev_feats, cur_feats], dim = 1)
@@ -33,12 +32,10 @@ class SeqFeatureFuser(nn.Module):
 class DRIVING_BEV_DYNHead(BaseHead):
     def __init__(self, global_config, task_config, loss_func=DRIVING_BEV_DYNLoss):
         self.task_config = task_config
-        self.is_track_task = True  # 区分当前是否是Track任务
-        self.head_conv = 64
 
-        self.fuser_config = {"in_channels": 256, "out_channels": 128}
-        self.head_config = {"in_channels": 128,
-                            "num_stages": 6, "out_channels": 21, "upsample": 8}
+        self.dyn_od_head_cfg = self.task_config.Head["dyn_od_head"]
+        self.fuser_config = self.dyn_od_head_cfg["fuser_config"] # {"in_channels": 256, "out_channels": 128}
+        self.head_config = self.dyn_od_head_cfg["head_config"] # {"in_channels": 128, "num_stages": 6, "out_channels": 21, "upsample": 8}
 
         self.feature_bank = None
         self.prev_metas = None
@@ -48,33 +45,35 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
         
-        self.grid_size = [int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
-                          int((
-                              self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1])]
+        self.grid_size = [
+            int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
+            int((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1])
+        ]  # [H, W] 48, 120
         
-        xyz_camA = gridcloud3d(
-            1, 1, self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
-        xyz_camA[:, :, 0] = xyz_camA[:, :, 0] * self.voxel_size[0] + \
-            self.voxel_size[0]/2 + self.point_cloud_range[0]
-        xyz_camA[:, :, 1] = xyz_camA[:, :, 1] * self.voxel_size[1] + \
-            self.voxel_size[1]/2 + self.point_cloud_range[1]
-        xyz_camA[:, :, 2] = xyz_camA[:, :, 2] * self.voxel_size[2] + \
-            self.voxel_size[2]/2 + self.point_cloud_range[2]
-        self.xyz_camA = xyz_camA[:,:,[0,1,3],:]
+        xyz_camA = gridcloud3d(1, 1, self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
+        xyz_camA[:, :, 0] = xyz_camA[:, :, 0] * self.voxel_size[0] + self.voxel_size[0]/2 + self.point_cloud_range[0]
+        xyz_camA[:, :, 1] = xyz_camA[:, :, 1] * self.voxel_size[1] + self.voxel_size[1]/2 + self.point_cloud_range[1]
+        xyz_camA[:, :, 2] = xyz_camA[:, :, 2] * self.voxel_size[2] + self.voxel_size[2]/2 + self.point_cloud_range[2]
+        self.xyz_camA = xyz_camA[:, :, [0, 1, 3], :]
+        
         super(DRIVING_BEV_DYNHead, self).__init__(
-            global_config, task_config, loss_func)
+            global_config, 
+            task_config, 
+            loss_func
+        )
 
     def _setup(self):
         self.head = nn.ModuleDict()
         self.head["fuser"] = SeqFeatureFuser(self.fuser_config)
         self.head["center_head"] = FastDecoderHead(self.head_config)
+    
     def load_state_dict(self, state_dict, strict=True):
         if len(self.head) == 1:
             self.head["center_head"].load_state_dict(state_dict, strict)
         else:
             for head_name, head in self.head.items():
                 state_dict_sub = {k.replace(f"{head_name}.", "", 1): state_dict[k]
-                                for k in state_dict if head_name in k}
+                                  for k in state_dict if head_name in k}
                 head.load_state_dict(state_dict_sub, strict)
 
     def GetCur2Prev(self, cur_metas, dts):
@@ -122,32 +121,35 @@ class DRIVING_BEV_DYNHead(BaseHead):
     def gen_shift_feature_grid(self, grid, cur2prev, prev_feat, bev_h_resolution, bev_w_resolution):
         bs, _, h, w = prev_feat.shape
         grid = grid.view(bs, h, w, 3, 1)
+        
         if torch.onnx.is_in_onnx_export():
             grid = cur2prev.matmul(grid)
         else:
             for idx in range(bs):
                 grid[idx] = cur2prev[idx].matmul(grid[idx])
+        
         # bev2feat
         grid_x = (grid[..., 0, 0].clone() - self.point_cloud_range[0]) / bev_w_resolution
         grid_y = (grid[..., 1, 0].clone() - self.point_cloud_range[1]) / bev_h_resolution
         grid[..., 0, 0] = grid_x.clone()
         grid[..., 1, 0] = grid_y.clone()
+
         # grid = torch.cat([grid_x.clone(), grid_y.clone()], dim = -1).unsqueeze(-1)
-        # todo 需要仔细分辨一下应该用哪个
+
         normalize_factor = torch.tensor([w, h],
                                         dtype=prev_feat.dtype,
                                         device=prev_feat.device)
         grid = grid[:, :, :, :2, 0] / normalize_factor.view(1, 1, 1, 2) * 2.0 - 1.0
-        # output = F.grid_sample(prev_feat, grid.to(
-        #     prev_feat.dtype), align_corners=False)
-        return grid
 
+        return grid
 
     def forward(self, x: torch.Tensor, calib=None, metadata=None) -> torch.Tensor:
         # print(ShowDataStruct("X",x))
         if (self.feature_bank == None):
             self.feature_bank = torch.zeros_like(x).detach()
+        
         B = len(metadata)
+        
         if torch.onnx.is_in_onnx_export():
             seq_flag = torch.ones(B, device = "cpu", dtype = torch.bool)
             B = 1
@@ -157,16 +159,23 @@ class DRIVING_BEV_DYNHead(BaseHead):
             rts = self.GetCur2Prev(metadata, dts)
             feats_shifted_grid = self.gen_shift_feature_grid(self.xyz_camA.repeat(B, 1, 1, 1).to(x.device).clone(), rts.to(x.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
             seq_flag = seq_flag.to(x.device).float().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)#.unsqueeze(-1)
-            feats_shifted = F.grid_sample( self.feature_bank.clone(), feats_shifted_grid.to(
-                    self.feature_bank.dtype), align_corners=False)
+            feats_shifted = F.grid_sample(self.feature_bank.clone(),
+                                          feats_shifted_grid.to(self.feature_bank.dtype),
+                                          align_corners=False)
             prev_feats = feats_shifted.clone() * seq_flag
             
-        self.feature_bank = x.detach().clone()
+        # self.feature_bank = x.detach().clone()
         self.prev_metas = copy.deepcopy(metadata)
 
         cur2prev = torch.from_numpy(np.eye(3)).to(x.device).unsqueeze(0).repeat(x.shape[0], 1, 1)
         x_fuser = self.head["fuser"](prev_feats, x, cur2prev)
         self.feature_bank = x_fuser.detach().clone()
         x_decode = self.head["center_head"](x_fuser)
-        batch_dict = {'head_conv': x_decode[:, 6:], "hm_cen": x_decode[:, :6], "cur_feats": x.detach().clone()}
+        
+        batch_dict = {
+            'head_conv': x_decode[:, 6:], 
+            "hm_cen": x_decode[:, :6], 
+            "cur_feats": x.detach().clone()
+        }
+        
         return [batch_dict]
