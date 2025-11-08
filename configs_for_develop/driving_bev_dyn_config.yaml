@@ -163,7 +163,7 @@ Tasks:
 
           root_dir: "bev_park/PointLine_train/",
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20250930-125033/20250930-125033_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251026-150826/20251026-150826_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251107-174323/20251107-174323_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
           fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
