@@ -1,6 +1,7 @@
 
 import copy
 from multiprocessing import Pool
+import pickle as pkl
 import random
 import os
 import cv2
@@ -25,7 +26,6 @@ import multiprocessing
 from shapely.geometry import LineString
 import json
 from gpal_nn.tasks.driving_bev_dyn.datasets.loader_utils import InitJsonFile, read_camera_yaml_to_dict
-from gpal_nn.tasks.driving_bev_dyn.datasets.data_utils import aug_image
 from gpal_nn.tasks.driving_bev_dyn.utils import common_utils
 
 from tools_scripts.data_format_cvt import ShowDataStruct
@@ -35,7 +35,7 @@ import torch.nn.functional as F
 import scipy
 from torchvision import transforms as T
 from gpal_lightning.utils.deploy_utils import DistGridMap
-
+from gpal_lightning.data.dataloader_helpers.clip_sampler import DatalistByclip
 
 def read_img(files_img, image_resize=[360, 640, 3]):
     # try:
@@ -103,17 +103,14 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         # exit(1)
 
         DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT")
-        LOCAL_DATASETS_ROOT = os.getenv(
-            "ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT")
+        LOCAL_DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT")
 
         WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
-        DATA_COLLECT_ROOT = os.getenv(
-            "ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT")
+        DATA_COLLECT_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT")
 
         self.root_dir = os.path.join(DATASETS_ROOT, root_dir)
         self.json_dir = os.path.join(WORKDIRS_ROOT, json_dir)
-        self.image_dir = os.path.join(
-            WORKDIRS_ROOT if is_manual_label else DATA_COLLECT_ROOT, image_dir)
+        self.image_dir = os.path.join(DATA_COLLECT_ROOT, image_dir)
         # self.image_dir = "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/2025-09-23_16-40-52-312.4"
         self.middle_json_str = middle_json_str
 
@@ -123,32 +120,17 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.task = task_config.name
 
         print(self.id_to_type)
-        self.type_to_id = {
-            "-".join(self.id_to_type[k]): k for k in self.id_to_type}
+        self.type_to_id = {"-".join(self.id_to_type[k]): k for k in self.id_to_type}
         print(self.type_to_id)
 
         self.class_names = self.type_to_id.keys()
         print(self.class_names)
         # exit(1)
 
-        # self.type_to_id = {}
-        # for i, name in enumerate(class_names):
-        #     self.type_to_id[name] = i + 1
-
-        # self.use_occ = False
-        # self.use_track = False
-
-        # if training:
-        #     self.logger.info('Total samples for track: %s' % (self.use_track))
-        #     self.logger.info('Total samples for occ: %s' % (self.use_occ))
-        # print(preprocess)
-        # self.json_data = InitJsonFile(
-        #     self.class_names, self.dataset_cfg.POINT_CLOUD_RANGE)
         self.image_view = camera_name
 
         # self.fusion_infos = []
-        self.data_list = [os.path.join(WORKDIRS_ROOT, ele)
-                          for ele in data_list]
+        self.data_list = [os.path.join(WORKDIRS_ROOT, ele) for ele in data_list]
 
         super().__init__(global_config=global_config,
                          task_config=task_config,
@@ -172,100 +154,39 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.img_h_len = self.task_config.image_crop_config['IMAGE_CROP_H_LEN']
         self.img_crop_dict = self.task_config.image_crop_config
         self.img_crop_start = self.task_config.image_crop_config['CROP_HeSai_ID4']['CROP_START']
+        self.camera_raw_size = self.task_config.image_crop_config['CAMERA_RAW_SIZE']
 
-        self.json_data = InitJsonFile(
-            self.class_names, self.task_config.od_range)
-        OD_HEATMAP_VOXEL_SIZE = [0.64, 0.64, 0.5]
-        OCC_RANGE = [-40.96, -25.6, -1.0, 81.92, 25.6, 5.0]
-        RADAR_PREPROCESS_VOXEL_SIZE = [0.32, 0.32, 0.5]
+        self.json_data = InitJsonFile(self.class_names, self.task_config.od_range)
+        
+        OD_HEATMAP_VOXEL_SIZE = self.task_config.build_gt["od_heatmap_voxel_size"]
         OD_HEATMAP_OUT_HW = [
-            int((self.task_config.od_range[4] -
-                self.task_config.od_range[1])/OD_HEATMAP_VOXEL_SIZE[1]),
-            int((self.task_config.od_range[3] -
-                self.task_config.od_range[0])/OD_HEATMAP_VOXEL_SIZE[0]),
+            int((self.task_config.od_range[4] - self.task_config.od_range[1]) / OD_HEATMAP_VOXEL_SIZE[1]),
+            int((self.task_config.od_range[3] - self.task_config.od_range[0]) / OD_HEATMAP_VOXEL_SIZE[0]),
         ]  # [96, 240]  # YX
-        CLASS_NAMES_LIST = self.class_names
-        MAX_OBJ_NUMS = 256
 
         DATA_PROCESSOR = [
-            # dict(
-            #     NAME='makeBEVMap',
-            #     POINT_CLOUD_RANGE=OD_RANGE,
-            #     OCC_RANGE=OCC_RANGE,
-            #     VOXEL_SIZE=BEV_MAP_VOXEL_SIZE,
-            #     BEV_ENABLED=True
-            # ),
             dict(
                 NAME='mask_points_and_boxes_outside_range',
-                OCC_RANGE=OCC_RANGE,
+                OCC_RANGE=self.task_config.od_range,
                 REMOVE_OUTSIDE_BOXES=True
             ),
-            # dict(
-            #     NAME='shuffle_points',
-            #     SHUFFLE_ENABLED=dict(train=True, test=False)
-            # ),
-            # dict(
-            #     NAME='transform_points_to_voxels',
-            #     VOXEL_SIZE=RADAR_PREPROCESS_VOXEL_SIZE,
-            #     MAX_POINTS_PER_VOXEL=32,
-            #     VOXEL_FEATURES=8,
-            #     MAX_NUMBER_OF_VOXELS=dict(train=100000, test=100000)
-            # ),
-            # dict(
-            #     NAME='build_od_gt_targets',
-            #     hm_size=OD_HEATMAP_OUT_HW,
-            #     num_classes=len(CLASS_NAMES_LIST),
-            #     max_objects=MAX_OBJ_NUMS,
-            #     TARGET_ENABLED=dict(train=True, test=False)
-            # ),
             dict(
                 NAME='build_targets_track',
                 hm_size=OD_HEATMAP_OUT_HW,
-                num_classes=len(CLASS_NAMES_LIST),
-                max_objects=MAX_OBJ_NUMS,
-                TARGET_ENABLED=dict(train=True, test=False)
+                num_classes=len(self.class_names),
+                max_objects=self.task_config.build_gt["max_objects"],
             ),
-            # dict(
-            #     NAME='build_targets_former',
-            #     hm_size=OD_HEATMAP_OUT_HW,
-            #     num_classes=len(CLASS_NAMES_LIST),
-            #     max_objects=MAX_OBJ_NUMS,
-            #     TARGET_ENABLED=dict(train=True, test=False)
-            # ),
-            # dict(
-            #     NAME='build_occ',
-            #     voxel_size=OCC_OUT_VOXEL_SIZE,
-            #     pcr=OCC_RANGE,
-            #     OCC_ENABLED=dict(train=True, test=False)
-            # ),
-            # dict(
-            #     NAME='build_2d_targets',
-            #     sample_size=[40, 96],
-            #     max_objects=MAX_OBJ_NUMS,
-            #     TARGET_ENABLED=dict(train=True, test=False)
-            # )
         ]
 
-        POINT_FEATURE_ENCODING = dict(
-            encoding_type="absolute_coordinates_encoding",
-            used_feature_list=["x", "y", "z",
-                               "vr", "cv_ground", "power", "snr"],
-            src_feature_list=["x", "y", "z", "vr",
-                              "cv_ground", "power", "snr"],
-        )
         self.data_processor = DataProcessor(
-            DATA_PROCESSOR, point_cloud_range=np.array(
-                self.task_config.od_range),
-            training=phase == const.PHASE_TRAINING, num_point_features=0
+            DATA_PROCESSOR, 
+            point_cloud_range=np.array(self.task_config.od_range), 
+            # placeholder
+            training= phase == const.PHASE_TRAINING, 
+            num_point_features=None
         )
-
-        # self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
-        # self.root_split_path = self.dataset_cfg.DATA_PATH_LIST
-        # self.class_names = class_names
-        # self.logger = logger
 
         # if self.dataset_cfg.USE_CAMERA_YAML:
-
         cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
         if True:
             intrinsic = []
@@ -306,17 +227,14 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         fusion_infos = []
         for info_path in self.data_list:
-            # info_path = self.root_path / info_path
             if not os.path.exists(info_path):
                 print(info_path, f' is not exists')
                 continue
             with open(info_path, 'rb') as f:
                 infos = pickle.load(f)
-                # infos = infos[:100]
                 fusion_infos.extend(infos)
 
-        print('Total samples for HeSai dataset: %d' %
-              (len(fusion_infos)))
+        print('Total samples for HeSai dataset [原始数据]: %d' %(len(fusion_infos)))
 
         skip_subday_list = [
             '2025-07-10_13-44-15-069',
@@ -353,8 +271,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             '2025-07-10_10-49-52-675',
         ]
 
-        fusion_infos = [i for i in fusion_infos if i['sequence_name'].split(
-            '/')[-1] not in skip_subday_list]
+        fusion_infos = [i for i in fusion_infos if i['sequence_name'].split('/')[-1] not in skip_subday_list]
 
         if phase != const.PHASE_TRAINING:
             skip_subday_list = [
@@ -383,8 +300,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 fusion_infos_new.append(info)
 
             fusion_infos = fusion_infos_new
-            self.fusion_infos = []
+            # self.fusion_infos = []
         # fusion_infos = [fusion_infos[100]] * 6
+        # fusion_infos = fusion_infos[::20]
         # if phase == const.PHASE_TRAINING:
         #     fusion_infos_ext = []
         #     for ele in fusion_infos:
@@ -394,8 +312,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
         #         fusion_infos_ext.append(copy.deepcopy(ele))
         #     fusion_infos = fusion_infos_ext
-        print('Total samples for HeSai dataset: %d' %
-              (len(fusion_infos)))
+        print('Total samples for HeSai dataset [指定日期过滤]: %d' %(len(fusion_infos)))
         return fusion_infos
 
     def _build_world_data_list(self):
@@ -408,6 +325,155 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             self.rank_local = 0
 
         self.world_data_list = self.include_fusion_data(self.phase)
+
+    def DistributeByClip(self, datalist, world_size, length_lim=15, rank_curr=0):
+        epoch_len = len(datalist) // world_size
+        datalist_by_clip = DatalistByclip(datalist, "sequence_name")
+        clip_key_list = [k for k in datalist_by_clip if len(datalist_by_clip[k]) > length_lim]
+        res_clip_n_1 = []
+        while len(res_clip_n_1) < (world_size - 1):
+            res_clip_n_1 += clip_key_list[:world_size - 1 - len(res_clip_n_1)]
+        clip_key_list += res_clip_n_1
+
+        clip_keys_per_rank = len(clip_key_list) // world_size
+        
+        start_index = rank_curr * clip_keys_per_rank
+        end_index = start_index + clip_keys_per_rank
+        clip_keys_rank = pkl.loads(pkl.dumps(
+            clip_key_list[rank_curr::world_size][:clip_keys_per_rank]))
+        from tqdm import tqdm
+        dataset = [ele for ele in tqdm(datalist, desc=f'初筛数据[补全rank]') if ele["sequence_name"] in clip_keys_rank]
+        return dataset
+
+    def _preconstruct_test_stream_indices(self, datalist, batch_size, key="sequence_name"):
+        
+        def GroupByclip(datalist, key="sequence_name", ret_idx=False, add_clip_idx=False):
+            datalist_by_clip = {}
+            for ele_i, ele in enumerate(datalist):
+                clip_key = ele[key]
+                if clip_key not in datalist_by_clip:
+                    datalist_by_clip[clip_key] = []
+                if ret_idx:
+                    datalist_by_clip[clip_key].append(ele_i)
+                else:
+                    datalist_by_clip[clip_key].append(ele)
+            
+            if add_clip_idx:
+                keys = list(datalist_by_clip.keys())
+                new_datalist = []
+                for clip_idx, clip_key in enumerate(keys):
+                    clip_data = datalist_by_clip[clip_key]
+                    for ele_idx, ele in enumerate(clip_data):
+                        new_ele = ele.copy() if isinstance(ele, dict) else ele
+                        if isinstance(new_ele, dict):
+                            new_ele['clip_idx'] = clip_idx
+                            new_ele['frame_idx'] = ele_idx
+                        new_datalist.append(new_ele)
+                return new_datalist
+            
+            return datalist_by_clip
+
+        NEW_datalist = GroupByclip(datalist, key, ret_idx=False, add_clip_idx=True)  # 添加clip索引和frame索引用于debug
+        datalist_by_clip = GroupByclip(NEW_datalist, key, ret_idx=True, add_clip_idx=False)
+        
+        from collections import Counter
+        len_clip = Counter([len(ele) for ele in datalist_by_clip.values()])
+        
+        if len(len_clip) > 1 or len(NEW_datalist) % (list(len_clip.items())[0][0] * batch_size) != 0:
+            for _ in range(5):
+                print(f'Warning: 不同clip的帧数不同, {len_clip}')
+                print(f'Warning: len % (max_length * batch_size * X) == 0 才可以时序, tot:{len(NEW_datalist)}, ')
+                print(f'max_length:{list(len_clip.items())[0][0]} batch_size:{batch_size}')
+                print(f'不再进行时序推理')
+                print('--------------\n')
+                
+            re_range_idx = [i for i in range(len(NEW_datalist))]
+            """
+            cnt = 0
+            for i in range(0, len(re_range_idx), batch_size):
+                idx_in_batch = re_range_idx[i:i+batch_size]
+                data_info = [f"batch {i//batch_size:05d} flatten_i {i:05d}: {NEW_datalist[idx]['clip_idx']:04d}^{NEW_datalist[idx]['time_stamp']}^{NEW_datalist[idx]['frame_idx']:04d}" for idx in idx_in_batch]
+                cnt += len(idx_in_batch)
+                print(f"  数据: {data_info}")
+            print(f"总样本数: {cnt}")
+            print(f"总clip数: {len(NEW_datalist)}")
+            print(f"最大batch长度(从0开始): {len(NEW_datalist) // batch_size} 最大整数 faltten 索引 {len(NEW_datalist) // batch_size * batch_size}")
+            """
+
+            return [NEW_datalist[i] for i in re_range_idx]
+    
+        print(f'进行时序推理: {len(NEW_datalist)} 个样本, {len(datalist_by_clip)} 个clip')
+        clip_key_list = list(datalist_by_clip.keys())
+        epoch_len = sum(len(frames) for frames in datalist_by_clip.values())
+        
+        current_clip_idx = 0
+        flatten_idxs = np.zeros([epoch_len, 2], dtype = np.int32) - 1
+        for i in range(epoch_len):
+            if (flatten_idxs[i, 0] < 0) or (flatten_idxs[i, 1] < 0):
+                
+                if current_clip_idx >= len(clip_key_list):
+                    break
+
+                clip_idx = current_clip_idx
+                current_clip_idx += 1
+
+                clip_key = clip_key_list[clip_idx]
+                frames_in_clip = datalist_by_clip[clip_key]
+                
+                frame_start_idx = 0
+                frame_end_idx = len(frames_in_clip)
+                
+                for j in range(frame_end_idx - frame_start_idx):
+                    if (i + j * batch_size) >= epoch_len:
+                        break
+                    flatten_idxs[i + j * batch_size, 0] = clip_idx
+                    flatten_idxs[i + j * batch_size, 1] = frame_start_idx + j  # 记录帧索引
+
+        NEW_flatten_idxs = [datalist_by_clip[clip_key_list[ele[0]]][ele[1]]
+                            for ele in flatten_idxs]
+        new_datalist = [NEW_datalist[i] for i in NEW_flatten_idxs]
+        
+        """
+        验证信息
+        
+        with open("test_flatten_idxs.log", "w") as f:
+            cnt = 0
+            for i in range(0, len(flatten_idxs), batch_size):
+                idx_in_batch = NEW_flatten_idxs[i:i+batch_size]
+                data_info = [f"batch {i//batch_size:05d} flatten_i {i:05d}: {NEW_datalist[idx]['clip_idx']:04d}^{NEW_datalist[idx]['time_stamp']}^{NEW_datalist[idx]['frame_idx']:04d}" for idx in idx_in_batch]
+                cnt += len(idx_in_batch)
+                # if i < 256:
+                print(f"  数据: {data_info}", file=f)
+
+            print(f"总样本数: {cnt}", file=f)
+            print(f"总clip数: {len(clip_key_list)}", file=f)
+            print(f"最大batch长度(从0开始): {len(NEW_datalist) // batch_size}, 最大整数faltten索引 {len(NEW_datalist) // batch_size * batch_size}", file=f)
+        """
+        
+        return new_datalist
+
+    def _distribute_data(self):
+        try:
+            rank_curr = distributed.get_rank()
+            world_size = distributed.get_world_size()
+        except (RuntimeError, AssertionError):
+            rank_curr = 0
+            world_size = 1
+        
+        if self.phase == const.PHASE_TRAINING:
+            cut_data_list = self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=15, rank_curr=rank_curr)
+        elif self.phase == const.PHASE_VALIDATION:
+            """
+            模拟训练时ClipSampler的行为, 但不考虑rank行为, 单卡测试
+            """
+            cut_data_list = cut_and_resample_sorted_data_list = self._preconstruct_test_stream_indices(
+                self.world_data_list, 
+                batch_size=self.global_config.image_per_gpu
+            )
+        else:
+            raise NotImplementedError
+        
+        return cut_data_list
 
     def __len__(self):
         return len(self.dataset)
@@ -445,15 +511,26 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         extrinsic = []
         camera_sizes = []
 
-        for cur_view in self.image_view:
-            assert cur_view == self.json_data.cameras[cur_view].name
+        # for cur_view in self.image_view:
+        actual_views = list(self.json_data.cameras.keys())
+        
+        for cur_ref_view in self.image_view:
+            ref_view_short = cur_ref_view.replace('img_', '')
+            
+            if ref_view_short in actual_views:
+                cur_view = ref_view_short
+            else:
+                cur_view = cur_ref_view
+                
+            # assert cur_view == self.json_data.cameras[cur_view].name
             intrinsic.append(
                 self.json_data.cameras[cur_view].intrinsic.to_matrix())
             cam_dist.append(
                 self.json_data.cameras[cur_view].intrinsic.get_distortion_coeffs())
             extrinsic.append(
                 self.json_data.cameras[cur_view].extrinsic.to_matrix())
-            camera_sizes.append(self.json_data.cameras[cur_view].image_size)
+            # camera_sizes.append(self.json_data.cameras[cur_view].image_size)
+            camera_sizes.append(self.camera_raw_size[self.image_view.index(cur_ref_view)])
 
         # json_data_dict[cur_view] = {
         #     'image_size': camera_sizes,
@@ -517,7 +594,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.fast_buf_try_cnt += 1
         database_slice_key = "_".join(img_file.split('/')[-4:-2]+[slice_timestamp])
         image, hw_origin = self._slice_image_buffer_access(
-            database_slice_key, view_key)
+            database_slice_key, view_key
+        )
         if image is None:
             image = read_img(str(img_file), self.image_resize + [3])
             if self.phase == const.PHASE_TRAINING:
@@ -531,84 +609,31 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         return image
 
     def prepare_data(self, data_dict):
-        """
-        Args:
-            data_dict:
-                points: optional, (N, 3 + C_in)
-                gt_boxes: optional, (N, 7 + C) [x, y, z, dx, dy, dz, heading, ...]
-                gt_names: optional, (N), string
-                ...
-
-        Returns:
-            data_dict:
-                frame_id: string
-                points: (N, 3 + C_in)
-                gt_boxes: optional, (N, 7 + C) [x, y, z, dx, dy, dz, heading, ...]
-                gt_names: optional, (N), string
-                use_lead_xyz: bool
-                voxels: optional (num_voxels, max_points_per_voxel, 3 + C)
-                voxel_coords: optional (num_voxels, 3)
-                voxel_num_points: optional (num_voxels)
-                ...
-        """
         if self.phase == const.PHASE_TRAINING:
             assert 'gt_boxes' in data_dict, 'gt_boxes should be provided for training'
-            gt_boxes_mask = np.array(
-                [n in self.class_names for n in data_dict['gt_names']], dtype=np.bool_)
-
-            '''data_dict = self.data_augmentor.forward(
-                data_dict={
-                    **data_dict,
-                    'gt_boxes_mask': gt_boxes_mask
-                }
-            )'''
 
         # print(data_dict['gt_names'], self.class_names)
         if data_dict.get('gt_boxes', None) is not None:
-            selected = common_utils.keep_arrays_by_name(
-                data_dict['gt_names'], self.class_names)
+            selected = common_utils.keep_arrays_by_name(data_dict['gt_names'], self.class_names)
 
-            not_selected = [i for i in range(
-                len(data_dict['gt_names'])) if i not in selected]
+            not_selected = [i for i in range(len(data_dict['gt_names'])) if i not in selected]
 
             if not_selected != []:
-                print(len(data_dict['gt_names'][selected]),
-                      data_dict['gt_names'][not_selected])
+                print(len(data_dict['gt_names'][selected]), data_dict['gt_names'][not_selected])
                 # exit(1)
             data_dict['gt_boxes'] = data_dict['gt_boxes'][selected]
             data_dict['gt_names'] = data_dict['gt_names'][selected]
-            gt_classes = np.array([self.type_to_id[n]
-                                  for n in data_dict['gt_names']], dtype=np.int32)
-            gt_boxes = np.concatenate((data_dict['gt_boxes'].reshape(-1, 10),
+            gt_classes = np.array([self.type_to_id[n] for n in data_dict['gt_names']], dtype=np.int32)
+            gt_boxes = np.concatenate((data_dict['gt_boxes'].reshape(-1, 10), 
                                        gt_classes.reshape(-1, 1).astype(np.float32)), axis=1)
             data_dict['gt_boxes'] = gt_boxes
-
-        if data_dict.get('gt_boxes_former', None) is not None:
-            selected = common_utils.keep_arrays_by_name(
-                data_dict['gt_names_former'], self.class_names)
-            data_dict['gt_boxes_former'] = data_dict['gt_boxes_former'][selected]
-            data_dict['gt_names_former'] = data_dict['gt_names_former'][selected]
-            gt_classes = np.array(
-                [self.type_to_id[n] for n in data_dict['gt_names_former']], dtype=np.int32)
-            gt_boxes = np.concatenate((data_dict['gt_boxes_former'].reshape(-1, 10),
-                                       gt_classes.reshape(-1, 1).astype(np.float32)), axis=1)
-            data_dict['gt_boxes_former'] = gt_boxes
-
-        if data_dict.get('points', None) is not None:
-            data_dict = self.point_feature_encoder.forward(data_dict)
 
         data_dict = self.data_processor.forward(
             data_dict=data_dict
         )
 
-        # if (self.phase == const.PHASE_TRAINING) and (len(data_dict['gt_boxes']) == 0):
-        #     new_index = np.random.randint(self.__len__())
-        #     print(f"resample trig {new_index}")
-        #     return self.__getitem__(new_index)
-
         data_dict.pop('gt_names', None)
-        if data_dict.get('gt_names_former', None) is not None:
-            data_dict.pop('gt_names_former', None)
+        
         return data_dict
 
     def ClearFastBufCnt(self):
@@ -696,6 +721,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         out = F.grid_sample(img, homo_grid).float()
 
         return out 
+    
     @TimeProf
     def __getitem__(self, idx):
         """
@@ -713,37 +739,39 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         try:
             info = copy.deepcopy(self.dataset[idx])
 
-            # print(f"__getitem__ {idx}")
-            # print(info)
             input_dict = {}
 
-            # 总起
             sequence_name = info['sequence_name']
             curr_time_stamp, prev_time_stamp = info['time_stamp'].split('/')
 
-            # === 当前帧 格式必须统一
+            # 无论预刷还是指标测试的数据格式/相对路径必须一致, f'{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
             curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
+            vcu_file =  f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
+            # seq,time_meas,time_pub,motion_info.vehicle_speed,motion_info.yaw_rate,motion_info.longitudinal_acceleration,motion_info.lateral_acceleration,motion_info.drive_mode,actuator_info.is_left_direction_light_on,actuator_info.is_right_direction_light_on,actuator_info.is_main_beam_on,actuator_info.is_dipped_beam_on,actuator_info.is_wiper_on,actuator_info.is_horn_on,actuator_info.is_left_direction_light_switch_on,actuator_info.is_right_direction_light_switch_on,actuator_info.front_left_door_status,actuator_info.front_right_door_status,actuator_info.rear_left_door_status,actuator_info.rear_right_door_status,actuator_info.rear_hatch_status,actuator_info.driver_safety_belt_status,actuator_info.is_brake_light_on,actuator_info.is_dangerous_warning_light_on,actuator_info.is_front_frog_light_on,actuator_info.is_rear_frog_light_on,actuator_info.is_reverse_direction_light_on,actuator_info.is_width_lamp_on,actuator_info.wiper_speed,actuator_info.is_washer_on,actuator_info.is_autodrive_active,axle_info[0].axis_id,axle_info[0].left_wheel_tire_pressure,axle_info[0].right_wheel_tire_pressure,axle_info[0].left_wheel_speed,axle_info[0].right_wheel_speed,axle_info[0].left_wheel_angle,axle_info[0].right_wheel_angle,axle_info[0].left_wheel_pulse,axle_info[0].right_wheel_pulse,axle_info[0].left_wheel_pulse_direction,axle_info[0].right_wheel_pulse_direction,axle_info[1].left_wheel_tire_pressure,axle_info[1].right_wheel_tire_pressure,axle_info[1].left_wheel_speed,axle_info[1].right_wheel_speed,axle_info[1].left_wheel_angle,axle_info[1].right_wheel_angle,axle_info[1].left_wheel_pulse,axle_info[1].right_wheel_pulse,axle_info[1].left_wheel_pulse_direction,axle_info[1].right_wheel_pulse_direction,powertrain_info.motor_speed,powertrain_info.motor_reference_torque,powertrain_info.motor_torque_change_rate,powertrain_info.battery_charge,powertrain_info.transmission_current_gear_level,powertrain_info.transmission_current_gear_position,powertrain_info.motor_torque_response,powertrain_info.throttle_percentage,powertrain_info.is_accelerator_pedal_override,powertrain_info.controlled_state_of_longitudinal_dynamic_system,powertrain_info.torque_request,powertrain_info.torque_feedback,powertrain_info.mcu_longitudinal_control_state_feedback,powertrain_info.mcu_driving_mode_feedback,steering_system_info.steering_wheel_angle,steering_system_info.steering_wheel_angle_speed,steering_system_info.steering_motor_torque,steering_system_info.steer_hands_on_status,steering_system_info.steer_angle_calibration_status,steering_system_info.received_steering_angle_request,steering_system_info.received_steering_torque_request,steering_system_info.eps_control_status,steering_system_info.eps_failure_reason,steering_system_info.steering_wheel_angle_control_failure_reason,steering_system_info.torque_control_failure_reason,steering_system_info.steering_wheel_angle_control_state,steering_system_info.torque_control_state,steering_system_info.mcu_lateral_control_state_feedback,steering_system_info.mcu_gear_control_state_feedback,brake_system_info.is_break_pedal_pressed,steering_system_info.is_abs_active,steering_system_info.is_epb_on,steering_system_info.brake_system_acceleration_response,steering_system_info.break_pedal_position,steering_system_info.is_brake_pedal_override,steering_system_info.is_vehicle_stand_still,steering_system_info.is_vehicle_park_stand_still,steering_system_info.braking_system_control_state,steering_system_info.mcu_brake_system_control_state_feedback,steering_system_info.epb_state
+            
+            with open(vcu_file, 'r') as vcu_reader:
+                vcu = vcu_reader.readline().split('\t')
+            
             # curr_json_file = "/data/ai_group/workdirs/od_occ_group/huiquyang/data/Obstacle_3DModelResult_/EKART_ID4001_2025-08-15-18-20-39/2025-08-15_18-34-44-232/3d_detection_json/1755254118.200182.json"
             curr_json_data = self.json_data.load(curr_json_file)
             re_curr_infos = self.json_data.parse_json(curr_json_data)
             meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
 
             gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
-            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(
-                cam_infos=cameras)
+            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
 
             input_dict['gt_names'] = gt_names
             input_dict['gt_boxes'] = gt_boxes
 
             time_dp.Duration("cur_json", "begin")
 
-            time_dp.Duration("prev_json", "cur_json")
+            # time_dp.Duration("prev_json", "cur_json")
 
             # === 共同信息
             input_dict['frame_id'] = info['time_stamp']
 
             # if self.dataset_cfg.USE_CAMERA_YAML:
-            if True:
+            if self.phase == const.PHASE_VALIDATION:
                 intrinsic = self.intrinsic
                 cam_dist = self.cam_dist
                 temp = np.stack([np.eye(4) for i in range(7)], axis=0)
@@ -770,25 +798,29 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 img_crop_dict = copy.deepcopy(self.img_crop_dict)
 
                 if self.phase != const.PHASE_TRAINING:
-                    input_dict[f'origin_images_input{view_idx}'] = current_img.astype(
-                        np.float32).copy()
+                    input_dict[f'origin_images_input{view_idx}'] = current_img.astype(np.float32).copy()
                     # current_img2 = cv2.undistort(
                     #     current_img, calib_intrin, calib_dist, calib_intrin)
                     # current_img2 = cv2.resize(current_img2, self.image_resize[::-1])
                     # current_img2 = current_img2[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
-                    img_grid = DistGridMap(current_img.shape[1],
-                                            current_img.shape[0],
-                                            calib_dist,
-                                                calib_intrin,
-                                                int(self.img_crop_dict["IMAGE_RESIZE"][1]),
-                                                int(self.img_crop_dict["IMAGE_RESIZE"][0]),
-                                                int(self.img_crop_dict["IMAGE_CROP_H_LEN"]),
-                                                int(self.img_crop_dict["CROP_HeSai_ID4"]
-                                                    ["CROP_START"][view_idx]),
-                                                norm = False).astype(np.float32)
+                    img_grid = DistGridMap(
+                        current_img.shape[1],
+                        current_img.shape[0],
+                        calib_dist,
+                        calib_intrin,
+                        int(self.img_crop_dict["IMAGE_RESIZE"][1]),
+                        int(self.img_crop_dict["IMAGE_RESIZE"][0]),
+                        int(self.img_crop_dict["IMAGE_CROP_H_LEN"]),
+                        int(self.img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][view_idx]),
+                        norm=False
+                    ).astype(np.float32)
                     
-                    current_img = cv2.remap(current_img, img_grid[...,0], img_grid[...,1], 
-                        interpolation = cv2.INTER_NEAREST)
+                    current_img = cv2.remap(
+                        current_img,
+                        img_grid[...,0], 
+                        img_grid[...,1],
+                        interpolation=cv2.INTER_NEAREST
+                    )
                     calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
                     calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
                 else:
@@ -797,24 +829,25 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     current_img = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
 
                 if self.phase == const.PHASE_TRAINING:
-                    current_img = torch.from_numpy(current_img).unsqueeze(
-                        0).to("cpu").permute(0, 3, 1, 2).float()
+                    current_img = torch.from_numpy(current_img).unsqueeze(0).to("cpu").permute(0, 3, 1, 2).float()
                     cam_to_vehicle = np.linalg.inv(calib_extrin)
-                    rot_temp = scipy.spatial.transform.Rotation.from_matrix(
-                        cam_to_vehicle[:3, :3]).as_quat()
+                    rot_temp = scipy.spatial.transform.Rotation.from_matrix(cam_to_vehicle[:3, :3]).as_quat()
                     rot_temp = Quaternion(rot_temp[3], rot_temp[0], rot_temp[1], rot_temp[2])
                     current_img, trans_cv, rots_cv = self.img_aug_cuda(
-                        current_img, None, rot_temp, calib_intrin, device="cpu")
+                        img_tensor=current_img, 
+                        trans_cv=None, 
+                        rots_cv=rot_temp, 
+                        intrin=calib_intrin, 
+                        device="cpu"
+                    )
                     cam_to_vehicle[:3, :3] = rots_cv.rotation_matrix
 
                     input_dict["extrinsic"][view_idx] = np.linalg.inv(cam_to_vehicle)
-                    current_img = current_img.squeeze(
-                        0).permute(1, 2, 0).cpu().numpy()
+                    current_img = current_img.squeeze(0).permute(1, 2, 0).cpu().numpy()
     
-                input_dict[f'images_input{view_idx}'] = current_img.astype(
-                    np.float32) / 255.0
+                input_dict[f'images_input{view_idx}'] = current_img.astype(np.float32) / 255.0
 
-            time_dp.Duration("image", "prev_json")
+            time_dp.Duration("image", "cur_json")
 
             data_dict = self.prepare_data(data_dict=input_dict)
             time_dp.Duration("prepare_data", "image")
@@ -838,7 +871,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             for key in ["intrinsic", "cam_dist", "extrinsic"]:
                 data_dict_ret["calib"][key] = data_dict[key]
-            data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
+            # data_dict_ret["calib"]["img_crop_dict"] = self.img_crop_dict
             data_dict_ret['calib']["img_shapes"] = np.stack(
                 [np.array(list(img.shape)) for img in data_dict_ret["image"].values()], axis=0)
             data_dict_ret['calib']["bev_real2aug"] = np.eye(4, dtype=np.float32)
@@ -846,20 +879,22 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             intrinsics = copy.deepcopy(data_dict_ret['calib']["intrinsic"])
             for i in range(intrinsics.shape[0]):
                 intrinsics[i, :2] /= self.img_crop_dict["CROP_HeSai_ID4"]['SCALE'][i]
-                intrinsics[i, 1,
-                           2] -= self.img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][i]
+                intrinsics[i, 1, 2] -= self.img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][i]
             
             data_dict_ret['calib']["ego2imgs"] = np.stack(
                 [i@e for e, i in zip(data_dict_ret['calib']['extrinsic'][:,:3], intrinsics)], axis=0)
             data_dict_ret['calib']["ego2imgs"] = np.stack([np.concatenate([ele, np.array(
                 [[0, 0, 0, 1]])], axis=0) for ele in data_dict_ret['calib']["ego2imgs"]], axis=0)
 
-
+            data_dict_ret['meta']['is_key'] = info.get('is_key', True)
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
-            data_dict_ret['meta']['img_path'] = img_path
+            # data_dict_ret['meta']['img_path'] = img_path
             frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
             data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
+            data_dict_ret['meta']['timestamp'] = curr_time_stamp
+            data_dict_ret['meta']['ego_speed'] = float(vcu[3])
+            data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
             data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
             data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
             data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt

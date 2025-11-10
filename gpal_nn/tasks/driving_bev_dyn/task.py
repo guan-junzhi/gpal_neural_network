@@ -62,7 +62,7 @@ def DrawBbox2D(img, pts, f, cx, cy, dist, color):
         p2 = pts[pair[1]]
         uv1, uv2 = LineWithTruncated(p1, p2, f, cx, cy, dist)
         if (uv1 is not None) and (uv2 is not None):
-            cv2.line(img, uv1, uv2, color, 4)
+            cv2.line(img, uv1, uv2, color, 2)
     return pts
 
 def GetBboxInWorld(tf, size):
@@ -104,6 +104,8 @@ def Draw3DObjectsOnImage(img, objects, intrin, extrin, dist, color):
 class DRIVING_BEV_DYNTask(BaseTask):
     def __init__(self, global_config, task_config, name):
         super().__init__(global_config, task_config, name, None)
+        self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
+
         pass
 
     def GetVis(self, imgs, preds, gts, metadata, calib, idx):
@@ -127,11 +129,11 @@ class DRIVING_BEV_DYNTask(BaseTask):
                 calib_intrin = copy.deepcopy(calib["intrinsic"][idx][cam_idx]).detach().cpu().numpy()
                 calib_extrin = copy.deepcopy(calib["extrinsic"][idx][cam_idx]).detach().cpu().numpy()
                 calib_dist = copy.deepcopy(calib["cam_dist"][idx][cam_idx]).detach().cpu().numpy()
-                img_crop_dict = copy.deepcopy(calib["img_crop_dict"])
+                img_crop_dict = copy.deepcopy(self.image_crop_config)
                 img = (imgs[cam_name][idx].detach().cpu().numpy().transpose(
                     1, 2, 0) * 254).astype(np.uint8)
-                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx][idx])
-                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx][idx])
+                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx])
+                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx])
                 calib_dist *= 0.0
                 img = cv2.undistort(img, calib_intrin, calib_dist, calib_intrin)
 
@@ -160,7 +162,9 @@ class DRIVING_BEV_DYNTask(BaseTask):
                         fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
             cv2.putText(vis_draw1, metadata[idx]['clip_id'], (50, 60),
             fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
-            cv2.putText(vis_draw1, '/'.join(metadata[idx]['img_path']['img_front_120'].split('/')[-4:]), (50, 90),
+            # cv2.putText(vis_draw1, '/'.join(metadata[idx]['img_path']['img_front_120'].split('/')[-4:]), (50, 90),
+            # fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
+            cv2.putText(vis_draw1, "{} {:.2f}m/s {:.4f}rad/s".format(metadata[idx]['timestamp'],metadata[idx]['ego_speed'],metadata[idx]['ego_yaw_rate']) , (50, 90),
             fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 255], thickness=2, fontScale=0.5)
 
 
@@ -216,7 +220,7 @@ class DRIVING_BEV_DYNTask(BaseTask):
                 os.makedirs(file_root, exist_ok=True)
             if const.EVALUATION_FILES_EXTENSION.lower() == ".json":
                 dict_to_json(os.path.join(file_root, uuid +
-                                          const.EVALUATION_FILES_EXTENSION), file_object)
+                                          const.EVALUATION_FILES_EXTENSION), file_object, indent=4)
                 # print(os.path.join(file_root, uuid +
                 #                    const.EVALUATION_FILES_EXTENSION))
             else:

@@ -63,9 +63,9 @@ then
 elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250925_16_31_04/checkpoint/epoch=1-step=11000_checkpoint.pth
-    onnx_path="workspace//20250930_06_49_06_onnx/checkpoint/epoch=1-step=11000_checkpoint_sim.onnx"
-    onnx_path="/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet_calibration_hbm/tools/ptq/model_output/single_frame_moldel_v1_int8_/single_frame_moldel_v1_int8_quantized_model.bc"
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20251011_02_12_25/checkpoint/epoch=5-step=50000_checkpoint.pth
+    onnx_path="workspace//20251023_06_55_13_onnx/checkpoint/epoch=5-step=50000_checkpoint_sim.onnx"
+    # onnx_path="/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet_calibration_hbm/tools/ptq/model_output/single_frame_moldel_v1_int16_random_calib_data_1021/single_frame_moldel_v1_int16_quantized_model.bc"
     config=configs_for_develop/driving_bev_dyn_config.yaml
     calib_data_save_path="None" 
 else
