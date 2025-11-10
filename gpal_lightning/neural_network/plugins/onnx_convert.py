@@ -206,6 +206,7 @@ class PytorchToOnnx:
                 "img_rear_left": [1920, 1080, 3],
                 "img_rear_right": [1920, 1080, 3],
             }
+            return used_image_shapes
         elif task_name in ["DRIVING_BEV_STA"]:
             used_image_shapes: dict = {
                 "img_front_30": [3840, 2160, 3],
