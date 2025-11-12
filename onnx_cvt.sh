@@ -67,8 +67,8 @@ then
     config=configs_for_develop/driving_bev_dyn_config.yaml
 else
     tasks=driving_bev_sta
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/checkpoint/epoch=0-step=22000_checkpoint.pth
-    config=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251028_11_46_53/config.yaml
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251108_00_38_01/checkpoint/epoch=0-step=60000_checkpoint.pth
+    config=./configs_for_develop/driving_bev_sta_config.yaml
 fi
 
 echo load_from=$load_from
