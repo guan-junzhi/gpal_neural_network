@@ -188,38 +188,39 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         # if self.dataset_cfg.USE_CAMERA_YAML:
         cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
-        if True:
-            intrinsic = []
-            distort_coeff = []
-            r_mat = []
-            t_vec = []
-            # breakpoint()
-            for curr_view in self.image_view:
-                curr_view_yaml_file = f"{WORKDIRS_ROOT}/gpal_neural_network_group/sikong/temp_dir_for_od/{cam_calib_dir}/{curr_view.replace('img_', '')}.yaml"
-                # curr_view_yaml_file = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/tools_own/read_update_cam_yaml_and_save_grid_valid/calibration-dev@1ac5e4038a8/JX_C5_1/vehicle_config/calibration/camera/{curr_view.replace('img_', '')}.yaml"
-                yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
-                intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
-                distort_coeff.append(
-                    yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
-                r_mat.append(yaml_dict['r_mat'].reshape(-1, 3, 3))
-                t_vec.append(yaml_dict['t_vec'].reshape(-1, 3, 1))
+        # if True:
+        #     intrinsic = []
+        #     distort_coeff = []
+        #     r_mat = []
+        #     t_vec = []
+        #     # breakpoint()
+        #     for curr_view in self.image_view:
+        #         curr_view_yaml_file = f"{WORKDIRS_ROOT}/gpal_neural_network_group/sikong/temp_dir_for_od/{cam_calib_dir}/{curr_view.replace('img_', '')}.yaml"
+        #         # curr_view_yaml_file = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/tools_own/read_update_cam_yaml_and_save_grid_valid/calibration-dev@1ac5e4038a8/JX_C5_1/vehicle_config/calibration/camera/{curr_view.replace('img_', '')}.yaml"
+        #         yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
+        #         intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
+        #         distort_coeff.append(
+        #             yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
+        #         r_mat.append(yaml_dict['r_mat'].reshape(-1, 3, 3))
+        #         t_vec.append(yaml_dict['t_vec'].reshape(-1, 3, 1))
 
-            intrinsic_np = np.concatenate(intrinsic, axis=0)
-            distort_coeff_np = np.concatenate(distort_coeff, axis=0)
-            r_mat_np = np.concatenate(r_mat, axis=0)
-            t_vec_np = np.concatenate(t_vec, axis=0)
+        #     intrinsic_np = np.concatenate(intrinsic, axis=0)
+        #     distort_coeff_np = np.concatenate(distort_coeff, axis=0)
+        #     r_mat_np = np.concatenate(r_mat, axis=0)
+        #     t_vec_np = np.concatenate(t_vec, axis=0)
 
-            self.intrinsic = intrinsic_np
-            self.cam_dist = distort_coeff_np
-            self.r_mat_np = r_mat_np
-            self.t_vec_np = t_vec_np
+            # self.intrinsic = intrinsic_np
+            # self.cam_dist = distort_coeff_np
+            # self.r_mat_np = r_mat_np
+            # self.t_vec_np = t_vec_np
 
         self.jitter = T.ColorJitter([0.2, 1.2], 0.3, 0.3, 0.2)
 
         self.ClearFastBufCnt()
 
         self.deploy_eval = (phase != const.PHASE_TRAINING) and (global_config.onnx_path != None)
-
+        
+        self.subtask_name = self.global_config.Tasks['DRIVING_BEV_DYN']['SWITCH_SUBTASK']
 
     def include_fusion_data(self, phase):
 
@@ -536,10 +537,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         #     'image_size': camera_sizes,
         #     'camera_names': self.image_view,
         # }
-
-        intrinsic = np.array(intrinsic).reshape(7, 3, 3)
-        cam_dist = np.array(cam_dist).reshape(7, 1, 5)
-        extrinsic = np.array(extrinsic).reshape(7, 4, 4)  # 4*4
+        V = len(self.image_view)
+        intrinsic = np.array(intrinsic).reshape(V, 3, 3)
+        cam_dist = np.array(cam_dist).reshape(V, 1, 5)
+        extrinsic = np.array(extrinsic).reshape(V, 4, 4)  # 4*4
 
         return intrinsic, cam_dist, extrinsic, camera_sizes
 
@@ -721,9 +722,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         out = F.grid_sample(img, homo_grid).float()
 
         return out 
-    
-    @TimeProf
-    def __getitem__(self, idx):
+
+    def getitem_driving_bev_dyn_subtask(self, idx):
         """
         Args:
             idx (int): Index
@@ -771,13 +771,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['frame_id'] = info['time_stamp']
 
             # if self.dataset_cfg.USE_CAMERA_YAML:
-            if self.phase == const.PHASE_VALIDATION:
-                intrinsic = self.intrinsic
-                cam_dist = self.cam_dist
-                temp = np.stack([np.eye(4) for i in range(7)], axis=0)
-                temp[:, :3:, :3] = self.r_mat_np
-                temp[:, :3:, [3]] = self.t_vec_np
-                extrinsic = temp
+            # if self.phase == const.PHASE_VALIDATION:
+            #     intrinsic = self.intrinsic
+            #     cam_dist = self.cam_dist
+            #     temp = np.stack([np.eye(4) for i in range(7)], axis=0)
+            #     temp[:, :3:, :3] = self.r_mat_np
+            #     temp[:, :3:, [3]] = self.t_vec_np
+            #     extrinsic = temp
 
             input_dict['intrinsic'] = copy.deepcopy(intrinsic)  # np.stack([intrinsic, intrinsic])
             input_dict['cam_dist'] = copy.deepcopy(cam_dist)  # np.stack([cam_dist, cam_dist])
@@ -914,6 +914,165 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         time_dp.Duration("dataset.getitem", "begin")
         # time_dp.Print()
         return data_dict_ret
+        
+    def getitem_subtask_driving_bev_byn_fisheye(self, idx):
+        """
+        Args:
+            idx (int): Index
+
+        Returns:
+            tuple: (image, target) where target is the image segmentation.
+        """
+        self.ClearFastBufCnt()
+
+        time_dp = DetailProf()
+        time_dp.Tic("begin")
+
+        try:
+            info = copy.deepcopy(self.dataset[idx])
+
+            input_dict = {}
+
+            sequence_name = info['sequence_name']
+            curr_time_stamp, prev_time_stamp = info['time_stamp'].split('/')
+
+            # === gtbox info ===
+            curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
+            vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
+            
+            # seq,time_meas,time_pub,motion_info.vehicle_speed,motion_info.yaw_rate,motion_info.longitudinal_acceleration,motion_info.lateral_acceleration,motion_info.drive_mode,actuator_info.is_left_direction_light_on,actuator_info.is_right_direction_light_on,actuator_info.is_main_beam_on,actuator_info.is_dipped_beam_on,actuator_info.is_wiper_on,actuator_info.is_horn_on,actuator_info.is_left_direction_light_switch_on,actuator_info.is_right_direction_light_switch_on,actuator_info.front_left_door_status,actuator_info.front_right_door_status,actuator_info.rear_left_door_status,actuator_info.rear_right_door_status,actuator_info.rear_hatch_status,actuator_info.driver_safety_belt_status,actuator_info.is_brake_light_on,actuator_info.is_dangerous_warning_light_on,actuator_info.is_front_frog_light_on,actuator_info.is_rear_frog_light_on,actuator_info.is_reverse_direction_light_on,actuator_info.is_width_lamp_on,actuator_info.wiper_speed,actuator_info.is_washer_on,actuator_info.is_autodrive_active,axle_info[0].axis_id,axle_info[0].left_wheel_tire_pressure,axle_info[0].right_wheel_tire_pressure,axle_info[0].left_wheel_speed,axle_info[0].right_wheel_speed,axle_info[0].left_wheel_angle,axle_info[0].right_wheel_angle,axle_info[0].left_wheel_pulse,axle_info[0].right_wheel_pulse,axle_info[0].left_wheel_pulse_direction,axle_info[0].right_wheel_pulse_direction,axle_info[1].left_wheel_tire_pressure,axle_info[1].right_wheel_tire_pressure,axle_info[1].left_wheel_speed,axle_info[1].right_wheel_speed,axle_info[1].left_wheel_angle,axle_info[1].right_wheel_angle,axle_info[1].left_wheel_pulse,axle_info[1].right_wheel_pulse,axle_info[1].left_wheel_pulse_direction,axle_info[1].right_wheel_pulse_direction,powertrain_info.motor_speed,powertrain_info.motor_reference_torque,powertrain_info.motor_torque_change_rate,powertrain_info.battery_charge,powertrain_info.transmission_current_gear_level,powertrain_info.transmission_current_gear_position,powertrain_info.motor_torque_response,powertrain_info.throttle_percentage,powertrain_info.is_accelerator_pedal_override,powertrain_info.controlled_state_of_longitudinal_dynamic_system,powertrain_info.torque_request,powertrain_info.torque_feedback,powertrain_info.mcu_longitudinal_control_state_feedback,powertrain_info.mcu_driving_mode_feedback,steering_system_info.steering_wheel_angle,steering_system_info.steering_wheel_angle_speed,steering_system_info.steering_motor_torque,steering_system_info.steer_hands_on_status,steering_system_info.steer_angle_calibration_status,steering_system_info.received_steering_angle_request,steering_system_info.received_steering_torque_request,steering_system_info.eps_control_status,steering_system_info.eps_failure_reason,steering_system_info.steering_wheel_angle_control_failure_reason,steering_system_info.torque_control_failure_reason,steering_system_info.steering_wheel_angle_control_state,steering_system_info.torque_control_state,steering_system_info.mcu_lateral_control_state_feedback,steering_system_info.mcu_gear_control_state_feedback,brake_system_info.is_break_pedal_pressed,steering_system_info.is_abs_active,steering_system_info.is_epb_on,steering_system_info.brake_system_acceleration_response,steering_system_info.break_pedal_position,steering_system_info.is_brake_pedal_override,steering_system_info.is_vehicle_stand_still,steering_system_info.is_vehicle_park_stand_still,steering_system_info.braking_system_control_state,steering_system_info.mcu_brake_system_control_state_feedback,steering_system_info.epb_state
+            with open(vcu_file, 'r') as vcu_reader:
+                vcu = vcu_reader.readline().split('\t')
+            
+            # curr_json_file = "/data/ai_group/workdirs/od_occ_group/huiquyang/data/Obstacle_3DModelResult_/EKART_ID4001_2025-08-15-18-20-39/2025-08-15_18-34-44-232/3d_detection_json/1755254118.200182.json"
+            curr_json_data = self.json_data.load(curr_json_file)
+            ret_curr_infos = self.json_data.parse_json(curr_json_data)
+            meta_info, cameras, bounding_boxes, special_labels = ret_curr_infos
+
+            gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
+            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+
+            input_dict['gt_names'] = gt_names
+            input_dict['gt_boxes'] = gt_boxes
+
+            time_dp.Duration("cur_json", "begin")
+
+            # time_dp.Duration("prev_json", "cur_json")
+
+            # === common info ===
+            input_dict['frame_id'] = info['time_stamp']
+
+            # if self.dataset_cfg.USE_CAMERA_YAML:
+            # if self.phase == const.PHASE_VALIDATION:
+            #     intrinsic = self.intrinsic
+            #     cam_dist = self.cam_dist
+            #     temp = np.stack([np.eye(4) for i in range(7)], axis=0)
+            #     temp[:, :3:, :3] = self.r_mat_np
+            #     temp[:, :3:, [3]] = self.t_vec_np
+            #     extrinsic = temp
+
+            input_dict['intrinsic'] = copy.deepcopy(intrinsic)  # np.stack([intrinsic, intrinsic])
+            input_dict['cam_dist'] = copy.deepcopy(cam_dist)  # np.stack([cam_dist, cam_dist])
+            input_dict['extrinsic'] = copy.deepcopy(extrinsic)  # np.stack([extrinsic, extrinsic])
+            input_dict['camera_names'] = copy.deepcopy(self.image_view)
+            input_dict['camera_sizes'] = copy.deepcopy(camera_sizes)
+
+            # === image info ===
+            # img_path = {}
+            for view_idx, camera_view in enumerate(self.image_view):
+                image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                # img_path[camera_view] = image_file
+                # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
+                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx)
+
+                input_dict[f'origin_images_input{view_idx}'] = current_img.astype(np.float32).copy()
+
+                # if self.phase == const.PHASE_TRAINING:
+                #     current_img = torch.from_numpy(current_img).unsqueeze(0).to("cpu").permute(0, 3, 1, 2).float()
+                #     current_img, trans_cv, rots_cv = self.img_aug_cuda(
+                #         img_tensor=current_img,
+                #         trans_cv=None,
+                #         rots_cv=None,
+                #         intrin=None,
+                #         device="cpu"
+                #     )
+
+                #     current_img = current_img.squeeze(0).permute(1, 2, 0).cpu().numpy()
+    
+                input_dict[f'images_input{view_idx}'] = current_img.astype(np.float32) / 255.0
+                
+            time_dp.Duration("image", "cur_json")
+            data_dict = self.prepare_data(data_dict=input_dict)
+            time_dp.Duration("prepare_data", "image")
+
+            data_dict_ret = {
+                "meta": {"frame_id": data_dict["frame_id"]}, 
+                'image': {}, 
+                "label": {}, 
+                "calib": {},
+            }
+            
+            for i in range(len(data_dict["camera_names"])):
+                if not self.deploy_eval:
+                    data_dict_ret['image'][data_dict["camera_names"][i]] = data_dict[f"images_input{i}"].transpose(2, 0, 1)
+                else:
+                    data_dict_ret['image'][data_dict["camera_names"][i]] = data_dict[f"origin_images_input{i}"]
+
+            for key in data_dict:
+                if "gt_curr_" in key:
+                    data_dict_ret["label"][key] = data_dict[key]
+
+            data_dict_ret["label"]["gt_boxes"] = data_dict["gt_boxes"]
+
+            for key in ["intrinsic", "cam_dist", "extrinsic"]:
+                data_dict_ret["calib"][key] = data_dict[key]
+
+            data_dict_ret['calib']["img_shapes"] = np.stack([np.array(list(img.shape)) 
+                                                             for img in data_dict_ret["image"].values()], axis=0)
+            data_dict_ret['calib']["bev_real2aug"] = np.eye(4, dtype=np.float32)
+
+            data_dict_ret['meta']['is_key'] = info.get('is_key', True)
+            data_dict_ret['meta']['camera_name'] = self.camera_names
+            data_dict_ret['meta']['task_name'] = self.task
+            # data_dict_ret['meta']['img_path'] = img_path
+            frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
+            data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
+            data_dict_ret['meta']['timestamp'] = curr_time_stamp
+            data_dict_ret['meta']['ego_speed'] = float(vcu[3])
+            data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
+            data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
+            data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
+            data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
+
+        except Exception as e:
+
+            if self.phase == const.PHASE_TRAINING:
+                new_index = np.random.randint(self.__len__())
+                print(f"PHASE_TRAINING {idx} load faild {e}, resample trig {new_index}")
+                return self.__getitem__(new_index)
+            else:
+                print(f"PHASE_TRAINING {idx} load faild {e}, faild exit(1)")
+                exit(1)
+
+        time_dp.Duration("move_data", "prepare_data")
+
+        time_dp.Duration("dataset.getitem", "begin")
+        # time_dp.Print()
+        
+        return data_dict_ret
+
+    @TimeProf
+    def __getitem__(self, idx):
+        
+        if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
+            data_dict = self.getitem_subtask_driving_bev_byn_fisheye(idx)
+            return data_dict
+        elif self.subtask_name in ['DRIVING_BEV_DYN']:
+            data_dict = self.getitem_driving_bev_dyn_subtask(idx)
+        else:
+            raise NotImplementedError(f"subtask_name {self.subtask_name} not support")
+        
+        return data_dict
 
 
 def Get(dataset_temp, i, j):
