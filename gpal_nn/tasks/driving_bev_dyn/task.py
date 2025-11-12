@@ -226,7 +226,7 @@ def Draw3DObjectsOnImage(img, objects, intrin, extrin, dist, color):
             DrawBbox2D(img, obj_cam.T, f, cx, cy, dist, color)
     return img
 
-def Draw3DObjectsOnFisheyeImageOneView(img, objects, intrin, extrin, dist, color, scale, crop_start):
+def Draw3DObjectsOnFisheyeImageOneView(img, objects, intrin, extrin, dist, color, scale, crop_start, cam_name):
     img = copy.deepcopy(img)
     
     # f = intrin[0, 0] / scale
@@ -248,7 +248,8 @@ def Draw3DObjectsOnFisheyeImageOneView(img, objects, intrin, extrin, dist, color
         projected_boxes.append((obj_cam, valid_mask))
         
         img = draw_uvboxes_on_image(img, projected_boxes, color, thickness=1)
-        
+    cv2.putText(img, cam_name, (30, 30), 
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[255, 255, 255], thickness=2, fontScale=1)
     return img
 
 @TASKS.register_module()
@@ -290,11 +291,11 @@ class DRIVING_BEV_DYNTask(BaseTask):
                     
                     gt_boxes = gts[idx]['gt_boxes']
                     img = Draw3DObjectsOnFisheyeImageOneView(
-                        img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 255, 0], scale, crop_start)
+                        img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 255, 0], scale, crop_start, cam_name)
                     
-                    # gt_boxes = pred_objs[idx]['boxes_lidar']
-                    # img = Draw3DObjectsOnFisheyeImageOneView(
-                    #     img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 0, 255], scale, crop_start)
+                    gt_boxes = pred_objs[idx]['boxes_lidar']
+                    img = Draw3DObjectsOnFisheyeImageOneView(
+                        img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 0, 255], scale, crop_start, cam_name)
 
                     vis_imgs.append(img)
                 vis_imgs = np.concatenate(vis_imgs, axis=0)
