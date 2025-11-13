@@ -2,7 +2,7 @@ import torch
 from gpal_nn.tasks.driving_bev_sta.losses.base_assigner import denormalize_2d_pts, denormalize_2d_bbox
 
 
-def decode_pred_with_score(cls_score_pred, bbox_pred=None, points_pred=None, lane_marking_types_pred=None, lane_marking_colors_pred=None, shape_types_pred=None, centerline_types_pred=None, 
+def decode_pred_with_score(cls_score_pred, bbox_pred=None, points_pred=None, lane_marking_types_pred=None, lane_marking_colors_pred=None, shape_types_pred=None, centerline_types_pred=None, centerline_directions_pred=None, 
                            keypoint_cls_pred=None, keypoint_reg_pred=None, num_cls=2, num_query=50, pc_range=None,
                            socre_thr=0.3):
     cls_score_pred = cls_score_pred.squeeze().sigmoid()
@@ -36,6 +36,9 @@ def decode_pred_with_score(cls_score_pred, bbox_pred=None, points_pred=None, lan
     if centerline_types_pred is not None:
         _, centerline_types_pred = centerline_types_pred.squeeze().max(-1)
         centerline_types_pred = centerline_types_pred[socre_mask]
+    if centerline_directions_pred is not None:
+        _, centerline_directions_pred = centerline_directions_pred.squeeze().max(-1)
+        centerline_directions_pred = centerline_directions_pred[socre_mask]
     if keypoint_cls_pred is not None:
         keypoint_cls_pred = keypoint_cls_pred.squeeze().sigmoid()
         keypoint_cls_pred = keypoint_cls_pred[socre_mask]
@@ -43,7 +46,7 @@ def decode_pred_with_score(cls_score_pred, bbox_pred=None, points_pred=None, lan
         keypoint_reg_pred = keypoint_reg_pred.squeeze()
         keypoint_reg_pred = keypoint_reg_pred[socre_mask]
 
-    return bbox_pred, points_pred, cls_score_pred, cls_pred, lane_marking_types_pred, lane_marking_colors_pred, shape_types_pred, centerline_types_pred, keypoint_cls_pred, keypoint_reg_pred
+    return bbox_pred, points_pred, cls_score_pred, cls_pred, lane_marking_types_pred, lane_marking_colors_pred, shape_types_pred, centerline_types_pred, centerline_directions_pred, keypoint_cls_pred, keypoint_reg_pred
 
 def coordinate_transport_local(points_pred, start_x, start_y):
     '''

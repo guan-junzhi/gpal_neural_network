@@ -122,16 +122,16 @@ class WrappedGpNet(GpNet):
         bev_feature = self.model[self._transformers[task]](neck0_output, calib)
       
         for task_name in self.tasks_to_run.keys():
-            outputs = self.model[task_name](bev_feature)[0]
+            outputs = self.model[task_name](bev_feature, calib)[0]
             print(ShowDataStruct("DRIVING_BEV_STA", outputs))
             outputs_classes, intermediate_reference_points = outputs['all_cls_scores'].detach(), outputs['all_pts_preds'].detach()
             lane_marking_types_preds, lane_marking_colors_preds = outputs['all_lane_marking_types_preds'].detach(), outputs['all_lane_marking_colors_preds'].detach()
             shape_types, centerline_types = outputs['all_shape_types_preds'].detach(), outputs['all_centerline_types_preds'].detach()
-            keypoint_classes, keypoint_regs = outputs['all_keypoint_classes_preds'].detach(), outputs['all_keypoint_regs_preds'].detach()
+            centerline_directions, keypoint_classes, keypoint_regs = outputs['all_centerline_directions_preds'].detach(), outputs['all_keypoint_classes_preds'].detach(), outputs['all_keypoint_regs_preds'].detach()
 
         return (outputs_classes[-1], intermediate_reference_points[-1],
                 lane_marking_types_preds[-1], lane_marking_colors_preds[-1],
-                shape_types[-1], centerline_types[-1], keypoint_classes[-1], keypoint_regs[-1])
+                shape_types[-1], centerline_types[-1], centerline_directions[-1], keypoint_classes[-1], keypoint_regs[-1])
         
 
     def forward_park(self, input):
@@ -254,6 +254,7 @@ class PytorchToOnnx:
                 merged_input_dict["calib"]["queries_rebatch_grid"] = torch.rand(2, 50, 100,2).cuda()
                 merged_input_dict["calib"]["restore_bev_grid"] = torch.rand(1, 100, 100, 2).cuda()
                 merged_input_dict["calib"]["bev_pillar_counts"] = torch.rand(1, 5000, 1).cuda()
+                merged_input_dict['calib']['navi_info'] = {"points": torch.rand(1, 20, 2).cuda()}
 
             elif task.name == "PARKING_IPM_STA":
                 avm_w = 768
@@ -318,8 +319,8 @@ class PytorchToOnnx:
                 output_names=['avm', 'slot_point', 'slot_line']
 
             if task.name == "DRIVING_BEV_STA":
-                input_names = ["img_30", "img_120", "images_grid", "reference_points_rebatch", "queries_rebatch_grid", "restore_bev_grid", "bev_pillar_counts"]
-                output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "keypoint_classes_preds", "keypoint_regs_preds"]
+                input_names = ["img_30", "img_120", "images_grid", "reference_points_rebatch", "queries_rebatch_grid", "restore_bev_grid", "bev_pillar_counts", "navi_info"]
+                output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "centerline_directions_preds", "keypoint_classes_preds", "keypoint_regs_preds"]
                 do_constant_folding = False
             with torch.no_grad():
                 torch.onnx.export(
