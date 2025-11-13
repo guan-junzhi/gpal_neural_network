@@ -37,3 +37,7 @@ config_for_single*
 */.ipynb_checkpoints/
 */*/*/.ipynb_checkpoints/
 */*/*/*/.ipynb_checkpoints/
+
+calib_data
+workdir
+*hbm

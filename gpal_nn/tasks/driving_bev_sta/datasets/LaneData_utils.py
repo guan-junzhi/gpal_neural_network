@@ -4,9 +4,10 @@ main_class_type_map = {
     "lane_marking": 0,
     "edge": 1,
     "centerline": 2,
-    "polygon": 3,
-    "arrow": 4,
-    "parking_slot": 5,
+    "guideline_ego_path": 3,
+    "polygon": 4,
+    "arrow": 5,
+    "parking_slot": 6,
 }
 
 main_class_name_map = {index: name for name, index in main_class_type_map.items()}

@@ -62,7 +62,7 @@ def DrawBbox2D(img, pts, f, cx, cy, dist, color):
         p2 = pts[pair[1]]
         uv1, uv2 = LineWithTruncated(p1, p2, f, cx, cy, dist)
         if (uv1 is not None) and (uv2 is not None):
-            cv2.line(img, uv1, uv2, color, 4)
+            cv2.line(img, uv1, uv2, color, 2)
     return pts
 
 def GetBboxInWorld(tf, size):

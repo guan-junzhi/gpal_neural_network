@@ -1,7 +1,7 @@
 image_per_gpu: 24
 workers_per_gpu: 12
 skip_sanity_check: true
-max_iterations: 60000
+max_iterations: 100000
 save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
@@ -13,7 +13,7 @@ Train:
   max_visu_img_num: 10
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
-    after_scheduler: CosineAnnealingLR, T_max: 80000}
+    after_scheduler: CosineAnnealingLR, T_max: 120000}
 
 Backbones:
   backbone0:
@@ -45,7 +45,8 @@ Transformer:
   transformer_config:
     task_name: DRIVING_BEV_DYN
     bev_map_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-    bev_map_voxel_size: [1.28, 1.28, 0.5]
+    bev_map_voxel_size: [1.28, 1.28, 1.5]
+    image_down_div: 8
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
     in_channels: 128
     out_channels: 128
@@ -87,7 +88,18 @@ Tasks:
       "CROP_HeSai_ID4":
         "SCALE": [5, 5, 2.5, 2.5, 2.5, 2.5, 2.5]
         "CROP_START": [0, 0, 80, 80, 80, 80, 80]
+      "CAMERA_RAW_SIZE":
+        [[3840, 2160], 
+         [3840, 2160], 
+         [1920, 1080], 
+         [1920, 1080], 
+         [1920, 1080], 
+         [1920, 1080], 
+         [1920, 1080]]
   
+    build_gt:
+      "max_objects": 256
+      "od_heatmap_voxel_size": [0.64, 0.64]
 
     od_range:
       [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
@@ -99,11 +111,43 @@ Tasks:
         inplanes: 128
         interplanes: 64
         scale_factor: 8
+      dyn_od_head:
+        fuser_config: 
+          in_channels: 256
+          out_channels: 128
+        head_config: 
+          in_channels: 128
+          num_stages: 6
+          out_channels: 21
+          upsample: 8
+      
+    Loss:
+      od_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+      out_feat_voxel_size: [0.64, 0.64, 0.5]
+    
+    POST_PROCESSING:
+      od_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+      RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
+      SCORE_THRESH: 0.28
+      OUTPUT_RAW_SCORE: False
+      EVAL_METRIC: "kitti"
+      NMS_CONFIG: 
+        MULTI_CLASSES_NMS: False
+        NMS_TYPE: "nms_gpu"
+        NMS_THRESH: 0.1
+        NMS_PRE_MAXSIZE: 4096
+        NMS_POST_MAXSIZE: 500
+      DET_RANGE_LIST: [
+        [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0],
+      ]
+      IOU_THRESH_LIST: [0.5, 0.5, 0.25, 0.25]
+      out_feat_voxel_size: [0.64, 0.64, 0.5]
+
+
 
     Evaluator: {}
     datasets:
       training:
-
       - { dataset_name: 'xxx', 
           # is_manual_label == true,
           # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
@@ -113,27 +157,30 @@ Tasks:
           is_manual_label: false,
           have_prev_label: true,
           image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
+          # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
+          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLine_train/",
-          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20250930-125033/20250930-125033_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20250930-125033/20250930-125033_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251026-150826/20251026-150826_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
           fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
+      
       validation:
       - { dataset_name: 'xxx', 
           is_manual_label: true,
           have_prev_label: false,
-          image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLineData_Test/",
-          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames2808_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames14256_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
