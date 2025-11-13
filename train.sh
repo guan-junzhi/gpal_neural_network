@@ -15,7 +15,7 @@ nvidia-smi
 free -m
 
 echo "[READ GLOBAL ENV VAR]:"
-airflow_key="gpal_neural_network_one_node_traning_job_on_airflow"
+airflow_key="lane_detection_one_node_traning_job_on_airflow"
 echo "AIRFLOW_CTX_DAG_ID=$AIRFLOW_CTX_DAG_ID"
 echo "airflow_key=$airflow_key"
 if [[ "$TASK_IN_AIRFLOW" == "1" ]];
@@ -67,7 +67,7 @@ then
     config=configs_for_develop/radar4d_nn_sdk_config.yaml
 else
     tasks=driving_bev_sta 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20251023_05_35_20/checkpoint/epoch=1-step=60000_checkpoint.pth
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250919_06_20_34/checkpoint/epoch=6-step=100000_checkpoint.pth
     config=configs_for_develop/driving_bev_sta_config.yaml
 
 fi
