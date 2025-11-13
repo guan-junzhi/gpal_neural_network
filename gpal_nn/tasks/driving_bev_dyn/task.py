@@ -1,4 +1,5 @@
 import os
+from matplotlib.style import available
 import numpy as np
 import torch
 import random
@@ -84,6 +85,131 @@ def GetBboxInWorld(tf, size):
     p_w = p_w[:3]
     return p_w
 
+def draw_uvboxes_on_image(image, projected_boxes, color=(0, 255, 0), thickness=2):
+    img = image.copy()
+    edges = [
+            (0, 1), (1, 2), (2, 3), (3, 0),  # 底面
+            (4, 5), (5, 6), (6, 7), (7, 4),  # 顶面
+            (0, 4), (1, 5), (2, 6), (3, 7)   # 竖边
+        ]
+    
+    for vertices_2d, valid_mask in projected_boxes:
+        # 绘制边
+        for edge in edges:
+            if valid_mask[edge[0]] and valid_mask[edge[1]]:
+                pt1 = tuple(vertices_2d[edge[0]].astype(int))
+                pt2 = tuple(vertices_2d[edge[1]].astype(int))
+                cv2.line(img, pt1, pt2, color, thickness)
+        
+        # 绘制顶点
+        for i, vertex in enumerate(vertices_2d):
+            if valid_mask[i]:
+                pt = tuple(vertex.astype(int))
+                if i in [2,3,6,7]:
+                    cv2.circle(img, pt, 1, (254, 0, 0), -1)
+                # else:
+                #     cv2.circle(img, pt, 1, (0, 0, 255), -1)
+                    
+    return img
+
+
+def project_points_to_fisheye_raw_uv(points_world, intrinsic_matrix, distortion_coeffs, extrinsic_matrix):
+    """
+    将世界坐标系下的3D点投影到鱼眼相机图像平面
+    
+    参数:
+    - points_world: 世界坐标系下的3D点 (Nx3) numpy数组
+    - intrinsic_matrix: 相机内参矩阵 (3x3)
+                       [[fx,  0, cx],
+                        [ 0, fy, cy],
+                        [ 0,  0,  1]]
+    - distortion_coeffs: 鱼眼畸变系数 (1xN) 或 (Nx1)
+                        通常为 [k1, k2, k3, k4, k5] (5参数模型)
+    - extrinsic_matrix: 相机外参矩阵 (4x4) 
+                       [[R | t],
+                        [0 | 1]]
+    
+    返回:
+    - points_image: 图像坐标 (Nx2) numpy数组 [[u1, v1], [u2, v2], ...]
+    - valid_mask: 布尔数组 (N,)，标记哪些点在相机前方且投影有效
+    """
+    
+    # 步骤1: 世界坐标系 -> 相机坐标系
+    # 转换为齐次坐标
+    N = points_world.shape[0]
+    points_homo = np.hstack([points_world, np.ones((N, 1))])
+    
+    # 应用外参变换
+    points_camera_homo = (extrinsic_matrix @ points_homo.T).T
+    points_camera = points_camera_homo[:, :3]
+    
+    # 过滤相机后方的点
+    valid_mask = points_camera[:, 2] > 0
+    
+    # if not np.any(valid_mask):
+    #     return np.zeros((N, 2)), valid_mask
+    
+    # 步骤2: 相机坐标系 -> 归一化平面
+    X = points_camera[:, 0]
+    Y = points_camera[:, 1]
+    Z = points_camera[:, 2]
+    
+    # 避免除零
+    Z = np.where(Z > 1e-6, Z, 1e-6)
+    
+    x = X / Z
+    y = Y / Z
+    
+    # 步骤3: 计算入射角 theta
+    r = np.sqrt(x**2 + y**2)
+    theta = np.arctan(r)
+    
+    # 步骤4: 鱼眼畸变模型 (等距投影 + 畸变)
+    # r_distorted = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8 + k5*theta^10)
+    
+    # 提取畸变系数
+    dist = distortion_coeffs.flatten()
+    k1 = dist[0] if len(dist) > 0 else 0
+    k2 = dist[1] if len(dist) > 1 else 0
+    k3 = dist[2] if len(dist) > 2 else 0
+    k4 = dist[3] if len(dist) > 3 else 0
+    k5 = dist[4] if len(dist) > 4 else 0
+    
+    theta2 = theta * theta
+    theta4 = theta2 * theta2
+    theta6 = theta4 * theta2
+    theta8 = theta4 * theta4
+    theta10 = theta8 * theta2
+    
+    # 畸变后的径向距离 (5项式)
+    r_distorted = theta * (1 + k1*theta2 + k2*theta4 + k3*theta6 + k4*theta8 + k5*theta10)
+    
+    # 避免除零
+    r = np.where(r > 1e-6, r, 1e-6)
+    
+    # 计算畸变后的归一化坐标
+    scale = r_distorted / r
+    x_distorted = x * scale
+    y_distorted = y * scale
+    
+    # 步骤5: 归一化平面 -> 像素坐标
+    # 提取内参
+    fx = intrinsic_matrix[0, 0]
+    fy = intrinsic_matrix[1, 1]
+    cx = intrinsic_matrix[0, 2]
+    cy = intrinsic_matrix[1, 2]
+    
+    u = fx * x_distorted + cx
+    v = fy * y_distorted + cy
+    
+    # 组合结果
+    points_image = np.column_stack([u, v])
+    
+    # 标记无效点
+    # points_image[~valid_mask] = 0
+    
+    return points_image, points_camera
+
 
 def Draw3DObjectsOnImage(img, objects, intrin, extrin, dist, color):
     img = copy.deepcopy(img)
@@ -100,11 +226,39 @@ def Draw3DObjectsOnImage(img, objects, intrin, extrin, dist, color):
             DrawBbox2D(img, obj_cam.T, f, cx, cy, dist, color)
     return img
 
+def Draw3DObjectsOnFisheyeImageOneView(img, objects, intrin, extrin, dist, color, scale, crop_start, cam_name):
+    img = copy.deepcopy(img)
+    
+    # f = intrin[0, 0] / scale
+    # cx = intrin[0, 2]
+    # cy = intrin[1, 2] / scale - crop_start
+
+    projected_boxes = []
+    
+    for box in objects:
+        obj_tf = GetBoxTf(box[0], box[1], box[2], box[6])
+        pts = GetBboxInWorld(obj_tf, box[3:6])
+        
+        obj_cam, points_camera = project_points_to_fisheye_raw_uv(pts.T, intrin, dist, extrin)
+        obj_cam[:, 0] = obj_cam[:, 0] / scale
+        obj_cam[:, 1] = obj_cam[:, 1] / scale - crop_start
+        
+        valid_mask = points_camera[:, 2] > 0
+            
+        projected_boxes.append((obj_cam, valid_mask))
+        
+        img = draw_uvboxes_on_image(img, projected_boxes, color, thickness=1)
+    cv2.putText(img, cam_name, (30, 30), 
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[255, 255, 255], thickness=2, fontScale=1)
+    return img
+
 @TASKS.register_module()
 class DRIVING_BEV_DYNTask(BaseTask):
     def __init__(self, global_config, task_config, name):
         super().__init__(global_config, task_config, name, None)
         self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
+        
+        self.subtask_name = global_config.Tasks['DRIVING_BEV_DYN']['SWITCH_SUBTASK']
 
         pass
 
@@ -123,31 +277,57 @@ class DRIVING_BEV_DYNTask(BaseTask):
                 vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], [box[7], box[8]], [0, 0, 255],
                             [255, 255, 255], line_width=1)
 
+            if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
+                vis_imgs = []
+                for cam_idx, cam_name in enumerate(metadata[idx]["camera_name"]):
+                    calib_intrin = copy.deepcopy(calib["intrinsic"][idx][cam_idx]).detach().cpu().numpy()
+                    calib_extrin = copy.deepcopy(calib["extrinsic"][idx][cam_idx]).detach().cpu().numpy()
+                    calib_dist = copy.deepcopy(calib["cam_dist"][idx][cam_idx]).detach().cpu().numpy()
+                    img_crop_dict = copy.deepcopy(self.image_crop_config)
+                    img = (imgs[cam_name][idx].detach().cpu().numpy().transpose(1, 2, 0) * 254).astype(np.uint8)
+                    
+                    scale = img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx]
+                    crop_start = img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx]
+                    
+                    gt_boxes = gts[idx]['gt_boxes']
+                    img = Draw3DObjectsOnFisheyeImageOneView(
+                        img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 255, 0], scale, crop_start, cam_name)
+                    
+                    gt_boxes = pred_objs[idx]['boxes_lidar']
+                    img = Draw3DObjectsOnFisheyeImageOneView(
+                        img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 0, 255], scale, crop_start, cam_name)
 
-            vis_imgs = []
-            for cam_idx, cam_name in enumerate(metadata[idx]["camera_name"]):
-                calib_intrin = copy.deepcopy(calib["intrinsic"][idx][cam_idx]).detach().cpu().numpy()
-                calib_extrin = copy.deepcopy(calib["extrinsic"][idx][cam_idx]).detach().cpu().numpy()
-                calib_dist = copy.deepcopy(calib["cam_dist"][idx][cam_idx]).detach().cpu().numpy()
-                img_crop_dict = copy.deepcopy(self.image_crop_config)
-                img = (imgs[cam_name][idx].detach().cpu().numpy().transpose(
-                    1, 2, 0) * 254).astype(np.uint8)
-                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx])
-                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx])
-                calib_dist *= 0.0
-                img = cv2.undistort(img, calib_intrin, calib_dist, calib_intrin)
+                    vis_imgs.append(img)
+                vis_imgs = np.concatenate(vis_imgs, axis=0)
+            
+            elif self.subtask_name in ['DRIVING_BEV_DYN']:
+                vis_imgs = []
+                for cam_idx, cam_name in enumerate(metadata[idx]["camera_name"]):
+                    calib_intrin = copy.deepcopy(calib["intrinsic"][idx][cam_idx]).detach().cpu().numpy()
+                    calib_extrin = copy.deepcopy(calib["extrinsic"][idx][cam_idx]).detach().cpu().numpy()
+                    calib_dist = copy.deepcopy(calib["cam_dist"][idx][cam_idx]).detach().cpu().numpy()
+                    img_crop_dict = copy.deepcopy(self.image_crop_config)
+                    img = (imgs[cam_name][idx].detach().cpu().numpy().transpose(
+                        1, 2, 0) * 254).astype(np.uint8)
+                    calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx])
+                    calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx])
+                    calib_dist *= 0.0
+                    img = cv2.undistort(img, calib_intrin, calib_dist, calib_intrin)
 
-                gt_boxes = gts[idx]['gt_boxes']
-                img = Draw3DObjectsOnImage(
-                    img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 255, 0])
+                    gt_boxes = gts[idx]['gt_boxes']
+                    img = Draw3DObjectsOnImage(
+                        img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 255, 0])
 
-                gt_boxes = pred_objs[idx]['boxes_lidar']
-                img = Draw3DObjectsOnImage(
-                    img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 0, 255])
+                    gt_boxes = pred_objs[idx]['boxes_lidar']
+                    img = Draw3DObjectsOnImage(
+                        img, gt_boxes, calib_intrin, calib_extrin, calib_dist[0], [0, 0, 255])
 
-                vis_imgs.append(img)
-            vis_imgs = np.concatenate(vis_imgs, axis=0)
-
+                    vis_imgs.append(img)
+                vis_imgs = np.concatenate(vis_imgs, axis=0)
+            
+            else:
+                raise NotImplementedError(f"DRIVING_BEV_DYNTask GetVis faild {self.subtask_name}")
+            
         except ValueError as e:
             print(f"DRIVING_BEV_DYNTask GetVis faild {e}")
             pass
@@ -178,7 +358,8 @@ class DRIVING_BEV_DYNTask(BaseTask):
 
     def heavy_log(self, iteration, phase, log_writer, data, preds, masks, trues, metadata, calib, loss_info=None):
         imgs = []
-        for idx in range(min(4,len(metadata))):
+        bs = min(self.global_config.image_per_gpu, self.head.global_config.Train['max_visu_img_num'])
+        for idx in range(bs):
             vis = self.GetVis(data, preds, trues, metadata, calib, idx)
             imgs.append(vis)
             # import cv2

@@ -1,5 +1,7 @@
 # import sys;sys.path.insert(0, "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_neural_network")
-import sys;sys.path.insert(0, "/opt/GPAL_Repo_PYTHON/gpal_neural_network")
+# import sys;sys.path.insert(0, "/opt/GPAL_Repo_PYTHON/gpal_neural_network")
+import sys;sys.path.insert(0, "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_neural_network")
+
 import os
 import copy
 
@@ -164,7 +166,7 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     logger.info(f'distance_threshold_list: {distance_threshold_list}')
     logger.info(f'find_worst: {find_worst}')
     logger.info(f'top_n: {top_n}')
-    logger.info(f'preds: {preds}')
+    logger.info(f'preds: {len(preds)}')
     logger.info(f'class_names: {class_names}')
     logger.info(f'\n')
     
@@ -193,7 +195,7 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     logger.info(f'det_annos: len: {len(det_annos)}')
     key_det_annos = [det_annos[i] for i in range(len(det_annos)) if metas[i]['is_key']]
     det_annos = key_det_annos
-    logger.info(f'key_det_annos: len{len(key_det_annos)}')
+    logger.info(f'key_det_annos: len:{len(key_det_annos)}')
     # det_annox = evaluator.load_det_annos(
     #     det_annos)  # 文件路径 or list[dict, dict, ...]
     
@@ -206,19 +208,28 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     logger.info(f'\n')
     test_dynamic_thresholds(loggerinfo=logger.info, restricted_ratio=restricted_ratio)
     logger.info(f'\n')
-
+    
+    DATA_COLLECT_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT")
+    if DATA_COLLECT_ROOT is None:
+        DATA_COLLECT_ROOT = "/data/dp_group/process-prod-bucket/data_collect/"
+    image_dir = DATA_COLLECT_ROOT
+    
     # badcase 展示不生成
-    if False:
+    if True:
         frame_infos = evaluator.get_frame_infos_from_distance_errors(distance_errors_list=distance_errors_list,)
     
         # TODO 暂时调试使用，后续统一到函数接口内部
-        value_frame_infos = evaluator.query_raw_frame_info(query_frame_infos=frame_infos, key_frame_infos=det_annox)
+        value_frame_infos = evaluator.query_raw_frame_info(query_frame_infos=frame_infos, key_frame_infos=det_annos)
         parse_frame_infos = evaluator.sparse_frame_infos_for_vis(value_frame_infos)
         
-        for worst_i, frame_info in enumerate(tqdm(parse_frame_infos)):  # 有badcase的fp fn
+        for worst_i, frame_info in enumerate(tqdm(parse_frame_infos, desc='vis badcase')):  # 有badcase的fp fn
             # timestamp = frame_info['timestamp']  # 是gt索引, 并不是timestamp
             frame_id = frame_info['frame_id']
-        
+
+            # if worst_i % 4 != 0:
+            #     continue
+            
+            temp_image_file = f'{save_badcase_dir}/{worst_i:05d}_{frame_id}.png'
             evaluator.visualize_pred_scores_and_gt_3dbox_use_bev_and_side_box(
                 pts_range = det_range_list[-1],
                 class_colors = color_list,
@@ -228,12 +239,45 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
                 pred_scores = frame_info['tot_dt_scores'],
                 gt_boxes = frame_info['tot_gt_boxes'],
                 gt_boxes_label_ids = frame_info['tot_gt_boxes_label_ids'],
-                save_imgfile = f'{save_badcase_dir}/{worst_i:05d}_{frame_id}.png',
+                save_imgfile = temp_image_file,
                 frame_id = frame_id,
                 save_dir = save_badcase_dir,
                 fnfp_info = frame_info['classes_data'],
             )
-    
+            
+            curr_meta_info = metas[worst_i]
+            camera_name_list = curr_meta_info['camera_name']
+            curr_clip_id = curr_meta_info['clip_id'].replace('^', '/')
+            timestamp = curr_meta_info['timestamp']
+            
+            image_list = []
+            for curr_cam_name in camera_name_list:
+                curr_view_path = f'{image_dir}/{curr_clip_id}/{curr_cam_name}/{timestamp}.jpg'
+                
+                curr_view_data = cv2.imread(curr_view_path)
+                cv2.putText(curr_view_data, curr_cam_name, (50, 50),
+                            fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[254, 254, 254], thickness=2, fontScale=2)
+                # cv2.imwrite(f'{save_badcase_dir}/{worst_i:05d}_{frame_id}_{curr_cam_name}.jpg', curr_view_data)
+                image_list.append(curr_view_data)
+            
+            image_img = np.concatenate(image_list, axis=1)
+            
+            bev_img = cv2.imread(temp_image_file)
+            if os.path.exists(temp_image_file):
+                os.remove(temp_image_file)
+                os.system(f'rm -f {temp_image_file}')
+            
+            HFm, WFm = image_img.shape[:2]
+            HTo, WTo = bev_img.shape[:2]
+            newH = int(HFm * WTo / WFm)
+            image_img = cv2.resize(image_img, (WTo, newH))  # 宽对齐
+
+            tot_img = np.concatenate([bev_img, image_img,], axis=0)
+            
+            cv2.putText(tot_img, f'{curr_clip_id}^{timestamp}', (20, 30),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX, color=[0, 0, 0], thickness=1, fontScale=0.5)
+            cv2.imwrite(f'{save_badcase_dir}/{worst_i:05d}_{frame_id}_{timestamp}.jpg', tot_img)
+
         logger.info(f'\n')
         logger.info(f'restricted_ratio: {restricted_ratio}')
         logger.info(f'distance_threshold_list: {distance_threshold_list}')
@@ -333,6 +377,37 @@ if __name__ == "__main__":
     # print(inputs[-1])
     # evaluation(*inputs)
     evaluation(preds, gts, metas, inputs[3])
+
+    # # === 自定义评估
+    # relative_path = "gpal_neural_network_one_node_traning_job_on_airflow_for_sikong_20251112_13_08_23/20251113_06_37_10^epoch=643-step=42500_checkpoint/20251113063711/DRIVING_BEV_DYN/0"
+    # relative_path = "gpal_neural_network_one_node_traning_job_on_airflow_for_sikong_20251112_13_08_23/20251113_07_32_14^epoch=643-step=42500_checkpoint/20251113073214/DRIVING_BEV_DYN/0"
+    # root_dir = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_neural_network/.vscode/workspace_ws_batch/{relative_path}"
+    
+    # # 对保存的结果再次单独评测使用
+    # meta_file_list = sorted([os.path.join(root_dir, "metadata", ele) for ele in os.listdir(os.path.join(root_dir, "metadata"))])
+    # gt_file_list = sorted([os.path.join(root_dir, "trues", ele)
+    #                 for ele in os.listdir(os.path.join(root_dir, "trues"))])
+    # pred_file_list = sorted([os.path.join(root_dir, "preds", ele) for ele in os.listdir(os.path.join(root_dir, "preds"))])
+    
+    # # 这种和模型评测的结果是一致的,但是和输出的json里对不上,应该是因为json里的顺序和这里的顺序不一致
+    # # meta_file_list = [os.path.join(root_dir, "metadata", ele) for ele in os.listdir(os.path.join(root_dir, "metadata"))]
+    # # gt_file_list = [os.path.join(root_dir, "trues", ele)
+    # #                 for ele in os.listdir(os.path.join(root_dir, "trues"))]
+    # # pred_file_list = [os.path.join(root_dir, "preds", ele) for ele in os.listdir(os.path.join(root_dir, "preds"))]
+    # print(len(meta_file_list), len(gt_file_list), len(pred_file_list))
+    
+    # metas = []
+    # gts = []
+    # preds = []
+
+    # for p, g, m in tqdm(zip(pred_file_list, gt_file_list, meta_file_list)):
+    #     metas += json.load(open(m, 'r'))
+    #     gts += json.load(open(g, 'r'))
+    #     preds += json.load(open(p, 'r'))
+
+
+    # # print(ShowDataStruct("gts", gts, 2, 4))
+
     # class_names = [
     #     "vehicle_car",
     #     "vehicle_truck",
