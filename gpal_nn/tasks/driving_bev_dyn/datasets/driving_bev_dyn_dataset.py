@@ -891,7 +891,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['task_name'] = self.task
             # data_dict_ret['meta']['img_path'] = img_path
             frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
-            data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
+            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['ego_speed'] = float(vcu[3])
             data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
@@ -998,7 +998,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 #     )
 
                 #     current_img = current_img.squeeze(0).permute(1, 2, 0).cpu().numpy()
-    
+                if self.phase != const.PHASE_TRAINING:
+                    current_img = cv2.resize(current_img, self.image_resize[::-1])
+                    current_img = current_img[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+                
                 input_dict[f'images_input{view_idx}'] = current_img.astype(np.float32) / 255.0
                 
             time_dp.Duration("image", "cur_json")
@@ -1036,7 +1039,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['task_name'] = self.task
             # data_dict_ret['meta']['img_path'] = img_path
             frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
-            data_dict_ret['meta']['clip_id'] = '_'.join(frame_path.split('/')[:2])
+            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['ego_speed'] = float(vcu[3])
             data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
