@@ -8,12 +8,15 @@ class BBoxL1LossWithCost(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, bbox_pred, bbox_gt):
+    def forward(self, bbox_pred, bbox_gt, weight=None):
         num_pred = bbox_pred.shape[0]
         num_gt = bbox_gt.shape[0]
 
         assert num_pred == num_gt
-        loss_matrix = F.smooth_l1_loss(bbox_pred, bbox_gt, reduction='none').mean(-1)
+        loss_matrix = F.smooth_l1_loss(bbox_pred, bbox_gt, reduction='none')
+        if weight is not None:
+            loss_matrix = loss_matrix * weight
+        loss_matrix = loss_matrix.mean(-1)
         return loss_matrix
 
     @torch.no_grad()

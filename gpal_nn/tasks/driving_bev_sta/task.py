@@ -33,7 +33,7 @@ class DRIVING_BEV_STATask(BaseTask):
         try:
             for l in gts[idx]['edges']['points']:
                 vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
-                vis1.DrawPolyline(l, [0, 255, 255], 2)
+                vis1.DrawPolyline(l, [0, 0, 255], 2)
             for i,l in enumerate(gts[idx]['polylines']['points']):
                 vis1.DrawKeypoint(l[0], 5, [212, 255, 127])
                 shape_type = gts[idx]['polylines']['shape_type'][i]
@@ -57,19 +57,21 @@ class DRIVING_BEV_STATask(BaseTask):
                     if gts[idx]['centerlines']['is_split_merge'][i]:
                         # print(ShowDataStruct("gts keypoint", gts[idx]['centerlines']['keypoint']))
                         vis1.DrawKeypoint(gts[idx]['centerlines']['keypoint'][i], 5, [135, 138, 128])
+            vis1.DrawPolyline(gts[idx]['navi_info']['points'], [255, 0, 0], 2)
+            vis1.DrawPolyline(gts[idx]['guideline']['ego_path'][0], [235, 206, 135], 2)
         except Exception as e:
             print(f"Error: {e}")
 
         vis_draw1 = vis1.Draw()
         pre_pts = preds['all_pts_preds']
         # print(ShowDataStruct("preds", preds))
-        color_list=[(0, 0, 255), (255, 0, 0), (0, 165, 255)]
+        color_list=[(0, 255, 0), (0, 0, 255), (0, 165, 255)]
         pre_pts_denorm = torch.stack(
             [(1-pre_pts[..., 1]) * 120, ((1-pre_pts[..., 0])-0.5) * 32], dim=-1)
 
         vis2 = Vis2D([-30, 130], [-20, 20], 0.1)
-        for l, ln, s, shape_type, centerline_type, is_split_merge,split_keypoint in zip(pre_pts_denorm[-1, idx], pre_pts[-1, idx], preds['all_cls_scores'][-1, idx], preds['all_shape_types_preds'][-1, idx],
-                                        preds['all_centerline_types_preds'][-1, idx], preds['all_keypoint_classes_preds'][-1, idx], preds['all_keypoint_regs_preds'][-1, idx]):
+        for l, ln, s, shape_type, centerline_type, centerline_direction, is_split_merge,split_keypoint in zip(pre_pts_denorm[-1, idx], pre_pts[-1, idx], preds['all_cls_scores'][-1, idx], preds['all_shape_types_preds'][-1, idx],
+                                        preds['all_centerline_types_preds'][-1, idx], preds['all_centerline_directions_preds'][-1, idx], preds['all_keypoint_classes_preds'][-1, idx], preds['all_keypoint_regs_preds'][-1, idx]):
             # if s[1:].sigmoid().max() > 0.3:
             cls_score_pred = s.squeeze().sigmoid()
             value, cls_pred = cls_score_pred.max(-1)
@@ -81,33 +83,35 @@ class DRIVING_BEV_STATask(BaseTask):
                 #     0, 255), random.randint(0, 255)]
                 try:
                     # 画起始点（亮蓝色）
-                    vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
+                    _, centerline_direction = centerline_direction.max(-1)
+                    # vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
                     _, shape_type = shape_type.max(-1)
                     _, centerline_type = centerline_type.max(-1)
                     # vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
                     if cls_pred != 0:
                         if cls_pred == 2 and centerline_type == 1:
                             vis2.DrawPolyline(l.detach().cpu().numpy(), [158, 168, 3], 2) #应急车道：青色
+                        elif cls_pred == 3:
+                            vis2.DrawPolyline(l.detach().cpu().numpy(), [235, 206, 135], 2) #引导线：天蓝色
                         else:
                             vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2)
                         if is_split_merge_pred.values > 0.5:
                             split_keypoint_pred = self.get_point_from_normalized_position(l, split_keypoint)
                             vis2.DrawKeypoint(split_keypoint_pred, 5, [135, 138, 128])
                     else:
-                        # if shape_type == 0 or shape_type == 1:
-                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, linetype_list[shape_type])
-                        # elif shape_type == 2:
-                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [250, 51, 153], 2, 'dashed', 20)
-                        # elif shape_type == 3:
-                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [203, 192, 255], 2, 'dashed', 20)
-                        # else:
-                        #     print("shape_type error:", shape_type)
-                        #     vis2.DrawPolyline(l.detach().cpu().numpy(), [192, 192, 192], 2, 'solid')
-                        # print("shape_type:", shape_type)
                         if isinstance(shape_type, torch.Tensor):
                             # 确保张量是标量且在 CUDA 上，转为 CPU 并提取整数
                             shape_type = shape_type.item() 
-                        vis2.DrawPolyline(l.detach().cpu().numpy(), [0, 0, 255], 2, shape_type, 20)
+                        vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2, shape_type, 20)
+                    #画起始点（亮蓝色）
+                    if cls_pred != 2:
+                        vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
+                    else:
+                        if centerline_direction == 0:
+                            vis2.DrawKeypoint(l[0].detach().cpu().numpy(), 5, [212, 255, 127])
+                        else:
+                            vis2.DrawKeypoint(l[-1].detach().cpu().numpy(), 5, [212, 255, 127])
+
                 except:
                     pass
         # exit()
@@ -116,6 +120,8 @@ class DRIVING_BEV_STATask(BaseTask):
         font = cv2.FONT_HERSHEY_SIMPLEX
         vis_draw = cv2.putText(vis_draw, clips[idx], (0, 20), font, 0.6, [255, 255, 255], 1)
         vis_draw = cv2.putText(vis_draw, timestamps[idx], (0, 70), font, 1.0, [255, 255, 255], 1)
+        vis_draw = cv2.putText(vis_draw, 'gt', (0, 120), font, 1.0, [255, 255, 255], 1)
+        vis_draw = cv2.putText(vis_draw, 'pred', (450, 120), font, 1.0, [255, 255, 255], 1)
 
         return vis_draw
 
