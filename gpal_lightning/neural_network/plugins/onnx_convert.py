@@ -47,6 +47,8 @@ class WrappedGpNet(GpNet):
         calib = input["calib"]
         task = input["task"]
         images_grid = calib["images_grid"]
+        metadata = input["metadata"]
+
         cam8m_set = ["img_front_120", "img_front_30"]
         cam2m_set = ["img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
 
@@ -69,26 +71,31 @@ class WrappedGpNet(GpNet):
         bev_feature = self.model[self._transformers[task]](neck0_output, calib)
       
         for task_name in self.tasks_to_run.keys():
-            output = self.model[task_name](bev_feature)
-            # print("DRIVING_BEV_DYN", output[0].shape)
-            BEV_TO_POINTS = dict(
-                        NAME="Bev_To_Points",
-                        NUM_BEV_FEATURES=64,
-                        VOXEL_SIZE=[0.64, 0.64],
-                        SCORE_THRESH=0.28,
-                        DOWN_RATIO=2,
-                        NUM_KEYPOINTS=256,
-                        TRAIN=True,
-                        NUM_OUTPUT_FEATURES=64
-                    )
-            bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,
-                                                grid_size=[480, 192,  12],
-                                                voxel_size=[0.32, 0.32, 0.5],
-                                                point_cloud_range=[-51.2, -
-                                                                    30.72, -1., 102.4, 30.72, 5.],
-                                                num_bev_features=[64, 64, 128, 64, 128, 128, 128])
-            output = bev_2_points(output[0])
-            print(ShowDataStruct("DRIVING_BEV_DYN", output))
+            if task_name == "DRIVING_BEV_DYN":
+                output = self.model[task_name](bev_feature,metadata = metadata )
+                output = output[0]
+                # print("DRIVING_BEV_DYN", output[0].shape)
+                # BEV_TO_POINTS = dict(
+                #             NAME="Bev_To_Points",
+                #             NUM_BEV_FEATURES=64,
+                #             VOXEL_SIZE=[0.64, 0.64],
+                #             SCORE_THRESH=0.28,
+                #             DOWN_RATIO=2,
+                #             NUM_KEYPOINTS=256,
+                #             TRAIN=True,
+                #             NUM_OUTPUT_FEATURES=64
+                #         )
+                # bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,
+                #                                   grid_size=[480, 192,  12],
+                #                                   voxel_size=[0.32, 0.32, 0.5],
+                #                                   point_cloud_range=[-51.2, -
+                #                                                      30.72, -1., 102.4, 30.72, 5.],
+                #                                   num_bev_features=[64, 64, 128, 64, 128, 128, 128])
+                # output = bev_2_points(output[0])
+                print(ShowDataStruct("DRIVING_BEV_DYN", output))
+
+                # exit(1)
+        
         return output
 
     def forward_sta(self, input):
@@ -199,6 +206,7 @@ class PytorchToOnnx:
                 "img_rear_left": [1920, 1080, 3],
                 "img_rear_right": [1920, 1080, 3],
             }
+            return used_image_shapes
         elif task_name in ["DRIVING_BEV_STA"]:
             used_image_shapes: dict = {
                 "img_front_30": [3840, 2160, 3],
@@ -233,9 +241,11 @@ class PytorchToOnnx:
                 merged_input_dict["calib"]["images_grid"] = torch.rand(
                     7, 320, 768, 2).cuda()
                 merged_input_dict["calib"]["vt_grid"] = torch.rand(
-                    7, 384, 240, 2).cuda()
-                merged_input_dict["calib"]["vt_grid_valid"] = torch.rand(
-                    7, 4, 96, 240).cuda()
+                    7, 192, 120, 2).cuda()
+                merged_input_dict["metadata"] = {}
+                merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 120).cuda()
+                merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 120, 2).cuda()
+
             elif task.name == "DRIVING_BEV_STA":
                 merged_input_dict = {"task": tasks[0].name, "image": input_dict}
                 merged_input_dict["calib"]={}
@@ -295,16 +305,15 @@ class PytorchToOnnx:
 
         
         os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
+        
 
         for task in tasks:
             do_constant_folding = True
             if task.name == "DRIVING_BEV_DYN":
                 input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
-                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid", "vt_grid_valid"]  # occ_od
+                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid",  "prev_feats","prev_feats_grid"]  # occ_od
 
-                output_names = ["center", "z",
-                        "size", "heading", "velocity", "score", "score_cls"]
-               
+                output_names = ["head_conv", "hm_center","prev_feats_output"]
             if task.name == "PARKING_IPM_STA":
                 input_names=["img_rear", "img_front","img_left", "img_right",  "grid_rear_and_front", "grid_left_and_right","mask_rear", "mask_front", "mask_left", "mask_right"]
                 output_names=['avm', 'slot_point', 'slot_line']

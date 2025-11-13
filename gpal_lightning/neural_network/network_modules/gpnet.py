@@ -417,7 +417,8 @@ class GpNet(LightningModule):
             actual_lr = self.learning_rate
 
         # print(ShowDataStruct("batch", batch))
-
+        # for ele_i, ele in enumerate(batch['meta'][:3]):
+        #     print(f"{ele_i} {ele['clip_id']} {ele['frame_id']} {ele['frame_num']}")
         time_dp.Duration("prepare", "begin")
 
         optimizer.zero_grad()
@@ -432,7 +433,7 @@ class GpNet(LightningModule):
         time_dp.Duration("data", "prepare")
 
         # print(f"curr_task = {curr_task}, camera_name = {camera_name}")
-        preds = self.model_forward(data, calib,  phase=const.PHASE_TRAINING)[0]
+        preds = self.model_forward(data, calib, metadata, phase=const.PHASE_TRAINING)[0]
 
         time_dp.Duration("model_forward", "data")
 
@@ -703,7 +704,7 @@ class GpNet(LightningModule):
             return result
         return convert_half_to_single_precision(result)
 
-    def slice_forward(self, x, calib):
+    def slice_forward(self, x, calib, metadata=None):
         if 'image' in x.keys():
             for key, value in x.items():
                 x.update({key: value})
@@ -793,7 +794,11 @@ class GpNet(LightningModule):
 
             # print(self.model[curr_task])
             # exit(1)
-            output = self.model[curr_task](output["img_bev_feat"], calib)
+            if curr_task in ["DRIVING_BEV_DYN"]:
+                output = self.model[curr_task](output["img_bev_feat"], calib, metadata)
+            else:
+                output = self.model[curr_task](output["img_bev_feat"], calib)
+            
             outputs.append(output)
 
             # print(ShowDataStruct("output", output))
@@ -834,7 +839,7 @@ class GpNet(LightningModule):
         If doing onnx conversion, please set batch size
         """
         if isinstance(x, dict):
-            outputs = self.slice_forward(x, calib)
+            outputs = self.slice_forward(x, calib, metadata)
         elif isinstance(x, torch.cuda.FloatTensor):
             outputs = self.image_forward(x)
         else:

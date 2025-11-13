@@ -267,7 +267,8 @@ class Points_Loss(nn.Module):
 
 
 class Compute_Loss(nn.Module):
-    def __init__(self):
+    def __init__(self, loss_config):
+        self.loss_config = loss_config
         super(Compute_Loss, self).__init__()
         self.focal_loss = FocalLoss()
         self.l1_loss = L1Loss()
@@ -281,47 +282,27 @@ class Compute_Loss(nn.Module):
         # pkl.dump((preds, trues), open("Compute_Loss.pkl", 'wb'))
         # exit(1)
 
-        # is_track_task = batch_dict["track"]
-        is_track_task = True
-        outputs = preds  # batch_dict['target']
-
+        outputs = preds  # ['head_conv', 'hm_cen', 'cur_feats']
+        
+        _, _, H, W = outputs['hm_cen'].shape  # H = 96  W = 240
+        
         hm_cen_sigmoid = _sigmoid(outputs['hm_cen'])  # 固定的字段, 来自于yaml
-        l_hm_cen = self.focal_loss(
-            hm_cen_sigmoid, trues['gt_curr_hm_cen'], False)
-        total_loss = l_hm_cen * self.weight_hm_cen
+        l_hm_cen = self.focal_loss(hm_cen_sigmoid, trues['gt_curr_hm_cen'], False)
+        hm_loss = l_hm_cen * self.weight_hm_cen
         # tb_dict['track_loss_heatmap'] = l_hm_cen.item()
         tb_dict['track_loss_hm'] = l_hm_cen  # with gradient
 
-        # cen_offset_sigmoid = _sigmoid(outputs['cen_offset'])
-        # vel_sigmoid = _sigmoid(outputs['vel'])
-        # z_coor_sigmoid = outputs['z_coor']
-        head_conv = preds["head_conv"].permute(0, 2, 3, 1).flatten(1, 2)
-        # hm_cen_cls = preds["hm_cen"].permute(0, 2, 3, 1).flatten(1, 2)
-
+        head_conv = preds["head_conv"].permute(0, 2, 3, 1).flatten(1, 2) # B D H W
 
         gt_mask = trues['track_obj_mask'].unsqueeze(-1)
         gt_idx = trues['track_indices_center'].long()
 
         B, _, D = head_conv.shape
 
-        head_conv_sel = head_conv[torch.arange(B)[:, None, None], gt_idx.reshape(B, -1, 1).repeat(1, 1, D), torch.arange(D)[None, None, :]]
-        # hm_cen_cls_sel = hm_cen_cls[torch.arange(B)[:, None, None], gt_idx.reshape(B, -1, 1).repeat(1, 1, 6), torch.arange(6)[None, None, :]]
-        # hm_cen_cls_sel = hm_cen_cls_sel.max(dim = -1)[0]
-        # print("hm_cen_cls_sel ", hm_cen_cls_sel.shape)
-
-        # gt_curr_hm_cen = trues['gt_curr_hm_cen'].permute(0, 2, 3, 1).flatten(1, 2)
-
-
-        # for i in range(-1,2):
-        #     for j in range(-1,2):
-        #         idx = 7759 +240 * i + j
-        #         print(idx, gt_curr_hm_cen[0, idx, 1], hm_cen_cls[0, idx, 1].sigmoid())
-
-        # print(gt_curr_hm_cen.min(), gt_curr_hm_cen.max())
-        # gt_curr_hm_cen_sel = gt_curr_hm_cen[torch.arange(B)[:, None, None], gt_idx.reshape(B, -1, 1).repeat(1, 1, 6), torch.arange(6)[None, None, :]]
-        # gt_curr_hm_cen_sel = gt_curr_hm_cen_sel.max(dim = -1)[0]
-        # print("gt_curr_hm_cen ", gt_curr_hm_cen_sel.shape)
-
+        head_conv_sel = head_conv[torch.arange(B)[:, None, None],
+                                  gt_idx.reshape(B, -1, 1).repeat(1, 1, D),
+                                  torch.arange(D)[None, None, :]
+                                  ]
 
         head_conv_sel = torch.stack([map[idx] for idx, map in zip(gt_idx, head_conv)], dim = 0)
         estimation_cen = head_conv_sel[..., :2]
@@ -330,17 +311,17 @@ class Compute_Loss(nn.Module):
         estimation_dir = head_conv_sel[..., 6:12]
         estimation_vel = head_conv_sel[..., 12:14]
         
-        point_cloud_range = [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-        voxel_size = [0.64, 0.64, 0.5]
-        H = 96
-        W = 240
+        point_cloud_range = self.loss_config['od_range']
+        voxel_size = self.loss_config['out_feat_voxel_size']
 
         ys, xs = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)])
         ys = ys.view(1, H, W) * voxel_size[1] + point_cloud_range[1]
         xs = xs.view(1, H, W) * voxel_size[0] + point_cloud_range[0]
-        xys = torch.cat([ys, xs], dim=0).view(
-            1, 2, -1).to(head_conv_sel).repeat(B, 1, 1).flip(1).permute(0,2,1)
-        xys_sel = xys[torch.arange(B)[:, None, None], gt_idx.reshape(B, -1, 1).repeat(1, 1, 2), torch.arange(2)[None, None, :]]
+        xys = torch.cat([ys, xs], dim=0).view(1, 2, -1).to(head_conv_sel).repeat(B, 1, 1).flip(1).permute(0,2,1)
+        xys_sel = xys[torch.arange(B)[:, None, None],
+                      gt_idx.reshape(B, -1, 1).repeat(1, 1, 2),
+                      torch.arange(2)[None, None, :]
+                      ]
 
         # print(xys.shape)
 
@@ -349,20 +330,11 @@ class Compute_Loss(nn.Module):
         # print(xys_sel[0][:10])
         l_z_coor = self.l1_loss(estimation_z, gt_mask, None, trues['track_z_coor'])
         l_dim = self.l1_loss_balanced(estimation_dim, gt_mask, None, trues['track_dim'])
-        # l_vel = self.l1_loss(
-        #     vel_sigmoid, batch_dict['obj_mask'], batch_dict['indices_center'], batch_dict['vel'])
         l_cen_offset = self.l1_loss(estimation_cen + xys_sel, gt_mask, None, trues['track_cen_offset'])
-        # l_direction = self.l1_loss(estimation_dir, gt_mask, None, trues['track_direction'])
-        # box_loss = l_cen_offset * self.weight_cenoff + \
-        #     l_dim * self.weight_dim + l_direction * self.weight_direction + \
-        #     l_z_coor * self.weight_z_coor + l_vel
-        # total_loss += box_loss
-
         l_vel = self.l1_loss(estimation_vel, gt_mask, None, trues['track_vel'])
 
         if gt_mask.sum() > 0:
-            gt_masked = trues['track_multibin_direction'][gt_mask.squeeze(
-                -1).bool(), :]
+            gt_masked = trues['track_multibin_direction'][gt_mask.squeeze(-1).bool(), :]
             pred_masked = estimation_dir[gt_mask.squeeze(-1).bool(), :]
             rotbin_loss = F.cross_entropy(pred_masked[...,:2], gt_masked[...,0].long(), reduction="sum") / gt_mask.sum()
             rotres_loss = torch.tensor(0.0).to(head_conv_sel.device)
@@ -438,7 +410,7 @@ class Compute_Loss(nn.Module):
         # print(box_sel[0,gt_mask[0,:,0].bool()])
         # print(box_pred[0,:50])
 
-        return total_loss, tb_dict
+        return hm_loss, tb_dict
 
 
 if __name__ == "__main__":

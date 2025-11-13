@@ -63,7 +63,7 @@ then
 elif [[ $1 == "driving_bev_dyn" ]];
 then
     tasks=driving_bev_dyn 
-    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250925_16_31_04/checkpoint/epoch=1-step=11000_checkpoint.pth
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_for_huiqu_20251023_11_35_43/checkpoint/epoch=9-step=49500_checkpoint.pth
     config=configs_for_develop/driving_bev_dyn_config.yaml
 else
     tasks=driving_bev_sta
