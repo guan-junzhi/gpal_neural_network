@@ -1,5 +1,5 @@
-image_per_gpu: 8
-workers_per_gpu: 4
+image_per_gpu: 10
+workers_per_gpu: 1
 skip_sanity_check: true
 max_iterations: 100000
 save_every_n_iterations: 500
@@ -8,6 +8,8 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
+  EPOCH_LEN: 150000
+  CLIP_LENGTH: [5, 25]
   log_every: 10
   visualize_every: 50
   max_visu_img_num: 8
@@ -88,7 +90,7 @@ Tasks:
       "IMAGE_CROP_SIZE": [512, 960]
       "CROP_HeSai_ID4":
         "SCALE": [2.0, 2.0, 2.0, 2.0]
-        "CROP_START": [16, 16, 16, 16]
+        "CROP_START": [0, 0, 0, 0]
       "CAMERA_RAW_SIZE":
         [[1920, 1080],
          [1920, 1080],

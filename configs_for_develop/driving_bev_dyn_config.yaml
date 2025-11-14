@@ -8,6 +8,8 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
+  EPOCH_LEN: 150000
+  CLIP_LENGTH: [5, 25]
   log_every: 10
   visualize_every: 200
   max_visu_img_num: 10
@@ -57,6 +59,7 @@ Tasks:
     # batch_size: 12
     # num_worker_limit: 2
     use_concat_dataset: true
+    SWITCH_SUBTASK: DRIVING_BEV_DYN
     load: all
     # freeze: all
     amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
