@@ -15,7 +15,8 @@ from gpal_lightning.data.dataloader_helpers.gpal_collate import gpal_collate
 from gpal_lightning.neural_network.global_config import GlobalConfig
 from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from tools_scripts.data_format_cvt import ShowDataStruct
-from gpal_nn.models.transformers.od_view_transform import (GetProjectGridByEgo2Imgs, gridcloud3d)
+from gpal_nn.models.transformers.od_view_transform import (GetProjectGridByEgo2Imgs, gridcloud3d, 
+                                                           GetProjectGridByEgo2ImgsFisheye)
 from gpal_lightning.utils.deploy_utils import bgr_to_nv12_split, rgb_to_nv12_split, DistGridMap
 from horizon_tc_ui import HBRuntime
 
@@ -38,6 +39,8 @@ class GpNetDeploy(GpNet):
 
         self.model_file = global_config.onnx_path
         self.calib_data_cnt = 0
+        
+        # od
         self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
         
         self.dyn_od_stream_feature_bank = None
@@ -46,7 +49,7 @@ class GpNetDeploy(GpNet):
         for task in self.tasks:
             if "DRIVING_BEV_DYN" == task:
                 self.xyz_camA = self.gen_xyz_camA()
-
+        self.subtask_name = self.global_config.Tasks['DRIVING_BEV_DYN'].get("SWITCH_SUBTASK", "DRIVING_BEV_DYN")
 
     def gen_xyz_camA(self):
         transformer_config = self.global_config.Transformer["transformer_config"]
@@ -136,8 +139,160 @@ class GpNetDeploy(GpNet):
         #     prev_feat.dtype), align_corners=False)
         return grid
 
+    
+    def forward_one_DRIVING_BEV_DYN_fisheye(self, x, calib, metadata):
+        
+        
+        def DistGridMapFisheye(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True):
+            if norm:
+                ws = np.linspace(-1.0, 1.0, src_w,
+                                endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
+                hs = np.linspace(-1.0, 1.0, src_h,
+                                endpoint=True)[:, np.newaxis, np.newaxis].repeat(src_w, 1)
+            else:
+                ws = np.linspace(0.0, src_w-1.0, src_w,
+                                endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
+                hs = np.linspace(0.0, src_h-1.0, src_h,
+                                endpoint=True)[:, np.newaxis, np.newaxis].repeat(src_w, 1)
+            # cv2.imwrite("ws.jpg", (ws * 127+128).astype(np.uint8))
+            # cv2.imwrite("hs.jpg", (hs * 127+128).astype(np.uint8))
+            src_map = np.concatenate([ws, hs], axis=-1)
+            # target_map = cv2.undistort(
+            #     src=src_map, cameraMatrix=intrins, distCoeffs=dist, newCameraMatrix=intrins)
+            target_map = src_map
+            target_map = cv2.resize(target_map, [tgt_w, tgt_h])
+            target_map = target_map[top_crop_bgn:top_crop_len+top_crop_bgn, :]
+            return target_map
+            
+            
+        
+        batch_ret = {
+            'fish_head_conv': [],
+            'fish_hm_center': [],
+            'fish_prev_feats_output': [],
+               
+        }
+        save_path = f'calib'
+        batch_size = B = len(metadata)
 
+        if (self.dyn_od_stream_feature_bank == None):
+            self.dyn_od_stream_feature_bank = torch.zeros(B, 128, 96, 120).cuda()
+
+        # 矩阵 and torch, 再分发到batch
+        seq_flags, dts = self.SeqCheck(self.dyn_od_stream_metas_bank, metadata)
+        rts = self.GetCur2Prev(metadata, dts)
+        feats_shifted_grid = self.gen_shift_feature_grid(
+            self.xyz_camA.repeat(B, 1, 1, 1).to(self.dyn_od_stream_feature_bank.device).clone(), 
+            rts.to(self.dyn_od_stream_feature_bank.device), 
+            self.dyn_od_stream_feature_bank.clone(), 
+            self.voxel_size[0], 
+            self.voxel_size[1]
+        )
+        
+        ONLINE_HW = (1536, 1920)
+        OFFLINE_HW = (1080, 1920)
+        
+        image_crop_config = copy.deepcopy(self.image_crop_config)
+        image_crop_config['CROP_HeSai_ID4']['CROP_START'] = 16
+        
+        for i in tqdm(range(batch_size)):
+
+            img_slice = {k: x[k][i].unsqueeze(0).float().detach().cpu().numpy() for k in x}
+            H_gap = ONLINE_HW[0] - OFFLINE_HW[0]
+            img_slice = {k: np.concatenate([img_slice[k], np.zeros_like(img_slice[k])[:, :H_gap, ...]], axis=1) for k in img_slice}
+            
+            images_grid = np.stack([
+                DistGridMapFisheye(
+                # src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True
+                img_slice[k].shape[2],
+                img_slice[k].shape[1],
+                None,
+                None,
+                int(ONLINE_HW[1]/2),
+                int(ONLINE_HW[0]/2),
+                int(image_crop_config["IMAGE_CROP_H_LEN"]),
+                int(image_crop_config['CROP_HeSai_ID4']['CROP_START']),
+            ) for _, k in enumerate(img_slice)], axis=0)
+            
+            #H, W, div, Z, Y, X,
+            #(64, 120, 8, 4, 96, 120)
+
+            extrinsic_matrix = calib['extrinsic'][i]
+            distortion_coeffs= calib['cam_dist'][i]
+            intrinsic_matrix = calib['intrinsic'][i]
+            H, W, div, Z, Y, X = 64, 120, 8, 4, 96, 120
+            xyz_camAX = self.model[self._transformers["DRIVING_BEV_DYN"]].xyz_camA.clone()
+            
+            # breakpoint()
+            vt_grid, vt_grid_valid = GetProjectGridByEgo2ImgsFisheye(
+                extrinsic_matrix,
+                distortion_coeffs,
+                intrinsic_matrix,
+                H, W, div, Z, Y, X,
+                xyz_camAX.to(extrinsic_matrix.device).clone(),
+                image_crop_config=image_crop_config,
+                )
+            vt_grid = torch.clip(vt_grid, -1.1, 1.1)
+
+            inputs_dict = {}
+            if "quantized_model.bc" in self.model_file:
+                # 添加 bgr 2 nv12 转换
+                print("nv12 input ...")
+                img_slice_nv12 = {}
+                for img_name, img_data in img_slice.items():
+                    y_data, uv_data = bgr_to_nv12_split(img_data)
+                    img_slice_nv12[f"{img_name}_y"] = y_data
+                    img_slice_nv12[f"{img_name}_uv"] = uv_data
+                inputs_dict.update(img_slice_nv12)
+            else:
+                inputs_dict.update(img_slice)
+            
+            bank_feats = self.dyn_od_stream_feature_bank[i].unsqueeze(0).float().detach().cpu().numpy()
+            prev_feats_grid = feats_shifted_grid[i].unsqueeze(0).float().detach().cpu().numpy()
+            
+            prev_feats = bank_feats * seq_flags[i].cpu().numpy()
+            
+            inputs_dict.update({
+                "fish_images_grid": images_grid.astype(np.float32),
+                "fish_vt_grid": vt_grid.float().detach().cpu().numpy(),
+                "fish_prev_feats": prev_feats,
+                "fish_prev_feats_grid": prev_feats_grid,  # 部署外挂计算
+                }
+            )
+
+            if self.global_config.calib_data_save_path != "None":
+                for k in inputs_dict:
+                    single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
+                    os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
+                    np.save(single_calib_data_save_path, inputs_dict[k])
+                self.calib_data_cnt+=1
+
+            self.session = HBRuntime(self.global_config.onnx_path)
+            outputs = self.session.run(self.output_names, inputs_dict)
+            for k, o in zip(batch_ret, outputs):
+                batch_ret[k].append(o)
+
+        for k in batch_ret:
+            batch_ret[k] = torch.from_numpy(np.concatenate(batch_ret[k], axis = 0)).cuda()
+        # breakpoint()
+        self.dyn_od_stream_feature_bank = batch_ret['fish_prev_feats_output'].clone()
+        self.dyn_od_stream_metas_bank = copy.deepcopy(metadata)
+        
+        # 去往topk
+        batch_ret = {
+            'head_conv': batch_ret['fish_head_conv'],
+            'hm_cen': batch_ret['fish_hm_center'],
+            'prev_feats_output': batch_ret['fish_prev_feats_output'],
+        }
+        
+        return [batch_ret]
+        
     def forward_one_DRIVING_BEV_DYN(self, x, calib, metadata):
+        
+        if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
+            data_dict = self.forward_one_DRIVING_BEV_DYN_fisheye(x, calib, metadata)
+            return data_dict
+        
         batch_ret = {
             'head_conv': [],
             'hm_cen': [],
