@@ -43,7 +43,7 @@ def _neg_loss(pred, gt, track, alpha=2, beta=4):
         loss = - neg_loss
     else:
         B, C, H, W = pred.shape
-        loss = - (pos_loss + neg_loss) / num_pos /  (H * W)
+        loss = - (pos_loss + neg_loss) / num_pos / (B * C) #/  (H * W)
     return loss
 
 
