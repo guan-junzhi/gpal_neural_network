@@ -97,7 +97,7 @@ Tasks:
           fixed_ptsnum_per_pred_line: 20
           fixed_ptsnum_per_gt_line: 20
           num_cls: 6
-          decoder_num_layers: 6
+          decoder_num_layers: 3
           decoder_num_heads: 8
 
     Evaluator: {}
