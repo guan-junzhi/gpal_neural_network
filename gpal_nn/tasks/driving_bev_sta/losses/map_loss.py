@@ -71,6 +71,18 @@ class BaseMapLossCost(nn.Module):
             alpha=0.25,
             loss_weight=cls_loss_weight
         )
+        self.polygon_class_loss = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight
+        )
+        self.arrow_class_loss = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight
+        )
         self.shape_type_loss2 = FocalLoss(
             use_sigmoid=True,
             gamma=2.0,
@@ -113,6 +125,20 @@ class BaseMapLossCost(nn.Module):
             loss_weight=cls_loss_weight,
             reduction="none"
         )
+        self.polygon_class_loss2 = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight,
+            reduction="none"
+        )
+        self.arrow_class_loss2 = FocalLoss(
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
+            loss_weight=cls_loss_weight,
+            reduction="none"
+        )
 
         self.pc_range = pc_range
 
@@ -131,9 +157,10 @@ class BaseMapLossCost(nn.Module):
                 start_vec_idx = end_vec_idx
 
     def loss_single_group(self, score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, centerline_direction_pred, \
-                          keypoint_cls_pred, keypoint_reg_pred, \
+                          keypoint_cls_pred, keypoint_reg_pred, polygon_class_pred, arrow_class_pred, \
                           cls_gt, bbox_gt, points_gt, lane_marking_types_gt, lane_marking_colors_gt, shape_types_gt, centerline_type_gt, centerline_direction_gt, \
-                           keypoint_cls_gt, keypoint_reg_gt, valid_masks, valid_lens, center_line_flags, is_centerline):
+                           keypoint_cls_gt, keypoint_reg_gt, polygon_class_gt, arrow_class_gt, \
+                           valid_masks, valid_lens, center_line_flags, is_centerline):
         loss_list = []
         avg_factor = []
         pred_mask_all = []
@@ -145,7 +172,8 @@ class BaseMapLossCost(nn.Module):
                 if (center_line_flags is None) or (center_line_flags[b]):
                     loss_list.append(self.no_gt_loss(score_pred[b], bbox_pred[b], points_pred[b], \
                                                      lane_marking_type_pred[b], lane_marking_color_pred[b], shape_type_pred[b], \
-                                                     centerline_type_pred[b], centerline_direction_pred[b], keypoint_cls_pred[b], keypoint_reg_pred[b]))
+                                                     centerline_type_pred[b], centerline_direction_pred[b], keypoint_cls_pred[b], keypoint_reg_pred[b], \
+                                                     polygon_class_pred[b], arrow_class_pred[b]))
                 
                 pred_mask_all.append(torch.zeros_like(score_pred[0,:,0]))
                 avg_factor.append(torch.zeros_like(score_pred[0, :, 0]))
@@ -190,6 +218,8 @@ class BaseMapLossCost(nn.Module):
         _centerline_direction_pred = centerline_direction_pred.flatten(0,1)[pred_mask_all]
         _keypoint_cls_pred = keypoint_cls_pred.flatten(0,1)[pred_mask_all]
         _keypoint_reg_pred = keypoint_reg_pred.flatten(0,1)[pred_mask_all]
+        _polygon_class_pred = polygon_class_pred.flatten(0,1)[pred_mask_all]
+        _arrow_class_pred = arrow_class_pred.flatten(0,1)[pred_mask_all]
         _bbox_gt = bbox_gt.flatten(0,1)[gt_index_all]
         _points_gt = points_gt.flatten(0, 1)[gt_index_all, gt_order_idx_all]
         _lane_marking_type_gt = lane_marking_types_gt.flatten(0,1)[gt_index_all]
@@ -197,17 +227,19 @@ class BaseMapLossCost(nn.Module):
         _shape_type_gt = shape_types_gt.flatten(0, 1)[gt_index_all]
         _centerline_type_gt = centerline_type_gt.flatten(0, 1)[gt_index_all]
         # _centerline_direction_gt = centerline_direction_gt.flatten(0, 1)[gt_index_all]
-        _centerline_direction_gt = gt_order_idx_all
+        _centerline_direction_gt = torch.clamp(gt_order_idx_all, 0, 1)
         _keypoint_cls_gt = keypoint_cls_gt.flatten(0, 1)[gt_index_all]
         _keypoint_reg_gt = keypoint_reg_gt.flatten(
-            0, 1)[gt_index_all, gt_order_idx_all]
-
+            0, 1)[gt_index_all, torch.clamp(gt_order_idx_all, 0, 1)]
+        _polygon_class_gt = polygon_class_gt.flatten(0,1)[gt_index_all]
+        _arrow_class_gt = arrow_class_gt.flatten(0,1)[gt_index_all]
         loss = self.loss_single(score_pred.flatten(0, 1), _bbox_pred, _points_pred, _lane_marking_type_pred, _lane_marking_color_pred, \
                                 _shape_type_pred, _centerline_type_pred, _centerline_direction_pred, 
-                                  _keypoint_cls_pred, _keypoint_reg_pred,
+                                  _keypoint_cls_pred, _keypoint_reg_pred, _polygon_class_pred, _arrow_class_pred,
                                 pred_to_gt_label_all, _bbox_gt, _points_gt, \
                                     _lane_marking_type_gt, _lane_marking_color_gt, _shape_type_gt, _centerline_type_gt, _centerline_direction_gt, \
-                                _keypoint_cls_gt, _keypoint_reg_gt, is_centerline)
+                                _keypoint_cls_gt, _keypoint_reg_gt, _polygon_class_gt, _arrow_class_gt,
+                                is_centerline)
 
 
         avg_factor = avg_factor.unsqueeze(-1)
@@ -224,10 +256,15 @@ class BaseMapLossCost(nn.Module):
             loss['loss_centerline_direction'] * avg_factor[pred_mask_all]).sum()
         loss['loss_keypoint_cls'] = (
             loss['loss_keypoint_cls'] * avg_factor[pred_mask_all]).sum()
+        loss['loss_polygon_class'] = (
+            loss['loss_polygon_class'] * avg_factor[pred_mask_all]).sum()
+        loss['loss_arrow_class'] = (
+            loss['loss_arrow_class'] * avg_factor[pred_mask_all]).sum()
         loss_list.append(loss)
         return loss_list
 
-    def no_gt_loss(self, score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, centerline_direction_pred, keypoint_cls_pred, keypoint_reg_pred):
+    def no_gt_loss(self, score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, 
+                   centerline_direction_pred, keypoint_cls_pred, keypoint_reg_pred, polygon_class_pred, arrow_class_pred):
         cls_gt = torch.zeros_like(score_pred)
         score_loss = self.cls_loss(score_pred, cls_gt, avg_factor=1)
         box_l1_loss = self.bbox_loss(bbox_pred, bbox_pred).sum() * self.l1_loss_weight
@@ -246,6 +283,8 @@ class BaseMapLossCost(nn.Module):
         centerline_direction_loss = self.centerline_direction_loss(centerline_direction_pred, centerline_direction_pred, weight=torch.zeros_like(centerline_direction_pred))
         keypoint_cls_loss = self.keypoint_cls_loss(keypoint_cls_pred, keypoint_cls_pred, weight=torch.zeros_like(keypoint_cls_pred))
         keypoint_reg_loss = self.keypoint_reg_loss(keypoint_reg_pred, keypoint_reg_pred).sum() * self.pts_l1_loss_weight
+        polygon_class_loss = self.polygon_class_loss(polygon_class_pred, polygon_class_pred, weight=torch.zeros_like(polygon_class_pred))
+        arrow_class_loss = self.arrow_class_loss(arrow_class_pred, arrow_class_pred, weight=torch.zeros_like(arrow_class_pred))
 
         return {
             "loss_score": score_loss,
@@ -260,9 +299,12 @@ class BaseMapLossCost(nn.Module):
             "loss_centerline_direction": centerline_direction_loss,
             "loss_keypoint_cls": keypoint_cls_loss,
             "loss_keypoint_reg": keypoint_reg_loss,
+            "loss_polygon_class": polygon_class_loss,
+            "loss_arrow_class": arrow_class_loss,
         }
     def forward(self, pred_items, gt_items):
-        score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, centerline_direction_pred, keypoint_cls_pred, keypoint_reg_pred = pred_items
+        score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, \
+        centerline_direction_pred, keypoint_cls_pred, keypoint_reg_pred, polygon_class_pred, arrow_class_pred = pred_items
 
         total_loss_dict = {
             "loss_score": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
@@ -277,6 +319,8 @@ class BaseMapLossCost(nn.Module):
             "loss_centerline_direction": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
             "loss_keypoint_cls": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
             "loss_keypoint_reg": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
+            "loss_polygon_class": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
+            "loss_arrow_class": torch.tensor(0, dtype=torch.float32, device=bbox_pred.device),
         }
 
         for group_idx, group in enumerate(self.output_group):
@@ -291,6 +335,8 @@ class BaseMapLossCost(nn.Module):
             centerline_directions_gt = gt_items[group_flag]["centerline_directions"]
             keypoint_cls_gt = gt_items[group_flag]["keyp_cls"]
             keypoint_reg_gt = gt_items[group_flag]["keyp_reg"]
+            polygon_class_gt = gt_items[group_flag]["polygon_classes"]
+            arrow_class_gt = gt_items[group_flag]["arrow_classes"]
             valid_mask = gt_items[group_flag]["valid_mask"]
             valid_len = gt_items[group_flag]["valid_len"]
             center_line_flags = gt_items[group_flag]["center_line_flag"]
@@ -308,21 +354,24 @@ class BaseMapLossCost(nn.Module):
             cur_centerline_direction_pred = centerline_direction_pred[:, start_vec_idx:end_vec_idx]
             cur_keypoint_cls_pred = keypoint_cls_pred[:, start_vec_idx:end_vec_idx]
             cur_keypoint_reg_pred = keypoint_reg_pred[:, start_vec_idx:end_vec_idx]
+            cur_polygon_class_pred = polygon_class_pred[:, start_vec_idx:end_vec_idx]
+            cur_arrow_class_pred = arrow_class_pred[:, start_vec_idx:end_vec_idx]
 
             center_line_flags = center_line_flags if main_class_type_map["centerline"] in group[0] else None
             loss_dict_list = self.loss_single_group(cur_score_pred, cur_bbox_pred, cur_points_pred, \
                                                     cur_lane_marking_type_pred, cur_lane_marking_color_pred, cur_shape_type_pred, cur_centerline_type_pred, cur_centerline_direction_pred, \
-                                               cur_keypoint_cls_pred, cur_keypoint_reg_pred, \
+                                               cur_keypoint_cls_pred, cur_keypoint_reg_pred, cur_polygon_class_pred, cur_arrow_class_pred, \
                                                cls_gt, bbox_gt, points_gt, \
                                                 lane_marking_types_gt, lane_marking_colors_gt, shape_types_gt, centerline_types_gt, centerline_directions_gt, \
-                                               keypoint_cls_gt, keypoint_reg_gt, valid_mask, valid_len, center_line_flags, is_centerline)
+                                               keypoint_cls_gt, keypoint_reg_gt, polygon_class_gt, arrow_class_gt, \
+                                               valid_mask, valid_len, center_line_flags, is_centerline)
             for loss_dict in loss_dict_list:
                 for key in loss_dict:
                     total_loss_dict[key] += loss_dict[key]
         return total_loss_dict
 
-    def loss_single(self, score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, centerline_direction_pred, keypoint_cls_pred, keypoint_reg_pred,
-                    cls_gt, bbox_gt, points_gt, lane_marking_type_gt, lane_marking_color_gt, shape_type_gt, centerline_type_gt, centerline_direction_gt, keypoint_cls_gt, keypoint_reg_gt, is_centerline):
+    def loss_single(self, score_pred, bbox_pred, points_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, centerline_direction_pred, keypoint_cls_pred, keypoint_reg_pred, polygon_class_pred, arrow_class_pred,
+                    cls_gt, bbox_gt, points_gt, lane_marking_type_gt, lane_marking_color_gt, shape_type_gt, centerline_type_gt, centerline_direction_gt, keypoint_cls_gt, keypoint_reg_gt, polygon_class_gt, arrow_class_gt, is_centerline):
         cls_weight = torch.ones_like(score_pred)
         cls_valid_mask = cls_gt >= 0
         cls_gt_valid = torch.where(cls_valid_mask, cls_gt, torch.zeros_like(cls_gt))
@@ -388,6 +437,18 @@ class BaseMapLossCost(nn.Module):
             keypoint_cls_loss = torch.zeros_like(keypoint_cls_pred)
             keypoint_reg_loss = torch.zeros_like(keypoint_reg_pred).sum()
 
+        polygon_class_weight = torch.ones_like(polygon_class_pred)
+        polygon_class_valid_mask = polygon_class_gt >= 0
+        polygon_class_gt_valid = torch.where(polygon_class_valid_mask, polygon_class_gt, torch.zeros_like(polygon_class_gt))
+        polygon_class_weight = polygon_class_weight * polygon_class_valid_mask[:, None]
+        polygon_class_loss = self.polygon_class_loss2(polygon_class_pred, polygon_class_gt_valid, weight=polygon_class_weight, avg_factor=1)
+
+        arrow_class_weight = torch.ones_like(arrow_class_pred)
+        arrow_class_valid_mask = arrow_class_gt >= 0
+        arrow_class_gt_valid = torch.where(arrow_class_valid_mask, arrow_class_gt, torch.zeros_like(arrow_class_gt))
+        arrow_class_weight = arrow_class_weight * arrow_class_valid_mask[:, None]
+        arrow_class_loss = self.arrow_class_loss2(arrow_class_pred, arrow_class_gt_valid, weight=arrow_class_weight, avg_factor=1)
+
         return {
             "loss_score": score_loss,
             "loss_box_l1": box_l1_loss,
@@ -401,4 +462,6 @@ class BaseMapLossCost(nn.Module):
             "loss_centerline_direction": centerline_direction_loss,
             "loss_keypoint_cls": keypoint_cls_loss,
             "loss_keypoint_reg": keypoint_reg_loss,
+            "loss_polygon_class": polygon_class_loss,
+            "loss_arrow_class": arrow_class_loss,
         }

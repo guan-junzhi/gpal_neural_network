@@ -290,6 +290,8 @@ class GpNetDeploy(GpNet):
                 'all_centerline_directions_preds',
                 'all_keypoint_classes_preds',
                 'all_keypoint_regs_preds',
+                'all_polygon_classes_preds',
+                'all_arrow_classes_preds',
             ]
         batch_ret ={}
         for k in out_keys:

@@ -70,12 +70,16 @@ class MapAssigner(nn.Module):
         self.pc_range = pc_range  # [x0, y0, z0, x1, y1, z1]
 
     @torch.no_grad()
-    def assign(self, bbox_pred, cls_pred, pts_pred, gt_bboxes, gt_label, gt_pts):
+    def assign(self, bbox_pred, cls_pred, pts_pred, gt_bboxes, gt_label, gt_pts_in):
         assert bbox_pred.shape[-1] == 4, f"bbox_pred shape is wrong {bbox_pred.shape}"
         assert pts_pred.shape[-1] == 2, f"pts_pred shape is wrong {pts_pred.shape}"
         assert bbox_pred.shape[0] == pts_pred.shape[0], \
             f"bbox query {bbox_pred.shape} is not equal pts query {pts_pred.shape}"
-
+        is_polyline = gt_pts_in[:,2:,:,:].sum() < 1e-3
+        if is_polyline:
+            gt_pts = gt_pts_in[:,:2,:,:]
+        else:
+            gt_pts = gt_pts_in
         num_gts, num_preds = gt_bboxes.shape[0], bbox_pred.shape[0]
         num_cls = cls_pred.shape[-1]
 

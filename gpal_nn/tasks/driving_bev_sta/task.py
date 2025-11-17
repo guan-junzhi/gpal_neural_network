@@ -57,6 +57,12 @@ class DRIVING_BEV_STATask(BaseTask):
                     if gts[idx]['centerlines']['is_split_merge'][i]:
                         # print(ShowDataStruct("gts keypoint", gts[idx]['centerlines']['keypoint']))
                         vis1.DrawKeypoint(gts[idx]['centerlines']['keypoint'][i], 5, [135, 138, 128])
+
+            for l in gts[idx]['polygons']['points']:
+                vis1.DrawPolyline(l, [255, 0, 0], 2)
+            for l in gts[idx]['arrows']['points']:
+                vis1.DrawPolyline(l, [255, 0, 0], 2)
+
             vis1.DrawPolyline(gts[idx]['navi_info']['points'], [255, 0, 0], 2)
             vis1.DrawPolyline(gts[idx]['guideline']['ego_path'][0], [235, 206, 135], 2)
         except Exception as e:
@@ -65,7 +71,7 @@ class DRIVING_BEV_STATask(BaseTask):
         vis_draw1 = vis1.Draw()
         pre_pts = preds['all_pts_preds']
         # print(ShowDataStruct("preds", preds))
-        color_list=[(0, 255, 0), (0, 0, 255), (0, 165, 255)]
+        color_list=[(0, 255, 0), (0, 0, 255), (0, 165, 255), (255, 0, 0), (255, 0, 0), (235, 206, 135)]
         pre_pts_denorm = torch.stack(
             [(1-pre_pts[..., 1]) * 120, ((1-pre_pts[..., 0])-0.5) * 32], dim=-1)
 
@@ -91,8 +97,6 @@ class DRIVING_BEV_STATask(BaseTask):
                     if cls_pred != 0:
                         if cls_pred == 2 and centerline_type == 1:
                             vis2.DrawPolyline(l.detach().cpu().numpy(), [158, 168, 3], 2) #应急车道：青色
-                        elif cls_pred == 3:
-                            vis2.DrawPolyline(l.detach().cpu().numpy(), [235, 206, 135], 2) #引导线：天蓝色
                         else:
                             vis2.DrawPolyline(l.detach().cpu().numpy(), color_list[cls_pred], 2)
                         if is_split_merge_pred.values > 0.5:

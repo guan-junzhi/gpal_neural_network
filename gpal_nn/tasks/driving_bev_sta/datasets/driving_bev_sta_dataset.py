@@ -558,6 +558,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 data_dict['polylines'] = {}
         if 'centerlines' in annot:
             self.process_centerline(annot['centerlines'], data_dict, bev_real2aug)
+
+        self.process_polygons_arrow(annot['polygons'], data_dict, bev_real2aug)
+
         if 'points' in data_dict['edges']:
             edges_visible_dict = {}
             edges_visible_mask = np.ones(len(data_dict['edges']['points']), dtype=bool)
@@ -807,14 +810,23 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['centerlines']['points'] = np.array(data_dict['centerlines']['points'])
 
     def process_polygons_arrow(self, polygons, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
-        data_dict['polygon_arrows'] = {}
-        polygons_points = []
+        data_dict['polygons'] = {}
+        data_dict['arrows'] = {}
 
-        polygon_mask = np.zeros(len(polygons['points']), dtype=bool)
         for idx, polygon in enumerate(polygons['points']):
             # TODO: move range filter to pipeline
+            if polygons['classes'][idx] != 'arrow' and polygon_type_map[polygons['classes'][idx]] < 0:
+                continue
+            first_point = polygon[0]
+            last_point = polygon[-1]
+            if not np.allclose(first_point, last_point, atol=1e-3):
+                polygon = np.vstack([polygon, first_point.reshape(1, -1)])
+
             polygon_homo = np.concatenate([polygon, np.ones((polygon.shape[0],1))], axis=-1)
             polygon = (bev_real2aug @ polygon_homo.T).T[:,:3]
+            polygon = _fix_pts_interpolate(polygon, int(LineString(polygon).length / 0.2))
+            if len(polygon) <= 1:
+                continue
             mask = polygon[..., 0] <= self.gt_range[0]
             mask *= polygon[..., 0] >= self.gt_range[3]
             mask *= polygon[..., 1] <= self.gt_range[1]
@@ -822,29 +834,36 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             filter_polygon = polygon[mask]
             if len(filter_polygon) < 3:
                 continue
+            pts = _fix_pts_interpolate(filter_polygon, self.pts_per_vector)
+            if 'points' in data_dict['edges']:
+                num_cross_edge = 0
+                edges_points = data_dict['edges']['points']
+                for polygon_pt in pts:
+                    ego_ls = LineString(np.stack([polygon_pt[:2], np.array([0,0])], axis=0))
+                    for edge in edges_points:
+                        edge_ls = LineString(edge[:,:2])
+                        if ego_ls.intersects(edge_ls):
+                            num_cross_edge += 1
+                            break
+                if num_cross_edge > self.pts_per_vector - 4:
+                    continue
+            if polygons['classes'][idx] == 'arrow':
+                if 'points' not in data_dict['arrows']:
+                    data_dict['arrows']['points'] = []
+                    data_dict['arrows']['classes'] = []
+                data_dict['arrows']['points'].append(pts)
+                data_dict['arrows']['classes'].append(arrow_type_map[polygons['arrow_type'][idx]])
+            else:
+                if 'points' not in data_dict['polygons']:
+                    data_dict['polygons']['points'] = []
+                    data_dict['polygons']['classes'] = []
+                data_dict['polygons']['points'].append(pts)
+                data_dict['polygons']['classes'].append(polygon_type_map[polygons['classes'][idx]])
 
-            polygon_mask[idx] = True
-            polygons_points.append(filter_polygon)
-
-        # process labels
-        if len(polygons_points) > 0:
-            data_dict['polygon_arrows']['points'] = polygons_points
-            self.get_polygon_arrow_attributes(polygons, data_dict, polygon_mask)
-
-    def get_polygon_arrow_attributes(self, polygons, data_dict, masks):
-        polygon_classes = []
-        arrow_types = []
-
-        assert len(polygons['points']) == len(masks) == len(polygons['classes']) == len(polygons['arrow_type'])
-
-        for mask, name, arrow_type in zip(masks, polygons['classes'], polygons['arrow_type']):
-            if mask == False:
-                continue
-            polygon_classes.append(polygon_type_map[name])
-            arrow_types.append(arrow_type_map[arrow_type])
-
-        data_dict['polygon_arrows']['classes'] = polygon_classes
-        data_dict['polygon_arrows']['arrow_type'] = arrow_types
+        if 'points' in data_dict['arrows']:
+            data_dict['arrows']['points'] = np.array(data_dict['arrows']['points'])
+        if 'points' in data_dict['polygons']:
+            data_dict['polygons']['points'] = np.array(data_dict['polygons']['points'])
 
     def ClearFastBufCnt(self):
         self.fast_buf_try_cnt = 0

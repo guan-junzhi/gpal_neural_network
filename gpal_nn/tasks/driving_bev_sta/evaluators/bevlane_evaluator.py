@@ -122,6 +122,8 @@ class Bevlane_Evaluator(object):
                         "shape_type_acc": results[j]["shape_type_acc"],
                         "centerline_type_acc": results[j]["centerline_type_acc"],
                         "centerline_direction_acc": results[j]["centerline_direction_acc"],
+                        "polygon_acc": results[j]["polygon_acc"],
+                        "arrow_acc": results[j]["arrow_acc"],
                     }
 
                     row_data = [
@@ -133,6 +135,8 @@ class Bevlane_Evaluator(object):
                         f'{results[j]["shape_type_acc"]:.3f}',
                         f'{results[j]["centerline_type_acc"]:.3f}',
                         f'{results[j]["centerline_direction_acc"]:.3f}',
+                        f'{results[j]["polygon_acc"]:.3f}',
+                        f'{results[j]["arrow_acc"]:.3f}',
                     ]
                     index.append(rois[j])
                     table_data.append(row_data)

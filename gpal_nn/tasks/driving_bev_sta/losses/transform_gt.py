@@ -61,3 +61,35 @@ def shift_polygen_points(pts, num_pts_per_vec=20):
         shift_pts = torch.roll(pts, i, dims=1)
         shift_points.append(shift_pts)
     return torch.stack(shift_points).permute(1, 0, 2, 3)
+
+def permute_line(pts):
+    num_pts_per_vec = pts.shape[1]
+    assert pts.shape[1] == num_pts_per_vec
+    assert pts.shape[2] == 2
+
+    is_polygon = (torch.abs(pts[:,0,:] - pts[:,-1,:]) < 1e-3).all(-1)
+
+    permute_lines_array = pts.new_zeros((pts.shape[0], 2 * (num_pts_per_vec - 1), num_pts_per_vec, 2))
+
+    polyline_pts = pts[~is_polygon]
+    polygon_pts = pts[is_polygon]
+
+    shift_points = []
+    shift_points.append(polyline_pts)
+    shift_points.append(torch.flip(polyline_pts, [1]))
+    shift_points = torch.stack(shift_points).permute(1, 0, 2, 3)
+    permute_lines_array[~is_polygon, :2, :, :] = shift_points
+
+    pts_to_permute = polygon_pts[:, :-1, :] # throw away replicate start end pts
+    shift_points = []
+    for i in range(num_pts_per_vec - 1):
+        shift_pts = torch.roll(pts_to_permute, i, dims=1)
+        shift_points.append(shift_pts)
+        flip_pts_to_permute = torch.flip(pts_to_permute, dims=[1])
+        shift_points.append(flip_pts_to_permute)
+    shift_points = torch.stack(shift_points).permute(1, 0, 2, 3)
+
+    shift_points = torch.cat([shift_points, shift_points[:,:,0:1,:]], dim=2)
+    permute_lines_array[is_polygon, :, :, :] = shift_points  
+    
+    return permute_lines_array

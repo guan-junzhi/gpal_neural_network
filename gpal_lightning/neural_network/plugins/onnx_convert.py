@@ -128,10 +128,12 @@ class WrappedGpNet(GpNet):
             lane_marking_types_preds, lane_marking_colors_preds = outputs['all_lane_marking_types_preds'].detach(), outputs['all_lane_marking_colors_preds'].detach()
             shape_types, centerline_types = outputs['all_shape_types_preds'].detach(), outputs['all_centerline_types_preds'].detach()
             centerline_directions, keypoint_classes, keypoint_regs = outputs['all_centerline_directions_preds'].detach(), outputs['all_keypoint_classes_preds'].detach(), outputs['all_keypoint_regs_preds'].detach()
+            polygon_classes, arrow_classes = outputs['all_polygon_classes_preds'].detach(), outputs['all_arrow_classes_preds'].detach()
 
         return (outputs_classes[-1], intermediate_reference_points[-1],
                 lane_marking_types_preds[-1], lane_marking_colors_preds[-1],
-                shape_types[-1], centerline_types[-1], centerline_directions[-1], keypoint_classes[-1], keypoint_regs[-1])
+                shape_types[-1], centerline_types[-1], centerline_directions[-1], 
+                keypoint_classes[-1], keypoint_regs[-1], polygon_classes[-1], arrow_classes[-1])
         
 
     def forward_park(self, input):
@@ -320,7 +322,8 @@ class PytorchToOnnx:
 
             if task.name == "DRIVING_BEV_STA":
                 input_names = ["img_30", "img_120", "images_grid", "reference_points_rebatch", "queries_rebatch_grid", "restore_bev_grid", "bev_pillar_counts", "navi_info"]
-                output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "centerline_directions_preds", "keypoint_classes_preds", "keypoint_regs_preds"]
+                output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "centerline_directions_preds", 
+                                "keypoint_classes_preds", "keypoint_regs_preds", "polygon_classes_preds", "arrow_classes_preds"]
                 do_constant_folding = False
             with torch.no_grad():
                 torch.onnx.export(

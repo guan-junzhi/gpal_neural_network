@@ -129,7 +129,8 @@ def get_cls_results_roi(gen_results,
     """
     # if len(gen_results) == 0 or
 
-    cls_gens, cls_scores, lane_marking_types, lane_marking_colors, shape_types, centerline_types, centerline_directions = [], [], [], [], [], [], []
+    cls_gens, cls_scores, lane_marking_types, lane_marking_colors, shape_types, \
+    centerline_types, centerline_directions, polygon_classes, arrow_classes = [], [], [], [], [], [], [], []
     # import pdb;pdb.set_trace()
     # if len(rois) > 1:
     #     num_sample = num_sample * len(rois)
@@ -172,6 +173,8 @@ def get_cls_results_roi(gen_results,
             shape_types.append(res['shape_type'])
             centerline_types.append(res['centerline_type'])
             centerline_directions.append(res['centerline_direction'])
+            polygon_classes.append(res['polygon_class'])
+            arrow_classes.append(res['arrow_class'])
 
     # 处理cls_gens 生成roi车道线 1->5
 
@@ -182,6 +185,8 @@ def get_cls_results_roi(gen_results,
     shape_types_gt = []
     centerline_types_gt = []
     centerline_directions_gt = []
+    polygon_classes_gt = []
+    arrow_classes_gt = []
     for ann in annotations['vectors']:
         if ann['type'] == class_id:
             line = ann['pts']
@@ -208,6 +213,8 @@ def get_cls_results_roi(gen_results,
             shape_types_gt.append(ann['shape_type'])
             centerline_types_gt.append(ann['centerline_type'])
             centerline_directions_gt.append(ann['centerline_direction'])
+            polygon_classes_gt.append(ann['polygon_class'])
+            arrow_classes_gt.append(ann['arrow_class'])
 
     roi_gen_dict = {}
     roi_gt_dict = {}
@@ -221,6 +228,8 @@ def get_cls_results_roi(gen_results,
         shape_types_ = []
         centerline_types_ = []
         centerline_directions_ = []
+        polygon_classes_ = []
+        arrow_classes_ = []
 
         for i, cg in enumerate(cls_gens_):
             if isinstance(cg, np.ndarray):
@@ -230,6 +239,8 @@ def get_cls_results_roi(gen_results,
                 shape_types_.append(shape_types[i])
                 centerline_types_.append(centerline_types[i])
                 centerline_directions_.append(centerline_directions[i])
+                polygon_classes_.append(polygon_classes[i])
+                arrow_classes_.append(arrow_classes[i])
         cls_gens_ = [i for i in cls_gens_ if isinstance(i, np.ndarray)]
         num_res = len(cls_gens_)
         if num_res > 0:
@@ -240,15 +251,19 @@ def get_cls_results_roi(gen_results,
             cls_shape_types_ = np.array(shape_types_)[:, np.newaxis]
             cls_centerline_types_ = np.array(centerline_types_)[:, np.newaxis]
             cls_centerline_directions_ = np.array(centerline_directions_)[:, np.newaxis]
+            cls_polygon_classes_ = np.array(polygon_classes_)[:, np.newaxis]
+            cls_arrow_classes_ = np.array(arrow_classes_)[:, np.newaxis]
             # print(roi,cls_gens_.shape,cls_scores_.shape)
             # import pdb;pdb.set_trace()
-            cls_gens_ = np.concatenate([cls_gens_, cls_scores_, cls_lane_marking_types_, cls_lane_marking_colors_, cls_shape_types_, cls_centerline_types_, cls_centerline_directions_], axis=-1)
+            cls_gens_ = np.concatenate([cls_gens_, cls_scores_, cls_lane_marking_types_, 
+                cls_lane_marking_colors_, cls_shape_types_, cls_centerline_types_, 
+                cls_centerline_directions_, cls_polygon_classes_, cls_arrow_classes_], axis=-1)
 
         else:
             if not eval_use_same_gt_sample_num_flag:
-                cls_gens_ = np.zeros((0, num_pred_pts_per_instance * code_size +6))
+                cls_gens_ = np.zeros((0, num_pred_pts_per_instance * code_size +8))
             else:
-                cls_gens_ = np.zeros((0, num_sample * code_size + 6))
+                cls_gens_ = np.zeros((0, num_sample * code_size + 8))
             # print(f'for class {i}, cls_gens has shape {cls_gens.shape}')
         roi_gen_dict[roi] = cls_gens_
 
@@ -260,6 +275,8 @@ def get_cls_results_roi(gen_results,
         shape_types_gt_ = [shape_types_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
         centerline_types_gt_ = [centerline_types_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
         centerline_directions_gt_ = [centerline_directions_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
+        polygon_classes_gt_ = [polygon_classes_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
+        arrow_classes_gt_ = [arrow_classes_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
         num_gts = len(cls_gts_)
         if num_gts > 0:
             # print([gg for gg in cls_gts_ if not isinstance(gg,np.ndarray)])
@@ -270,10 +287,13 @@ def get_cls_results_roi(gen_results,
             shape_types_gt_ = np.array(shape_types_gt_)[:, np.newaxis]
             centerline_types_gt_ = np.array(centerline_types_gt_)[:, np.newaxis]
             centerline_directions_gt_ = np.array(centerline_directions_gt_)[:, np.newaxis]
-            cls_gts_ = np.concatenate([cls_gts_, lane_marking_types_gt_, lane_marking_colors_gt_, shape_types_gt_, centerline_types_gt_, centerline_directions_gt_], axis=-1)
+            polygon_classes_gt_ = np.array(polygon_classes_gt_)[:, np.newaxis]
+            arrow_classes_gt_ = np.array(arrow_classes_gt_)[:, np.newaxis]
+            cls_gts_ = np.concatenate([cls_gts_, lane_marking_types_gt_, lane_marking_colors_gt_, shape_types_gt_, 
+            centerline_types_gt_, centerline_directions_gt_, polygon_classes_gt_, arrow_classes_gt_], axis=-1)
 
         else:
-            cls_gts_ = np.zeros((0, num_sample * code_size + 5))
+            cls_gts_ = np.zeros((0, num_sample * code_size + 7))
         roi_gt_dict[roi] = cls_gts_
     return roi_gen_dict, roi_gt_dict
 
@@ -477,7 +497,8 @@ def eval_map(gen_results,
 
             # import pdb;pdb.set_trace()
             tp, fp, dist_error_tuple, lane_marking_type_acc, lane_marking_color_acc, \
-                shape_type_acc, pred_shapes_list, true_shapes_list, centerline_type_acc, centerline_direction_acc = tuple(zip(*tpfp))
+                shape_type_acc, pred_shapes_list, true_shapes_list, centerline_type_acc, centerline_direction_acc,\
+                polygon_acc, arrow_acc = tuple(zip(*tpfp))
 
             if clsname == 'lane_marking':
                 all_pred_ids = []
@@ -514,6 +535,8 @@ def eval_map(gen_results,
             centerline_direction_acc_list = []
             lane_marking_type_acc_list = []
             lane_marking_color_acc_list = []
+            polygon_acc_list = []
+            arrow_acc_list = []
             for dist in dist_error_tuple:
                 dist_error_list.extend(dist)
             for acc in lane_marking_type_acc:
@@ -526,6 +549,10 @@ def eval_map(gen_results,
                 centerline_type_acc_list.extend(acc)
             for acc in centerline_direction_acc:
                 centerline_direction_acc_list.extend(acc)
+            for acc in polygon_acc:
+                polygon_acc_list.extend(acc)
+            for acc in arrow_acc:
+                arrow_acc_list.extend(acc)
 
             mean_dist_error = np.nanmean(dist_error_list)
             dist_error_95 = np.nanpercentile(dist_error_list, 95)
@@ -534,6 +561,8 @@ def eval_map(gen_results,
             centerline_direction_acc = np.sum(centerline_direction_acc_list) / len(centerline_direction_acc_list)
             lane_marking_type_acc = np.sum(lane_marking_type_acc_list) / len(lane_marking_type_acc_list)
             lane_marking_color_acc = np.sum(lane_marking_color_acc_list) / len(lane_marking_color_acc_list)
+            polygon_acc = np.sum(polygon_acc_list) / len(polygon_acc_list)
+            arrow_acc = np.sum(arrow_acc_list) / len(arrow_acc_list)
 
             # map_results = map(
             #     tpfp_fn,
@@ -596,7 +625,8 @@ def eval_map(gen_results,
                 'centerline_direction_acc': centerline_direction_acc,
                 'lane_marking_type_acc': lane_marking_type_acc,
                 'lane_marking_color_acc': lane_marking_color_acc,
-
+                'polygon_acc': polygon_acc,
+                'arrow_acc': arrow_acc,
             })
             # print('cls:{} done in {:2f}s!!'.format(clsname,float(timer.since_last_check())))
 
