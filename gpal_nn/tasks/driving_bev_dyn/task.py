@@ -1,5 +1,4 @@
 import os
-from matplotlib.style import available
 import numpy as np
 import torch
 import random
@@ -285,6 +284,7 @@ class DRIVING_BEV_DYNTask(BaseTask):
                     calib_dist = copy.deepcopy(calib["cam_dist"][idx][cam_idx]).detach().cpu().numpy()
                     img_crop_dict = copy.deepcopy(self.image_crop_config)
                     img = (imgs[cam_name][idx].detach().cpu().numpy().transpose(1, 2, 0) * 254).astype(np.uint8)
+                    img = np.ascontiguousarray(img)
                     
                     scale = img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx]
                     crop_start = img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx]
