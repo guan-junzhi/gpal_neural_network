@@ -41,6 +41,10 @@ class ClipSampler(Sampler):
                 clip_key = clip_key_list[clip_idx]
                 frames_in_clip = datalist_by_clip[clip_key]
                 # frame_start_idx = randint(0, len(frames_in_clip)-length_range[0])
+                
+                if len(frames_in_clip) < length_range[0]:
+                    continue
+                
                 frame_start_idx = [
                     randint(0, len(frames_in_clip)-length_range[0]) for _ in range(self.rank+1)][-1]
                 

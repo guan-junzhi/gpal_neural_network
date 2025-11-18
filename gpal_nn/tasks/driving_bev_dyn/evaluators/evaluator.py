@@ -192,8 +192,10 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     
     logger.info(f'det_annos: len: {len(det_annos)}')
     key_det_annos = [det_annos[i] for i in range(len(det_annos)) if metas[i]['is_key']]
+    metas = [metas[i] for i in range(len(metas)) if metas[i]['is_key']]
     det_annos = key_det_annos
     logger.info(f'key_det_annos: len:{len(key_det_annos)}')
+    logger.info(f'metas: len:{len(metas)}')
     # det_annox = evaluator.load_det_annos(
     #     det_annos)  # 文件路径 or list[dict, dict, ...]
     

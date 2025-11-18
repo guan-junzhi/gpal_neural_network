@@ -8,12 +8,12 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  EPOCH_LEN: 20000
-  CLIP_LENGTH: [5, 25]
+  EPOCH_LEN: 80000
+  CLIP_LENGTH: [64, 128]
   log_every: 10
   visualize_every: 200
   max_visu_img_num: 6
-  optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
+  optimizer: {type: AdamW, lr: 1.0e-04, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
     after_scheduler: CosineAnnealingLR, T_max: 120000}
 
@@ -127,7 +127,7 @@ Tasks:
     POST_PROCESSING:
       od_range: [-19.2, -15.36, -1.0, 19.2, 15.36, 5.0]
       RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
-      SCORE_THRESH: 0.28
+      SCORE_THRESH: 0.23
       OUTPUT_RAW_SCORE: False
       EVAL_METRIC: "kitti"
       NMS_CONFIG: 
@@ -184,7 +184,9 @@ Tasks:
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLineData_Test/",
-          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320_excludeNoneFisheyeDir.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320_clips48_frames9408_key1872_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320_excludeNoneFisheyeDir.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames2808_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT

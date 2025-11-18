@@ -193,7 +193,7 @@ class GpNetDeploy(GpNet):
         OFFLINE_HW = (1080, 1920)
         
         image_crop_config = copy.deepcopy(self.image_crop_config)
-        image_crop_config['CROP_HeSai_ID4']['CROP_START'] = 0  # ATTENTION: 泛化车和实际车都需要crop_start为0，统一为0
+        image_crop_config['CROP_HeSai_ID4']['CROP_START'] = [0, 0, 0, 0]  # ATTENTION: 泛化车和实际车都需要crop_start为0，统一为0
         
         for i in tqdm(range(batch_size)):
 
@@ -211,8 +211,8 @@ class GpNetDeploy(GpNet):
                 int(ONLINE_HW[1]/2),
                 int(ONLINE_HW[0]/2),
                 int(image_crop_config["IMAGE_CROP_H_LEN"]),
-                int(image_crop_config['CROP_HeSai_ID4']['CROP_START']),
-            ) for _, k in enumerate(img_slice)], axis=0)
+                int(image_crop_config['CROP_HeSai_ID4']['CROP_START'][img_i]),
+            ) for img_i, k in enumerate(img_slice)], axis=0)
             
             #H, W, div, Z, Y, X,
             #(64, 120, 8, 4, 96, 120)
