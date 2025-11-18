@@ -57,11 +57,12 @@ class DRIVING_BEV_STATask(BaseTask):
                     if gts[idx]['centerlines']['is_split_merge'][i]:
                         # print(ShowDataStruct("gts keypoint", gts[idx]['centerlines']['keypoint']))
                         vis1.DrawKeypoint(gts[idx]['centerlines']['keypoint'][i], 5, [135, 138, 128])
-
-            for l in gts[idx]['polygons']['points']:
-                vis1.DrawPolyline(l, [255, 0, 0], 2)
-            for l in gts[idx]['arrows']['points']:
-                vis1.DrawPolyline(l, [255, 0, 0], 2)
+            if 'points' in gts[idx]['polygons']:
+                for l in gts[idx]['polygons']['points']:
+                    vis1.DrawPolyline(l, [192, 192, 192], 2)
+            if 'points' in gts[idx]['arrows']:
+                for l in gts[idx]['arrows']['points']:
+                    vis1.DrawPolyline(l, [255, 255, 255], 2)
 
             vis1.DrawPolyline(gts[idx]['navi_info']['points'], [255, 0, 0], 2)
             vis1.DrawPolyline(gts[idx]['guideline']['ego_path'][0], [235, 206, 135], 2)
@@ -71,7 +72,7 @@ class DRIVING_BEV_STATask(BaseTask):
         vis_draw1 = vis1.Draw()
         pre_pts = preds['all_pts_preds']
         # print(ShowDataStruct("preds", preds))
-        color_list=[(0, 255, 0), (0, 0, 255), (0, 165, 255), (255, 0, 0), (255, 0, 0), (235, 206, 135)]
+        color_list=[(0, 255, 0), (0, 0, 255), (0, 165, 255), (192, 192, 192), (255, 255, 255), (235, 206, 135)]
         pre_pts_denorm = torch.stack(
             [(1-pre_pts[..., 1]) * 120, ((1-pre_pts[..., 0])-0.5) * 32], dim=-1)
 

@@ -824,7 +824,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
             polygon_homo = np.concatenate([polygon, np.ones((polygon.shape[0],1))], axis=-1)
             polygon = (bev_real2aug @ polygon_homo.T).T[:,:3]
-            polygon = _fix_pts_interpolate(polygon, int(LineString(polygon).length / 0.2))
+            polygon = _fix_pts_interpolate(polygon, max(int(LineString(polygon).length / 0.2), 20))
             if len(polygon) <= 1:
                 continue
             mask = polygon[..., 0] <= self.gt_range[0]
@@ -832,8 +832,12 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             mask *= polygon[..., 1] <= self.gt_range[1]
             mask *= polygon[..., 1] >= self.gt_range[4]
             filter_polygon = polygon[mask]
-            if len(filter_polygon) < 3:
+            if len(filter_polygon) < 4:
                 continue
+            first_point = filter_polygon[0]
+            last_point = filter_polygon[-1]
+            if not np.allclose(first_point, last_point, atol=1e-3):
+                filter_polygon = np.vstack([filter_polygon, first_point.reshape(1, -1)])
             pts = _fix_pts_interpolate(filter_polygon, self.pts_per_vector)
             if 'points' in data_dict['edges']:
                 num_cross_edge = 0
