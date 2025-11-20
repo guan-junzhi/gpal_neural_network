@@ -162,7 +162,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
             feats_shifted = F.grid_sample(self.feature_bank.clone(),
                                           feats_shifted_grid.to(self.feature_bank.dtype),
                                           align_corners=False)
-            prev_feats = feats_shifted.clone() * seq_flag
+            prev_feats = feats_shifted.clone() * seq_flag * 0.0
             
         # self.feature_bank = x.detach().clone()
         self.prev_metas = copy.deepcopy(metadata)
