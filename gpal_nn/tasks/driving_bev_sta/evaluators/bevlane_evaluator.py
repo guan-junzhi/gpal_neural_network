@@ -105,7 +105,8 @@ class Bevlane_Evaluator(object):
             if not isinstance(mean_ap, list):
                 mean_ap = [mean_ap]
 
-            header = ['gts', 'dets', 'Recall', 'Precision', 'AP', 'Dist', 'Dist@95', 'LaneTypeAcc', 'LaneColorAcc', 'ShapeTypeAcc', 'CenterlineTypeAcc', 'CenterlineDirectionAcc']
+            header = ['gts', 'dets', 'Recall', 'Precision', 'AP', 'Dist', 'Dist@95', 'LaneTypeAcc', 'LaneColorAcc', 
+                      'ShapeTypeAcc', 'CenterlineTypeAcc', 'CenterlineDirectionAcc', 'PolygonAcc', 'ArrowAcc']
             for i in range(num_scales):
                 table_data = []
                 index = []

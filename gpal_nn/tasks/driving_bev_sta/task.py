@@ -280,6 +280,10 @@ class DRIVING_BEV_STATask(BaseTask):
     def GetImgVis(self, data, metadata, calib, bev_real2aug, preds, gts, idx):
         front_30 = data['img_front_30'][idx]  # 形状变为 [3, 320, 768]
         front_120 = data['img_front_120'][idx]  # 形状变为 [3, 320, 768]
+        if front_30.shape[2] == 3:
+            front_30 = front_30.permute(2, 0, 1)
+        if front_120.shape[2] == 3:
+            front_120 = front_120.permute(2, 0, 1)
 
         # 在新维度上堆叠这两个张量，形成 [2, 3, 320, 768]
         images = torch.stack([front_30, front_120], dim=0).unsqueeze(0)

@@ -46,7 +46,7 @@ def decode_pred_with_score(cls_score_pred, bbox_pred=None, points_pred=None, lan
         keypoint_reg_pred = keypoint_reg_pred.squeeze()
         keypoint_reg_pred = keypoint_reg_pred[socre_mask]
     if polygon_class_pred is not None:
-        _, polygon_class_pred = polygon_class_pred.squeeze().max(-1)
+        _, polygon_class_pred = polygon_class_pred.max(-1)
         polygon_class_pred = polygon_class_pred[socre_mask]
     if arrow_class_pred is not None:
         _, arrow_class_pred = arrow_class_pred.squeeze().max(-1)

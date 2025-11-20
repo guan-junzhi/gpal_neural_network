@@ -16,11 +16,11 @@ class DRIVING_BEV_STAPostProcessing(BasePostProcess):
     def __init__(self, global_config, task_config):
         super().__init__(global_config, task_config)
         # self.pc_range = [0, -16, -10.0, 120, 16.0, 10.0]
-        self.pc_range = [0, 0, 0, 32, 120, 0]
-        self.num_vec = 50
+        self.pc_range = task_config.pc_range
+        self.num_vec = sum(value[1] for value in task_config.output_name_group.values())
         self.start_x = 120
         self.start_y = 16
-        self.num_decode_layer = 6
+        self.num_decode_layer = task_config.Head['head1']['layers_config']['decoder_num_layers']
         self.is_set_gt_z_as_zero = True
 
     def process_pred(self, vectors, metadata: dict) -> dict:

@@ -56,7 +56,8 @@ calibration_parameters:
   calibration_type: 'max'
   quant_config: {
     "model_config": {
-      "all_node_type": int16
+      "all_node_type": int16,
+      "model_output_type": int16,
     },
     "op_config": {
     },

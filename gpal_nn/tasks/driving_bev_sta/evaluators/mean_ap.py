@@ -130,7 +130,7 @@ def get_cls_results_roi(gen_results,
     # if len(gen_results) == 0 or
 
     cls_gens, cls_scores, lane_marking_types, lane_marking_colors, shape_types, \
-    centerline_types, centerline_directions, polygon_classes, arrow_classes = [], [], [], [], [], [], [], []
+    centerline_types, centerline_directions, polygon_classes, arrow_classes = [], [], [], [], [], [], [], [], []
     # import pdb;pdb.set_trace()
     # if len(rois) > 1:
     #     num_sample = num_sample * len(rois)
