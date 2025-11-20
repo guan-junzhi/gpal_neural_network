@@ -60,6 +60,7 @@ class ClipSampler(Sampler):
                     flatten_idxs[i + j * batch_size, 0] = clip_idx
                     flatten_idxs[i + j * batch_size, 1] = frame_start_idx + j
 
+        print('flatten_idxs have -1:', np.sum(flatten_idxs == -1))
         dataset = [datalist_by_clip[clip_key_list[ele[0]]][ele[1]]
                 for ele in flatten_idxs]
         # print(dataset)

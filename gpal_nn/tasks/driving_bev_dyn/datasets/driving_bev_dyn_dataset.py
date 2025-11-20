@@ -999,7 +999,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     if self.jitter and random.random() < 0.7:
                         for i in range(current_img.shape[0]):
                             current_img[i] = self.jitter(current_img[i]/255.0) * 255.0
-                            
+                    current_img = current_img.squeeze(0).permute(1, 2, 0).cpu().numpy()  # B C H W -> B H W C
                             
                 #     current_img = current_img.squeeze(0).permute(1, 2, 0).cpu().numpy()
                 if self.phase != const.PHASE_TRAINING:
