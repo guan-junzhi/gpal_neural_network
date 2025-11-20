@@ -20,8 +20,8 @@ def _search_prefix(dict_to_search, prefix):
     return dict_after_search
 
 def Simplify(dict_to_search):
-    while len(set([k.split('.')[0] for k in dict_to_search])) == 1:
-        dict_to_search = {'.'.join(k.split('.')[1:]): dict_to_search[k] for k in dict_to_search}
+    # while len(set([k.split('.')[0] for k in dict_to_search])) == 1:
+    #     dict_to_search = {'.'.join(k.split('.')[1:]): dict_to_search[k] for k in dict_to_search}
     return dict_to_search
 
 
