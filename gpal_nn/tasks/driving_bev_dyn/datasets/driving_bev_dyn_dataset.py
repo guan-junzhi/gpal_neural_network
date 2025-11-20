@@ -987,16 +987,20 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
                 input_dict[f'origin_images_input{view_idx}'] = current_img.astype(np.float32).copy()
 
-                # if self.phase == const.PHASE_TRAINING:
-                #     current_img = torch.from_numpy(current_img).unsqueeze(0).to("cpu").permute(0, 3, 1, 2).float()
-                #     current_img, trans_cv, rots_cv = self.img_aug_cuda(
-                #         img_tensor=current_img,
-                #         trans_cv=None,
-                #         rots_cv=None,
-                #         intrin=None,
-                #         device="cpu"
-                #     )
-
+                if self.phase == const.PHASE_TRAINING:
+                    current_img = torch.from_numpy(current_img).unsqueeze(0).to("cpu").permute(0, 3, 1, 2).float()
+                    # current_img, trans_cv, rots_cv = self.img_aug_cuda(
+                    #     img_tensor=current_img,
+                    #     trans_cv=None,
+                    #     rots_cv=None,
+                    #     intrin=None,
+                    #     device="cpu"
+                    # )
+                    if self.jitter and random.random() < 0.7:
+                        for i in range(current_img.shape[0]):
+                            current_img[i] = self.jitter(current_img[i]/255.0) * 255.0
+                            
+                            
                 #     current_img = current_img.squeeze(0).permute(1, 2, 0).cpu().numpy()
                 if self.phase != const.PHASE_TRAINING:
                     current_img = cv2.resize(current_img, self.image_resize[::-1])
