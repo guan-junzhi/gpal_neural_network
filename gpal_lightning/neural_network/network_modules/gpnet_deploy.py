@@ -287,6 +287,7 @@ class GpNetDeploy(GpNet):
                 'all_lane_marking_colors_preds',
                 'all_shape_types_preds',
                 'all_centerline_types_preds',
+                'all_centerline_directions_preds',
                 'all_keypoint_classes_preds',
                 'all_keypoint_regs_preds',
             ]
@@ -299,7 +300,7 @@ class GpNetDeploy(GpNet):
             # Intrinsics and distortions
             ks = calib['_Ks'][i].detach().cpu().numpy()
             dists = calib['_dists'][i].detach().cpu().numpy()
-            cut_start_h = self.global_config.Tasks[self.global_config.tasks[0]]['datasets']['validation'][0]['cut_start_h']
+            cut_start_h = self.global_config.Tasks['DRIVING_BEV_STA']['datasets']['validation'][0]['cut_start_h']
             ori_h, ori_w = int(metadata[i]['ori_shape'][0][0]), int(metadata[i]['ori_shape'][0][1])
             dst_h, dst_w = 540, 960
             # images_grid
@@ -384,6 +385,7 @@ class GpNetDeploy(GpNet):
                 'reference_points_rebatch': reference_points_rebatch.detach().cpu().numpy(),
                 'restore_bev_grid': restore_bev_grid.detach().cpu().numpy(),
                 'bev_pillar_counts': bev_pillar_counts.detach().cpu().numpy(),
+                'navi_info': calib['navi_info']['points'][i:i+1].detach().cpu().numpy(),
             })
 
             if getattr(self.global_config, 'calib_data_save_path', "None") != "None":

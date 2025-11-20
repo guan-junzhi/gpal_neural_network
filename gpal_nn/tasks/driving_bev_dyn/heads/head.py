@@ -175,7 +175,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
         batch_dict = {
             'head_conv': x_decode[:, 6:], 
             "hm_cen": x_decode[:, :6], 
-            "cur_feats": x.detach().clone()
+            "cur_feats": x_fuser.detach().clone()
         }
         
         return [batch_dict]

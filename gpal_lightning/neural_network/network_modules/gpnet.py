@@ -794,8 +794,11 @@ class GpNet(LightningModule):
 
             # print(self.model[curr_task])
             # exit(1)
-            output = self.model[curr_task](
-                output["img_bev_feat"], calib, metadata)
+            if curr_task in ["DRIVING_BEV_DYN"]:
+                output = self.model[curr_task](output["img_bev_feat"], calib, metadata)
+            else:
+                output = self.model[curr_task](output["img_bev_feat"], calib)
+            
             outputs.append(output)
 
             # print(ShowDataStruct("output", output))
