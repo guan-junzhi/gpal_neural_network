@@ -95,5 +95,5 @@ if [[ "$load_from" == "None" ]];
 then
 python3 train.py --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed $seed --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 else
-python3 train.py --load_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed $seed --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
+python3 train.py --resume_from $load_from --save $ENV_GPAL_NEURAL_NETWORK_WORKSPACE --seed $seed --config $config --gpus $ENV_GPAL_NEURAL_NETWORK_GPUS --tasks $tasks
 fi
