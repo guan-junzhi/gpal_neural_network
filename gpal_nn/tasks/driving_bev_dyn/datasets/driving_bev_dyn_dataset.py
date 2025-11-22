@@ -940,6 +940,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
             vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
             
+            if 'SKYWELL' in sequence_name:
+                curr_json_file = f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
+                vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
+            
             # seq,time_meas,time_pub,motion_info.vehicle_speed,motion_info.yaw_rate,motion_info.longitudinal_acceleration,motion_info.lateral_acceleration,motion_info.drive_mode,actuator_info.is_left_direction_light_on,actuator_info.is_right_direction_light_on,actuator_info.is_main_beam_on,actuator_info.is_dipped_beam_on,actuator_info.is_wiper_on,actuator_info.is_horn_on,actuator_info.is_left_direction_light_switch_on,actuator_info.is_right_direction_light_switch_on,actuator_info.front_left_door_status,actuator_info.front_right_door_status,actuator_info.rear_left_door_status,actuator_info.rear_right_door_status,actuator_info.rear_hatch_status,actuator_info.driver_safety_belt_status,actuator_info.is_brake_light_on,actuator_info.is_dangerous_warning_light_on,actuator_info.is_front_frog_light_on,actuator_info.is_rear_frog_light_on,actuator_info.is_reverse_direction_light_on,actuator_info.is_width_lamp_on,actuator_info.wiper_speed,actuator_info.is_washer_on,actuator_info.is_autodrive_active,axle_info[0].axis_id,axle_info[0].left_wheel_tire_pressure,axle_info[0].right_wheel_tire_pressure,axle_info[0].left_wheel_speed,axle_info[0].right_wheel_speed,axle_info[0].left_wheel_angle,axle_info[0].right_wheel_angle,axle_info[0].left_wheel_pulse,axle_info[0].right_wheel_pulse,axle_info[0].left_wheel_pulse_direction,axle_info[0].right_wheel_pulse_direction,axle_info[1].left_wheel_tire_pressure,axle_info[1].right_wheel_tire_pressure,axle_info[1].left_wheel_speed,axle_info[1].right_wheel_speed,axle_info[1].left_wheel_angle,axle_info[1].right_wheel_angle,axle_info[1].left_wheel_pulse,axle_info[1].right_wheel_pulse,axle_info[1].left_wheel_pulse_direction,axle_info[1].right_wheel_pulse_direction,powertrain_info.motor_speed,powertrain_info.motor_reference_torque,powertrain_info.motor_torque_change_rate,powertrain_info.battery_charge,powertrain_info.transmission_current_gear_level,powertrain_info.transmission_current_gear_position,powertrain_info.motor_torque_response,powertrain_info.throttle_percentage,powertrain_info.is_accelerator_pedal_override,powertrain_info.controlled_state_of_longitudinal_dynamic_system,powertrain_info.torque_request,powertrain_info.torque_feedback,powertrain_info.mcu_longitudinal_control_state_feedback,powertrain_info.mcu_driving_mode_feedback,steering_system_info.steering_wheel_angle,steering_system_info.steering_wheel_angle_speed,steering_system_info.steering_motor_torque,steering_system_info.steer_hands_on_status,steering_system_info.steer_angle_calibration_status,steering_system_info.received_steering_angle_request,steering_system_info.received_steering_torque_request,steering_system_info.eps_control_status,steering_system_info.eps_failure_reason,steering_system_info.steering_wheel_angle_control_failure_reason,steering_system_info.torque_control_failure_reason,steering_system_info.steering_wheel_angle_control_state,steering_system_info.torque_control_state,steering_system_info.mcu_lateral_control_state_feedback,steering_system_info.mcu_gear_control_state_feedback,brake_system_info.is_break_pedal_pressed,steering_system_info.is_abs_active,steering_system_info.is_epb_on,steering_system_info.brake_system_acceleration_response,steering_system_info.break_pedal_position,steering_system_info.is_brake_pedal_override,steering_system_info.is_vehicle_stand_still,steering_system_info.is_vehicle_park_stand_still,steering_system_info.braking_system_control_state,steering_system_info.mcu_brake_system_control_state_feedback,steering_system_info.epb_state
             with open(vcu_file, 'r') as vcu_reader:
                 vcu = vcu_reader.readline().split('\t')
@@ -971,6 +975,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             #     temp[:, :3:, [3]] = self.t_vec_np
             #     extrinsic = temp
 
+            # TODO
+            if 'SKYWELL' in sequence_name:
+                intrinsic[0, 0] *= 1.15363
+                intrinsic[1, 1] *= 1.15363
+                intrinsic[0, 2] = 972.1390
+                intrinsic[1, 2] = 556.7174
+            
             input_dict['intrinsic'] = copy.deepcopy(intrinsic)  # np.stack([intrinsic, intrinsic])
             input_dict['cam_dist'] = copy.deepcopy(cam_dist)  # np.stack([cam_dist, cam_dist])
             input_dict['extrinsic'] = copy.deepcopy(extrinsic)  # np.stack([extrinsic, extrinsic])
@@ -980,7 +991,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # === image info ===
             # img_path = {}
             for view_idx, camera_view in enumerate(self.image_view):
-                image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                if 'SKYWELL' in sequence_name:
+                    image_file = f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli_fisheye_eq_image_data/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                else:
+                    image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
                 # img_path[camera_view] = image_file
                 # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
                 current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx)
