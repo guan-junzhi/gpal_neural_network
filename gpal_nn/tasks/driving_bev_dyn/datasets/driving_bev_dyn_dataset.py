@@ -993,7 +993,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # img_path = {}
             for view_idx, camera_view in enumerate(self.image_view):
                 if 'SKYWELL' in sequence_name:
-                    image_file = f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli_fisheye_eq_image_data/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                    WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
+                    image_file = os.path.join(WORKDIRS_ROOT, f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli_fisheye_eq_image_data/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg')
                 else:
                     image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
                 # img_path[camera_view] = image_file
