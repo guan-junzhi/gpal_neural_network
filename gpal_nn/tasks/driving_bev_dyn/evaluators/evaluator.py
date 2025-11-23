@@ -215,7 +215,7 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     image_dir = DATA_COLLECT_ROOT
     
     # badcase 展示不生成
-    if False:
+    if True:
         frame_infos = evaluator.get_frame_infos_from_distance_errors(distance_errors_list=distance_errors_list,)
     
         # TODO 暂时调试使用，后续统一到函数接口内部

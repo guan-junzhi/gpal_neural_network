@@ -8,12 +8,12 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  EPOCH_LEN: 80000
+  EPOCH_LEN: 120000
   CLIP_LENGTH: [64, 128]
   log_every: 10
   visualize_every: 200
   max_visu_img_num: 6
-  optimizer: {type: AdamW, lr: 1.0e-04, weight_decay: 1.0e-06}
+  optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
     after_scheduler: CosineAnnealingLR, T_max: 120000}
 
@@ -47,7 +47,7 @@ Transformer:
   transformer_config:
     task_name: DRIVING_BEV_DYN
     bev_map_range: [-19.2, -15.36, -1.0, 19.2, 15.36, 5.0]
-    bev_map_voxel_size: [0.32, 0.32, 1.5]
+    bev_map_voxel_size: [0.64, 0.64, 1.5]
     image_down_div: 8
     input_source: ['img_front_fisheye', 'img_right_fisheye', 'img_rear_fisheye', 'img_left_fisheye']
     in_channels: 128
@@ -98,7 +98,7 @@ Tasks:
          [1920, 1080]]
     build_gt:
       "max_objects": 256
-      "od_heatmap_voxel_size": [0.16, 0.16]
+      "od_heatmap_voxel_size": [0.32, 0.32]
 
     od_range:
       [-19.2, -15.36, -1.0, 19.2, 15.36, 5.0]
@@ -122,7 +122,7 @@ Tasks:
       
     Loss:
       od_range: [-19.2, -15.36, -1.0, 19.2, 15.36, 5.0]
-      out_feat_voxel_size: [0.16, 0.16, 0.5]
+      out_feat_voxel_size: [0.32, 0.32, 0.5]
     
     POST_PROCESSING:
       od_range: [-19.2, -15.36, -1.0, 19.2, 15.36, 5.0]
@@ -140,7 +140,7 @@ Tasks:
         [-19.2, -15.36, -1.0, 19.2, 15.36, 5.0],
       ]
       IOU_THRESH_LIST: [0.5, 0.5, 0.25, 0.25]
-      out_feat_voxel_size: [0.16, 0.16, 0.5]
+      out_feat_voxel_size: [0.32, 0.32, 0.5]
 
 
 
@@ -167,7 +167,9 @@ Tasks:
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251026-150826/20251026-150826_train_frame_pairs_sampled_fisheye.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251107-174323/20251107-174323_train_frame_pairs_sampled_excludeNoneFisheyeDirOnlyParking.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251107-174323/20251107-174323_train_frame_pairs_sampled_excludeNoneFisheyeDir.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_modeloutput/20251114-163925/20251114-163925_0_train_frame_pairs_sampled_excludeNoneFisheyeDirOnlyParking99.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_modeloutput/20251114-163925/20251114-163925_0_train_frame_pairs_sampled_excludeNoneFisheyeDirOnlyParking99.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_modeloutput/20251114-163925/20251114-163925_0_train_frame_pairs_sampled_excludeNoneFisheyeDir80.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251122-153458/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_fisheye', 'img_right_fisheye', 'img_rear_fisheye', 'img_left_fisheye'],
           shuffle: False,
           fast_buffer_path: "./fisheye" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
@@ -181,9 +183,11 @@ Tasks:
           # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_1107", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_1107", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLineData_Test/",
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_modeloutput/20251114-163925/20251114-163925_0_train_frame_pairs_sampled_excludeNoneFisheyeDirOnlyParking99.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320_clips48_frames9408_key1872_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320_excludeNoneFisheyeDir.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT

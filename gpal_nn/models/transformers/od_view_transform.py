@@ -218,6 +218,38 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, image_down_div=None, xyz_camA
     
     return a
 
+class SimpleViewMarker(nn.Module):
+    """简单的视角顺序标记"""
+    
+    def __init__(self, num_views=4, feature_dim=256):
+        super().__init__()
+        # 可学习的视角嵌入
+        self.view_embedding = nn.Embedding(num_views, feature_dim)
+        self.num_views = num_views
+        
+    def forward(self, features):
+        """
+        Args:
+            features: [B, V, C, H, W] 多视角图像特征
+        Returns:
+            marked_features: [B, V, C, H, W] 加了视角标记的特征
+        """
+        B, V, C, H, W = features.shape
+        
+        # 生成视角ID [0, 1, 2, 3]
+        view_ids = torch.arange(V, device=features.device)  # [V]
+        
+        # 获取视角嵌入
+        view_emb = self.view_embedding(view_ids)  # [V, C]
+        
+        # 扩展到 [B, V, C, H, W]
+        view_emb = view_emb.view(1, V, C, 1, 1).expand(B, -1, -1, H, W)
+        
+        # 加到特征上
+        marked_features = features + view_emb
+        
+        return marked_features
+
 
 @TRANSFORMERS.register_module()
 class ODViewTransformer(BaseModule):
@@ -254,7 +286,7 @@ class ODViewTransformer(BaseModule):
             nn.BatchNorm2d(transformer_config["out_channels"]),
             nn.ReLU(True)
         )
-
+        self.view_marker = SimpleViewMarker(num_views=len(self.input_source), feature_dim=transformer_config["out_channels"])
 
     def forward(
         self,
@@ -265,6 +297,7 @@ class ODViewTransformer(BaseModule):
 
         if torch.onnx.is_in_onnx_export():
             feats = feats[0].unsqueeze(0)
+            feats = self.view_marker(feats)
             B = 1
         else:
             image_feats_stack = []
@@ -275,6 +308,9 @@ class ODViewTransformer(BaseModule):
             feats = torch.stack(image_feats_stack, dim=1)
             feats = feats.reshape(B, -1, C, H, W)
         xyz_camA = self.xyz_camA.clone()
+
+        # 加视角标记
+        feats = self.view_marker(feats)
         
         feat_bev = unproject_image_to_mem(
             feats,
