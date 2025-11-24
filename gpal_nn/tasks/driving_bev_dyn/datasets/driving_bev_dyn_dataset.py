@@ -980,8 +980,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             if 'SKYWELL' in sequence_name:
                 intrinsic[:, 0, 0] *= 1.15363
                 intrinsic[:, 1, 1] *= 1.15363
-                intrinsic[:, 0, 2] = 972.1390
-                intrinsic[:, 1, 2] = 556.7174
+                intrinsic[:, 0, 2] = intrinsic[:, 0, 2] * 1.15363 - 127.0
+                intrinsic[:, 1, 2] = intrinsic[:, 1, 2] * 1.15363 - 314.0
             
             input_dict['intrinsic'] = copy.deepcopy(intrinsic)  # np.stack([intrinsic, intrinsic])
             input_dict['cam_dist'] = copy.deepcopy(cam_dist)  # np.stack([cam_dist, cam_dist])
