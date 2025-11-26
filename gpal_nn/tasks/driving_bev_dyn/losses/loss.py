@@ -56,9 +56,9 @@ class DRIVING_BEV_DYNLoss(BaseLoss):
 
             # --- track loss
             elif 'track_loss' in loss_name and 'dir' in loss_name:
-                weight_loss = loss_value * 10.0
-            elif 'track_loss' in loss_name and 'hm' in loss_name:
                 weight_loss = loss_value * 5.0
+            elif 'track_loss' in loss_name and 'hm' in loss_name:
+                weight_loss = loss_value * 1.0
             elif 'track_loss' in loss_name and 'vel' in loss_name:
                 weight_loss = loss_value * 1.0
             elif 'track_loss' in loss_name and 'score' in loss_name:
