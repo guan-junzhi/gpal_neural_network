@@ -98,7 +98,12 @@ class RatioDataloader:
                         weighted_list, len(weighted_list), replacement = (len(ratio_list) > 1))
                 else:
                     sampler = ClipSampler(
-                        datalists, default_resample_len=150000, batch_size=batch_size, length_range=[5, 25], rank = self.global_rank)
+                        datalists, 
+                        default_resample_len=self.global_config.Train.get("EPOCH_LEN", 15000),
+                        batch_size=batch_size,
+                        length_range=self.global_config.Train.get("CLIP_LENGTH", [5, 25]),
+                        rank=self.global_rank
+                    )
 
                 dataloader = DataLoader(
                     dataset=concat_dataset,

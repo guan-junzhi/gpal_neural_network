@@ -168,6 +168,36 @@ class EncoderRes34(BaseModule):
         return [x1,x2,x3]
 
 
+@BACKBONES.register_module()
+class EncoderRes18(BaseModule):
+    def __init__(self, global_config, out_channels):
+        super(EncoderRes18, self).__init__(global_config)
+
+        # import pickle as pkl
+        # pkl.dump((global_config, out_channels), open("EncoderRes50.pkl", 'wb'))
+        # exit(1)
+        self.C = out_channels
+        resnet = models.resnet18(pretrained=True)
+        print(resnet.children())
+        self.backbone = nn.Sequential(*list(resnet.children())[:-4])
+        print(list(resnet.children()))
+        self.layer3 = resnet.layer3
+        self.layer4 = resnet.layer4
+        # self.depth_layer = nn.Conv2d(128, self.C, kernel_size=1, padding=0)
+        # self.upsampling_layer = UpsamplingConcat(0, 0)
+
+    def forward(self, x):
+        x1 = self.backbone(x)
+        x2 = self.layer3(x1)
+        x3 = self.layer4(x2)
+        # x = self.upsampling_layer(x2, x1)
+    #     # x = self.depth_layer(x)
+    # 0<class 'torch.Tensor'> : torch.Size([4, 128, 64, 120]) torch.float32
+    # 1<class 'torch.Tensor'> : torch.Size([4, 256, 32, 60]) torch.float32
+    # 2<class 'torch.Tensor'> : torch.Size([4, 512, 16, 30]) torch.float32
+        return [x1,x2,x3]
+
+
 if __name__ == "__main__":
     # x = torch.randn((4, 3, 640, 640)).cuda()
     # bb = ResNet(34).cuda()
