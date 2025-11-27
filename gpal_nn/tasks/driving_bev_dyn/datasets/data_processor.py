@@ -49,7 +49,7 @@ class DataProcessor(object):
 
         if data_dict.get('gt_boxes', None) is not None and config['REMOVE_OUTSIDE_BOXES']:
             mask = box_utils.mask_boxes_outside_range_numpy(
-                data_dict['gt_boxes'], self.point_cloud_range, min_num_corners=config.get('min_num_corners', 1))
+                data_dict['gt_boxes'], self.point_cloud_range, min_num_corners=config.get('min_num_corners', 5))
             data_dict['gt_boxes'] = data_dict['gt_boxes'][mask]
 
         return data_dict

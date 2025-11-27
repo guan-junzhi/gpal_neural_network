@@ -32,9 +32,17 @@ def _neg_loss(pred, gt, track, alpha=2, beta=4):
         neg_weights = torch.pow(1 - gt, beta)
 
     # neg_weights = torch.pow(1 - gt, beta)
-    pos_loss = torch.log(pred) * torch.pow(1 - pred, alpha) * pos_inds.float()
-    neg_loss = torch.log(1 - pred) * torch.pow(pred,
-                                               alpha) * neg_weights * neg_inds
+    
+    pos_inds_w = torch.ones_like(pos_inds).float()
+    pos_inds_w[:, 0, :, :] *= 1.0
+    pos_inds_w[:, 1, :, :] *= 3.0
+    pos_inds_w[:, 2, :, :] *= 1.5
+    pos_inds_w[:, 3, :, :] *= 3.0
+    pos_inds_w[:, 4, :, :] *= 2.0
+    pos_inds_w[:, 5, :, :] *= 4.0
+    
+    pos_loss = torch.log(pred) * torch.pow(1 - pred, alpha) * pos_inds.float() * pos_inds_w
+    neg_loss = torch.log(1 - pred) * torch.pow(pred, alpha) * neg_weights * neg_inds
     num_pos = pos_inds.float().sum()
     pos_loss = pos_loss.sum()
     neg_loss = neg_loss.sum()
@@ -42,7 +50,8 @@ def _neg_loss(pred, gt, track, alpha=2, beta=4):
     if num_pos == 0:
         loss = - neg_loss
     else:
-        loss = - (pos_loss + neg_loss) / num_pos
+        B, C, H, W = pred.shape
+        loss = - (pos_loss + neg_loss) / num_pos #/ (B * C) #/  (H * W)
     return loss
 
 
