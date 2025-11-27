@@ -41,3 +41,4 @@ config_for_single*
 calib_data
 workdir
 *hbm
+*png
