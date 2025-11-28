@@ -107,6 +107,8 @@ class MapInstanceDetectorHead(nn.Module):
         self.shape_type_num = max(shape_type_map.values()) + 1
         self.centerline_type_num = max(centerline_type_map.values()) + 1
         self.centerline_direction_num = 2
+        self.polygon_num = max(polygon_type_map.values()) + 1
+        self.arrow_num = max(arrow_type_map.values()) + 1
         self.in_channels = layers_config['in_channels']
         self.queue_length = layers_config.get("queue_length", 1)
         self.num_cam = layers_config['num_cam']
@@ -248,6 +250,14 @@ class MapInstanceDetectorHead(nn.Module):
         ]
         keypoint_reg_branch = nn.Sequential(*keypoint_reg_branch)
 
+        polygon_class_branch = nn.Sequential(
+            Linear(self.embed_dims, self.polygon_num)
+        )
+
+        arrow_class_branch = nn.Sequential(
+            Linear(self.embed_dims, self.arrow_num)
+        )
+
         # last reg_branch is used to generate proposal from
         # encode feature map when as_two_stage is True.
 
@@ -261,6 +271,8 @@ class MapInstanceDetectorHead(nn.Module):
         centerline_direction_branches = nn.ModuleList([centerline_direction_branch for _ in range(num_layers)])
         keypoint_cls_branches = nn.ModuleList([keypoint_cls_branch for _ in range(num_layers)])
         keypoint_reg_branches = nn.ModuleList([keypoint_reg_branch for _ in range(num_layers)])
+        polygon_class_branches = nn.ModuleList([polygon_class_branch for _ in range(num_layers)])
+        arrow_class_branches = nn.ModuleList([arrow_class_branch for _ in range(num_layers)])
 
         self.reg_branches = reg_branches
         self.cls_branches = cls_branches
@@ -272,6 +284,8 @@ class MapInstanceDetectorHead(nn.Module):
         self.keypoint_reg_branches = keypoint_reg_branches
         self.centerline_type_branches = centerline_type_branches
         self.centerline_direction_branches = centerline_direction_branches
+        self.polygon_class_branches = polygon_class_branches
+        self.arrow_class_branches = arrow_class_branches
         self.sigmoid = torch.nn.Sigmoid()
 
         self.seg_head = None
@@ -329,6 +343,8 @@ class MapInstanceDetectorHead(nn.Module):
         self.dequant_centerline_direction = DeQuantStub()
         self.dequant_keypoint_cls = DeQuantStub()
         self.dequant_keypoint_reg = DeQuantStub()
+        self.dequant_polygon_class = DeQuantStub()
+        self.dequant_arrow_class = DeQuantStub()
 
     def init_weights(self):
         """Initialize weights of the head."""
@@ -404,6 +420,24 @@ class MapInstanceDetectorHead(nn.Module):
         else:
             m = self.keypoint_cls_branches
             nn.init.constant_(m.bias, bias_init)
+
+        if isinstance(self.polygon_class_branches, nn.ModuleList):
+            for m in self.polygon_class_branches:
+                if hasattr(m, "bias"):
+                    nn.init.constant_(m.bias, bias_init)
+        else:
+            m = self.polygon_class_branches
+            nn.init.constant_(m.bias, bias_init)
+
+        if isinstance(self.arrow_class_branches, nn.ModuleList):
+            for m in self.arrow_class_branches:
+                if hasattr(m, "bias"):
+                    nn.init.constant_(m.bias, bias_init)
+        else:
+            m = self.arrow_class_branches
+            nn.init.constant_(m.bias, bias_init)
+
+
 
     def _init_embedding(self):
         """Initialize embeddings of the head."""
@@ -486,6 +520,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_centerline_directions: List[Tensor],
         outputs_keypoint_classes: List[Tensor],
         outputs_keypoint_regs: List[Tensor],
+        outputs_polygon_classes: List[Tensor],
+        outputs_arrow_classes: List[Tensor],
         outputs_seg=None,
         outputs_pv_seg=None,
     ) -> Dict:
@@ -500,6 +536,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_keypoint_regs_one2one = []
         outputs_coords_one2one = []
         outputs_pts_coords_one2one = []
+        outputs_polygon_classes_one2one = []
+        outputs_arrow_classes_one2one = []
 
         outputs_classes_one2many = []
         outputs_lane_marking_types_one2many = []
@@ -511,6 +549,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_keypoint_regs_one2many = []
         outputs_coords_one2many = []
         outputs_pts_coords_one2many = []
+        outputs_polygon_classes_one2many = []
+        outputs_arrow_classes_one2many = []
 
         for lvl in range(len(outputs_classes)):
             tmp = reference_out[lvl].float()
@@ -524,6 +564,8 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_centerline_direction = outputs_centerline_directions[lvl].float()
             outputs_keypoint_class = outputs_keypoint_classes[lvl].float()
             outputs_keypoint_reg = outputs_keypoint_regs[lvl].float()
+            outputs_polygon_class = outputs_polygon_classes[lvl].float()
+            outputs_arrow_class = outputs_arrow_classes[lvl].float()
 
             outputs_classes_one2one.append(
                 outputs_class[:, 0: self.num_vec_one2one]
@@ -554,6 +596,12 @@ class MapInstanceDetectorHead(nn.Module):
             )
             outputs_keypoint_regs_one2one.append(
                 outputs_keypoint_reg[:, 0 : self.num_vec_one2one]
+            )
+            outputs_polygon_classes_one2one.append(
+                outputs_polygon_class[:, 0 : self.num_vec_one2one]
+            )
+            outputs_arrow_classes_one2one.append(
+                outputs_arrow_class[:, 0 : self.num_vec_one2one]
             )
 
             outputs_classes_one2many.append(
@@ -586,6 +634,12 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_keypoint_regs_one2many.append(
                 outputs_keypoint_reg[:, self.num_vec_one2one :]
             )
+            outputs_polygon_classes_one2many.append(
+                outputs_polygon_class[:, self.num_vec_one2one :]
+            )
+            outputs_arrow_classes_one2many.append(
+                outputs_arrow_class[:, self.num_vec_one2one :]
+            )
 
         outputs_classes_one2one = torch.stack(outputs_classes_one2one)
         outputs_coords_one2one = torch.stack(outputs_coords_one2one)
@@ -597,6 +651,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_centerline_directions_one2one = torch.stack(outputs_centerline_directions_one2one)
         outputs_keypoint_classes_one2one = torch.stack(outputs_keypoint_classes_one2one)
         outputs_keypoint_regs_one2one = torch.stack(outputs_keypoint_regs_one2one)
+        outputs_polygon_classes_one2one = torch.stack(outputs_polygon_classes_one2one)
+        outputs_arrow_classes_one2one = torch.stack(outputs_arrow_classes_one2one)
 
         outputs_classes_one2many = torch.stack(outputs_classes_one2many)
         outputs_coords_one2many = torch.stack(outputs_coords_one2many)
@@ -608,6 +664,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_centerline_directions_one2many = torch.stack(outputs_centerline_directions_one2many)
         outputs_keypoint_classes_one2many = torch.stack(outputs_keypoint_classes_one2many)
         outputs_keypoint_regs_one2many = torch.stack(outputs_keypoint_regs_one2many)
+        outputs_polygon_classes_one2many = torch.stack(outputs_polygon_classes_one2many)
+        outputs_arrow_classes_one2many = torch.stack(outputs_arrow_classes_one2many)
 
         preds_dicts = {
             "all_cls_scores": outputs_classes_one2one,
@@ -620,6 +678,8 @@ class MapInstanceDetectorHead(nn.Module):
             "all_centerline_directions_preds": outputs_centerline_directions_one2one,
             "all_keypoint_classes_preds": outputs_keypoint_classes_one2one,
             "all_keypoint_regs_preds": outputs_keypoint_regs_one2one,
+            "all_polygon_classes_preds": outputs_polygon_classes_one2one,
+            "all_arrow_classes_preds": outputs_arrow_classes_one2one,
             "enc_cls_scores": None,
             "enc_bbox_preds": None,
             "enc_pts_preds": None,
@@ -638,6 +698,8 @@ class MapInstanceDetectorHead(nn.Module):
                 "all_centerline_directions_preds": outputs_centerline_directions_one2many,
                 "all_keypoint_classes_preds": outputs_keypoint_classes_one2many,
                 "all_keypoint_regs_preds": outputs_keypoint_regs_one2many,
+                "all_polygon_classes_preds": outputs_polygon_classes_one2many,
+                "all_arrow_classes_preds": outputs_arrow_classes_one2many,
                 "enc_cls_scores": None,
                 "enc_bbox_preds": None,
                 "enc_pts_preds": None,
@@ -778,6 +840,8 @@ class MapInstanceDetectorHead(nn.Module):
         outputs_centerline_directions = []
         outputs_keypoint_classes = []
         outputs_keypoint_regs = []
+        outputs_polygon_classes = []
+        outputs_arrow_classes = []
         for lvl in range(len(inter_states)):
             reg_points = inter_references[lvl]
             outputs_class = self.cls_branches[lvl](inter_states[lvl])
@@ -788,6 +852,8 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_centerline_direction = self.centerline_direction_branches[lvl](inter_states[lvl])
             outputs_keypoint_class = self.keypoint_cls_branches[lvl](inter_states[lvl])
             outputs_keypoint_reg = self.keypoint_reg_branches[lvl](inter_states[lvl])
+            outputs_polygon_class = self.polygon_class_branches[lvl](inter_states[lvl])
+            outputs_arrow_class = self.arrow_class_branches[lvl](inter_states[lvl])
             outputs_classes.append(self.dequant(outputs_class))
             reference_out.append(self.dequant(reg_points))
             outputs_lane_marking_types.append(self.dequant_lane_marking_type(outputs_lane_marking_type))
@@ -797,6 +863,8 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_centerline_directions.append(self.dequant_centerline_direction(outputs_centerline_direction))
             outputs_keypoint_classes.append(self.dequant_keypoint_cls(outputs_keypoint_class))
             outputs_keypoint_regs.append(self.dequant_keypoint_reg(outputs_keypoint_reg))
+            outputs_polygon_classes.append(self.dequant_polygon_class(outputs_polygon_class))
+            outputs_arrow_classes.append(self.dequant_arrow_class(outputs_arrow_class))
 
 
         outputs_seg = None
@@ -839,6 +907,8 @@ class MapInstanceDetectorHead(nn.Module):
                 outputs_centerline_directions[-1],
                 outputs_keypoint_classes[-1],
                 outputs_keypoint_regs[-1],
+                outputs_polygon_classes[-1],
+                outputs_arrow_classes[-1],
             )
         else:
             return (
@@ -851,6 +921,8 @@ class MapInstanceDetectorHead(nn.Module):
                 outputs_centerline_directions,
                 outputs_keypoint_classes,
                 outputs_keypoint_regs,
+                outputs_polygon_classes,
+                outputs_arrow_classes,
                 outputs_seg,
                 outputs_pv_segs,
             )
@@ -871,6 +943,8 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_centerline_directions,
             outputs_keypoint_classes,
             outputs_keypoint_regs,
+            outputs_polygon_classes,
+            outputs_arrow_classes,
             outputs_seg,
             outputs_pv_seg,
         ) = outputs
@@ -884,6 +958,8 @@ class MapInstanceDetectorHead(nn.Module):
             outputs_centerline_directions,
             outputs_keypoint_classes,
             outputs_keypoint_regs,
+            outputs_polygon_classes,
+            outputs_arrow_classes,
             outputs_seg,
             outputs_pv_seg,
         )
