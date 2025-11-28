@@ -4,7 +4,7 @@ from gpal_lightning.neural_network.global_config import GlobalConfig
 from gpal_lightning.neural_network.tasks.base.losses.loss import BaseLoss
 from gpal_lightning.neural_network.tasks.builder import LOSSES
 from gpal_nn.tasks.driving_bev_sta.losses.transform_gt import transform_gt_box, permute_line
-from gpal_nn.tasks.driving_bev_sta.losses.map_loss import BaseMapLossCost
+from gpal_nn.tasks.driving_bev_sta.losses.map_loss2 import BaseMapLossCost
 from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
 from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 import time
@@ -196,7 +196,61 @@ def lane_loss_computation(preds, trues, loss_func, centerline_dataset):
         time_dp.Duration("lane_loss_computation_all_4",
                             "lane_loss_computation_all_1")
         
-        single_loss_dict = {k: single_loss_dict[k] / bs for k in single_loss_dict}
+        # single_loss_dict = {k: single_loss_dict[k] / bs for k in single_loss_dict}  # 放在loss_func内部处理
+        time_dp.Duration("lane_loss_computation_all_5",
+                            "lane_loss_computation_all_4")
+
+        time_dp.Duration("lane_loss_computation_all", "begin")
+        # time_dp.Print()
+
+        loss_list.append(single_loss_dict)
+    total_dict = {}
+    final_total_loss = 0.0
+    for k in range(num_iter):
+        d_loss_dict = loss_list[k]
+        for key in d_loss_dict.keys():
+            total_dict[f"lane_d{k}.{key}"] = d_loss_dict[key]
+
+    for key in total_dict.keys():
+        if "loss" in key:
+            final_total_loss += total_dict[key]
+    total_dict['total_loss'] = final_total_loss
+    return total_dict
+
+def lane_loss_computation2(preds, trues, loss_func):
+    if "all_bbox_preds" not in preds:
+        return {}
+    all_cls_scores, all_bbox_pred, all_pts_pred, \
+        all_lane_marking_types_pred, all_lane_marking_colors_pred, \
+        all_shape_types_pred, all_centerline_types_preds, all_centerline_directions_preds, all_keypoint_classes_preds, all_keypoint_regs_pred, \
+        all_polygon_classes_preds, all_arrow_classes_preds = \
+        preds['all_cls_scores'], preds['all_bbox_preds'], preds['all_pts_preds'], \
+        preds['all_lane_marking_types_preds'], preds['all_lane_marking_colors_preds'], \
+        preds['all_shape_types_preds'], preds['all_centerline_types_preds'], \
+        preds['all_centerline_directions_preds'], preds['all_keypoint_classes_preds'], \
+        preds['all_keypoint_regs_preds'], preds['all_polygon_classes_preds'], preds['all_arrow_classes_preds']
+    num_iter, bs, _, pts_per_vector, _ = all_pts_pred.shape
+    loss_list = list()
+    for k in range(num_iter):
+        loss_dict = dict()
+        time_dp = DetailProf()
+        time_dp.Tic("begin")
+
+        score_pred, bbox_pred, pts_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, centerline_type_pred, centerline_direction_pred, \
+            keypoint_cls_pred, keypoint_reg_pred, polygon_cls_pred, arrow_cls_pred = all_cls_scores[k], all_bbox_pred[k], all_pts_pred[k], \
+            all_lane_marking_types_pred[k], all_lane_marking_colors_pred[k],all_shape_types_pred[k], all_centerline_types_preds[k], all_centerline_directions_preds[k], \
+            all_keypoint_classes_preds[k], all_keypoint_regs_pred[k], all_polygon_classes_preds[k], all_arrow_classes_preds[k]
+        time_dp.Duration("lane_loss_computation_all_1", "begin")
+        
+        stage_pred = [score_pred, bbox_pred, pts_pred, lane_marking_type_pred, lane_marking_color_pred, shape_type_pred, 
+                      centerline_type_pred, centerline_direction_pred, keypoint_cls_pred, keypoint_reg_pred, polygon_cls_pred, arrow_cls_pred]
+
+        single_loss_dict = loss_func(stage_pred, trues)
+
+        time_dp.Duration("lane_loss_computation_all_4",
+                            "lane_loss_computation_all_1")
+        
+        # single_loss_dict = {k: single_loss_dict[k] / bs for k in single_loss_dict}  # 放在loss_func内部处理
         time_dp.Duration("lane_loss_computation_all_5",
                             "lane_loss_computation_all_4")
 
@@ -309,16 +363,98 @@ def ProcessGt(trues, preds, centerline_dataset, output_group, max_ele_num=256):
 
     return gt_batched
 
+def ProcessGt2(trues, preds, output_group):
+    processed_gt = {"batchsize": len(trues)}
+    start_x = 120
+    start_y = 16
+    all_pts_pred = preds['all_pts_preds']
+    num_iter, bs, num_query, pts_per_vector, _ = all_pts_pred.shape
+    gt_batched = {"valid_mask":[], "classes": [], "bboxes": [], "points": [], 
+                  "lane_marking_types": [], "lane_marking_colors": [], "types": [], "centerline_types": [], 
+                  "centerline_directions": [], "keyp_cls": [], "keyp_reg": [], "center_line_flag": [],
+                  "polygon_classes": [], "arrow_classes": []}
+    #TODO
+    for bs_idx, gt in enumerate(trues):
+        annos, classes, lane_marking_types, lane_marking_colors, shape_types, centerline_types, centerline_directions, \
+            is_split_merges, keypoint_norms, polygon_classes, arrow_classes = pack_polyline_gt_points(gt)
+        # gt ploylines to gt bboxes  [n, 4], [n, 20, 2]
+        bboxes_gt, points_gt = transform_gt_box(annos, start_x, start_y,
+                                                num_pts_per_vec=pts_per_vector, y_first=False, device=all_pts_pred.device)
+
+        # [n,20, 2]->[n, 2, 20, 2]  矢量线翻转建模
+        points_gt = permute_line(points_gt)
+
+        keypoint_cls_gt = is_split_merges
+        if len(keypoint_norms) > 0:
+            keypoint_norms_filp = 1 - keypoint_norms
+            keypoint_norms_filp *= is_split_merges
+            keypoint_reg_gt = np.stack(
+                [keypoint_norms, keypoint_norms_filp], axis=0).transpose(1, 0)
+        else:
+            keypoint_reg_gt = np.zeros((0, 2), dtype=np.float32)
+
+        if len(shape_types) == 0:
+            lane_marking_types = torch.zeros(0).to(all_pts_pred.device).long()
+            lane_marking_colors = torch.zeros(0).to(all_pts_pred.device).long()
+            shape_types = torch.zeros(0).to(all_pts_pred.device).long()
+            centerline_types = torch.zeros(0).to(all_pts_pred.device).long()
+            centerline_directions = torch.zeros(0).to(all_pts_pred.device).long()
+            keypoint_cls_gt = torch.zeros(0).to(all_pts_pred.device).long()
+            keypoint_reg_gt = torch.zeros([0, 2]).to(
+                all_pts_pred.device).float()
+            classes = torch.zeros(0).to(all_pts_pred.device).long()
+            polygon_classes = torch.zeros(0).to(all_pts_pred.device).long()
+            arrow_classes = torch.zeros(0).to(all_pts_pred.device).long()
+        else:
+            lane_marking_types = torch.from_numpy(lane_marking_types).to(all_pts_pred.device).long()
+            lane_marking_colors = torch.from_numpy(lane_marking_colors).to(all_pts_pred.device).long()
+            shape_types = torch.from_numpy(shape_types).to(all_pts_pred.device).long()
+            centerline_types = torch.from_numpy(centerline_types).to(all_pts_pred.device).long()
+            centerline_directions = torch.from_numpy(centerline_directions).to(all_pts_pred.device).long()
+            keypoint_cls_gt = torch.from_numpy(keypoint_cls_gt).to(all_pts_pred.device).long()
+            keypoint_reg_gt = torch.from_numpy(keypoint_reg_gt).to(all_pts_pred.device).float()
+            classes = torch.from_numpy(classes).to(all_pts_pred.device).long()
+            polygon_classes = torch.from_numpy(polygon_classes).to(all_pts_pred.device).long()
+            arrow_classes = torch.from_numpy(arrow_classes).to(all_pts_pred.device).long()
+
+        valid_mask = classes.new_zeros([num_query, shape_types.shape[0]]).bool()
+        group_range = [0] + list(np.cumsum([group[1] for group in output_group]))
+        for group_idx, group in enumerate(output_group):
+            type_mask = torch.zeros_like(classes)
+            for target_cls in group[0]:
+                type_mask += (target_cls == classes)
+            type_mask = type_mask > 0
+            valid_mask[group_range[group_idx]:group_range[group_idx+1], type_mask] = True
+
+        gt_batched["valid_mask"].append(valid_mask)
+        gt_batched["classes"].append(classes)
+        gt_batched["bboxes"].append(bboxes_gt)
+        gt_batched["points"].append(points_gt)
+        gt_batched["lane_marking_types"].append(lane_marking_types)
+        gt_batched["lane_marking_colors"].append(lane_marking_colors)
+        gt_batched["types"].append(shape_types)
+        gt_batched["centerline_types"].append(centerline_types)
+        gt_batched["centerline_directions"].append(centerline_directions)
+        gt_batched["keyp_cls"].append(keypoint_cls_gt)
+        gt_batched["keyp_reg"].append(keypoint_reg_gt)
+        gt_batched["polygon_classes"].append(polygon_classes)
+        gt_batched["arrow_classes"].append(arrow_classes)
+
+    return gt_batched
+
 
 def loss_computation(preds, data, loss_func, output_group, centerline_dataset=None):
     total_dict = {}
     time_dp = DetailProf()
     time_dp.Tic("begin")
-    processed_gt = ProcessGt(
-        data, preds, centerline_dataset, output_group, max_ele_num=128)
+    # processed_gt = ProcessGt(
+    #     data, preds, centerline_dataset, output_group, max_ele_num=128)
+    processed_gt = ProcessGt2(data, preds, output_group)
     time_dp.Duration("ProcessGt", "begin")
-    lane_total_dict = lane_loss_computation(
-        preds, processed_gt, loss_func, centerline_dataset)
+    # lane_total_dict = lane_loss_computation(
+    #     preds, processed_gt, loss_func, centerline_dataset)
+    lane_total_dict = lane_loss_computation2(
+        preds, processed_gt, loss_func)
     time_dp.Duration("lane_loss_computation", "ProcessGt")
     # time_dp.Print()
 
