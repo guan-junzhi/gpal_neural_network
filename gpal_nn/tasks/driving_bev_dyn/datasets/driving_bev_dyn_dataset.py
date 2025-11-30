@@ -589,7 +589,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         return image
 
-    def get_image_by_slice(self, filepath, slice_timestamp, view_key, view_idx):
+    def get_image_by_slice(self, filepath, slice_timestamp, view_key, view_idx, crop_start):
         """统一处理不同视角的图像"""
         img_file = filepath
         self.fast_buf_try_cnt += 1
@@ -601,7 +601,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             image = read_img(str(img_file), self.image_resize + [3])
             if self.phase == const.PHASE_TRAINING:
                 image = cv2.resize(image, self.image_resize[::-1])
-                image = image[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
+                image = image[crop_start:crop_start + self.img_h_len]
             self._slice_image_cache(
                 database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=95)
         else:
@@ -747,6 +747,12 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # 无论预刷还是指标测试的数据格式/相对路径必须一致, f'{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
             curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
             vcu_file =  f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
+            
+            if 'SKYWELL' in sequence_name:
+                WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
+                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
+                vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
+            
             # seq,time_meas,time_pub,motion_info.vehicle_speed,motion_info.yaw_rate,motion_info.longitudinal_acceleration,motion_info.lateral_acceleration,motion_info.drive_mode,actuator_info.is_left_direction_light_on,actuator_info.is_right_direction_light_on,actuator_info.is_main_beam_on,actuator_info.is_dipped_beam_on,actuator_info.is_wiper_on,actuator_info.is_horn_on,actuator_info.is_left_direction_light_switch_on,actuator_info.is_right_direction_light_switch_on,actuator_info.front_left_door_status,actuator_info.front_right_door_status,actuator_info.rear_left_door_status,actuator_info.rear_right_door_status,actuator_info.rear_hatch_status,actuator_info.driver_safety_belt_status,actuator_info.is_brake_light_on,actuator_info.is_dangerous_warning_light_on,actuator_info.is_front_frog_light_on,actuator_info.is_rear_frog_light_on,actuator_info.is_reverse_direction_light_on,actuator_info.is_width_lamp_on,actuator_info.wiper_speed,actuator_info.is_washer_on,actuator_info.is_autodrive_active,axle_info[0].axis_id,axle_info[0].left_wheel_tire_pressure,axle_info[0].right_wheel_tire_pressure,axle_info[0].left_wheel_speed,axle_info[0].right_wheel_speed,axle_info[0].left_wheel_angle,axle_info[0].right_wheel_angle,axle_info[0].left_wheel_pulse,axle_info[0].right_wheel_pulse,axle_info[0].left_wheel_pulse_direction,axle_info[0].right_wheel_pulse_direction,axle_info[1].left_wheel_tire_pressure,axle_info[1].right_wheel_tire_pressure,axle_info[1].left_wheel_speed,axle_info[1].right_wheel_speed,axle_info[1].left_wheel_angle,axle_info[1].right_wheel_angle,axle_info[1].left_wheel_pulse,axle_info[1].right_wheel_pulse,axle_info[1].left_wheel_pulse_direction,axle_info[1].right_wheel_pulse_direction,powertrain_info.motor_speed,powertrain_info.motor_reference_torque,powertrain_info.motor_torque_change_rate,powertrain_info.battery_charge,powertrain_info.transmission_current_gear_level,powertrain_info.transmission_current_gear_position,powertrain_info.motor_torque_response,powertrain_info.throttle_percentage,powertrain_info.is_accelerator_pedal_override,powertrain_info.controlled_state_of_longitudinal_dynamic_system,powertrain_info.torque_request,powertrain_info.torque_feedback,powertrain_info.mcu_longitudinal_control_state_feedback,powertrain_info.mcu_driving_mode_feedback,steering_system_info.steering_wheel_angle,steering_system_info.steering_wheel_angle_speed,steering_system_info.steering_motor_torque,steering_system_info.steer_hands_on_status,steering_system_info.steer_angle_calibration_status,steering_system_info.received_steering_angle_request,steering_system_info.received_steering_torque_request,steering_system_info.eps_control_status,steering_system_info.eps_failure_reason,steering_system_info.steering_wheel_angle_control_failure_reason,steering_system_info.torque_control_failure_reason,steering_system_info.steering_wheel_angle_control_state,steering_system_info.torque_control_state,steering_system_info.mcu_lateral_control_state_feedback,steering_system_info.mcu_gear_control_state_feedback,brake_system_info.is_break_pedal_pressed,steering_system_info.is_abs_active,steering_system_info.is_epb_on,steering_system_info.brake_system_acceleration_response,steering_system_info.break_pedal_position,steering_system_info.is_brake_pedal_override,steering_system_info.is_vehicle_stand_still,steering_system_info.is_vehicle_park_stand_still,steering_system_info.braking_system_control_state,steering_system_info.mcu_brake_system_control_state_feedback,steering_system_info.epb_state
             
             with open(vcu_file, 'r') as vcu_reader:
@@ -786,16 +792,19 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['camera_sizes'] = copy.deepcopy(camera_sizes)
 
             img_path = {}
+            img_crop_dict = copy.deepcopy(self.img_crop_dict)
             for view_idx, camera_view in enumerate(self.image_view):
                 image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
                 img_path[camera_view] = image_file
-                # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
-                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx)
 
                 calib_intrin = copy.deepcopy(input_dict['intrinsic'][view_idx])
                 calib_extrin = copy.deepcopy(input_dict["extrinsic"][view_idx])
                 calib_dist = copy.deepcopy(input_dict["cam_dist"][view_idx])
-                img_crop_dict = copy.deepcopy(self.img_crop_dict)
+                if 'SKYWELL' in sequence_name:
+                    img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx] = img_crop_dict['CROP_HeSai_ID4']['CROP_START_SKYWELL'][view_idx]
+                crop_start = img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx]
+                # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
+                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx, crop_start)
 
                 if self.phase != const.PHASE_TRAINING:
                     input_dict[f'origin_images_input{view_idx}'] = current_img.astype(np.float32).copy()
@@ -808,10 +817,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                         current_img.shape[0],
                         calib_dist,
                         calib_intrin,
-                        int(self.img_crop_dict["IMAGE_RESIZE"][1]),
-                        int(self.img_crop_dict["IMAGE_RESIZE"][0]),
-                        int(self.img_crop_dict["IMAGE_CROP_H_LEN"]),
-                        int(self.img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][view_idx]),
+                        int(img_crop_dict["IMAGE_RESIZE"][1]),
+                        int(img_crop_dict["IMAGE_RESIZE"][0]),
+                        int(img_crop_dict["IMAGE_CROP_H_LEN"]),
+                        int(img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][view_idx]),
                         norm=False
                     ).astype(np.float32)
                     
@@ -878,8 +887,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             intrinsics = copy.deepcopy(data_dict_ret['calib']["intrinsic"])
             for i in range(intrinsics.shape[0]):
-                intrinsics[i, :2] /= self.img_crop_dict["CROP_HeSai_ID4"]['SCALE'][i]
-                intrinsics[i, 1, 2] -= self.img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][i]
+                intrinsics[i, :2] /= img_crop_dict["CROP_HeSai_ID4"]['SCALE'][i]
+                intrinsics[i, 1, 2] -= img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][i]
             
             data_dict_ret['calib']["ego2imgs"] = np.stack(
                 [i@e for e, i in zip(data_dict_ret['calib']['extrinsic'][:,:3], intrinsics)], axis=0)

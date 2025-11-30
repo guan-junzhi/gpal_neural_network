@@ -8,11 +8,11 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  EPOCH_LEN: 150000
+  EPOCH_LEN: 60000
   CLIP_LENGTH: [5, 25]
   log_every: 10
   visualize_every: 200
-  max_visu_img_num: 10
+  max_visu_img_num: 6
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
     after_scheduler: CosineAnnealingLR, T_max: 120000}
@@ -91,6 +91,7 @@ Tasks:
       "CROP_HeSai_ID4":
         "SCALE": [5, 5, 2.5, 2.5, 2.5, 2.5, 2.5]
         "CROP_START": [0, 0, 80, 80, 80, 80, 80]
+        "CROP_START_SKYWELL": [80, 80, 80, 80, 80, 80, 80]
       "CAMERA_RAW_SIZE":
         [[3840, 2160], 
          [3840, 2160], 
@@ -161,15 +162,18 @@ Tasks:
           have_prev_label: true,
           image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_1107", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLine_train/",
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20250930-125033/20250930-125033_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251026-150826/20251026-150826_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251026-150826/20251026-150826_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/combine_pkl/20251128-160418/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
-          fast_buffer_path: "./" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./7v_use_fish_data" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
       
@@ -178,12 +182,17 @@ Tasks:
           is_manual_label: true,
           have_prev_label: false,
           # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_1107", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLineData_Test/",
-          data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # fish equal data
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320_clips48_frames9408_key1872_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # 7V data
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames2808_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames14256_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
