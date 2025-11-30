@@ -10,6 +10,7 @@ dump_calibset: false
 Train:
   EPOCH_LEN: 60000
   CLIP_LENGTH: [5, 25]
+  log_every: 10
   visualize_every: 200
   max_visu_img_num: 6
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
