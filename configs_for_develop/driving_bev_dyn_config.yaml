@@ -173,7 +173,7 @@ Tasks:
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
-          fast_buffer_path: "./7v_use_fish_data" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./7v_task_use_4v7v_pkl_data" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
       
