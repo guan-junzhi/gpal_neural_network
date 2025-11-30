@@ -302,15 +302,24 @@ class DRIVING_BEV_DYNTask(BaseTask):
             
             elif self.subtask_name in ['DRIVING_BEV_DYN']:
                 vis_imgs = []
+                # breakpoint()
                 for cam_idx, cam_name in enumerate(metadata[idx]["camera_name"]):
                     calib_intrin = copy.deepcopy(calib["intrinsic"][idx][cam_idx]).detach().cpu().numpy()
                     calib_extrin = copy.deepcopy(calib["extrinsic"][idx][cam_idx]).detach().cpu().numpy()
                     calib_dist = copy.deepcopy(calib["cam_dist"][idx][cam_idx]).detach().cpu().numpy()
-                    img_crop_dict = copy.deepcopy(self.image_crop_config)
+                    
+                    scale = copy.deepcopy(metadata[idx]["scale"][cam_idx])
+                    crop_start = copy.deepcopy(metadata[idx]["crop"][cam_idx])
+                    
+                    # img_crop_dict = copy.deepcopy(self.image_crop_config)
                     img = (imgs[cam_name][idx].detach().cpu().numpy().transpose(
                         1, 2, 0) * 254).astype(np.uint8)
-                    calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx])
-                    calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx])
+                    # calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][cam_idx])
+                    # calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][cam_idx])
+                    
+                    calib_intrin[:2, :] /= scale
+                    calib_intrin[1, 2] -= crop_start
+                    
                     calib_dist *= 0.0
                     img = cv2.undistort(img, calib_intrin, calib_dist, calib_intrin)
 
