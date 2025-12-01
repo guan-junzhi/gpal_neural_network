@@ -182,4 +182,4 @@ def verify_output_consistency(original_model, modified_model, prefix, rtol=1e-5,
 
 # 使用示例
 if __name__ == "__main__":
-    safe_add_prefix(".vscode/workspace_huiquyang/20251124_02_49_52_onnx/checkpoint/epoch=1-step=9000_checkpoint_sim.onnx", "prefixed_model.onnx", "fisheye")
+    safe_add_prefix(".vscode/workspace_huiquyang/20251120_03_33_17_onnx/checkpoint/epoch=24-step=81000_checkpoint_sim.onnx", "prefixed_model.onnx", "fisheye")

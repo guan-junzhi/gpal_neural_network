@@ -165,7 +165,7 @@ def GetProjectGridByEgo2ImgsFisheye(extrin, distor, intrin, H, W, div, Z, Y, X, 
     sample_pts_3d = sample_pts_3d.repeat(V, 1, 1, 1)
     uvs, z = GetProjectGridByEgo2Imgs_Fisheye(extrin, distor, intrin, div, sample_pts_3d, image_crop_config)
     WH = torch.tensor(
-        [[[[(W-1) * div, (H-1) * div]]]], 
+        [[[[(W-1), (H-1)]]]], 
         device=extrin.device,
         dtype=extrin.dtype
     )
@@ -286,7 +286,10 @@ class ODViewTransformer(BaseModule):
             nn.BatchNorm2d(transformer_config["out_channels"]),
             nn.ReLU(True)
         )
-        self.view_marker = SimpleViewMarker(num_views=len(self.input_source), feature_dim=transformer_config["out_channels"])
+        if self.subtask_name in ["DRIVING_BEV_DYN_FISHEYE"]:
+            self.view_marker = SimpleViewMarker(num_views=len(self.input_source), feature_dim=transformer_config["out_channels"])
+        else:
+            self.view_marker = nn.Identity()
 
     def forward(
         self,
