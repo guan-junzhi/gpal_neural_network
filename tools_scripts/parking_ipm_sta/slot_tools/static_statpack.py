@@ -1,11 +1,93 @@
+import sys
 import os
-import cv2
+import time
 import numpy as np
-from gpal_lightning.neural_network.tasks.base.evaluators.evaluator import \
-    BaseEvaluator
-from gpal_lightning.neural_network.tasks.builder import EVALUATORS
-from gpal_nn.tasks.parking_ipm_sta.datasets.txtlabel_instance_p3 import TXTLabelLoader
 
+class PrintLogger:
+    """同时将输出打印到控制台和写入文件"""
+    
+    def __init__(self, log_file="output.log", mode="w", timestamp=True):
+        """
+        初始化打印记录器
+        
+        参数:
+            log_file: 日志文件路径
+            mode: 文件打开模式 ('w' 覆盖, 'a' 追加)
+            timestamp: 是否在每条日志前添加时间戳
+        """
+        self.terminal = sys.stdout
+        self.log_file = log_file
+        self.timestamp = timestamp
+        
+        # 创建日志文件所在目录
+        os.makedirs(os.path.dirname(log_file) or '.', exist_ok=True)
+        
+        # 打开日志文件
+        self.log = open(log_file, mode, encoding="utf-8")
+        
+        # 写入日志头
+        if mode == "w":
+            self.write_header()
+    
+    def write_header(self):
+        """写入日志文件头"""
+         
+        header = "Times Date : " + time.strftime("%d/%m/%Y") + " - " + time.strftime("%H:%M:%S")
+        self.log.write(header)
+    
+    def write(self, message):
+        """处理写入操作"""
+        # 写入控制台
+        self.terminal.write(message)
+        
+        # 写入文件
+        self.log.write(message)
+        self.log.flush()  # 确保数据立即写入文件
+    
+    def flush(self):
+        """刷新缓冲区"""
+        self.terminal.flush()
+        self.log.flush()
+    
+    def close(self):
+        """关闭日志文件"""
+        footer = f"\n{'='*20} Log Ended at {time.strftime('%Y-%m-%d %H:%M:%S')} {'='*20}\n"
+        self.log.write(footer)
+        self.log.close()
+        # 恢复原始标准输出
+        sys.stdout = self.terminal
+        print(f"日志已保存到: {os.path.abspath(self.log_file)}")
+
+def log_to_file(log_file="output.log", mode="w", timestamp=True):
+    """
+    装饰器：将函数的所有打印输出捕获到文件
+    
+    使用示例：
+    @log_to_file("my_script.log")
+    def main():
+        print("这将同时输出到控制台和文件")
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            original_stdout = sys.stdout
+            try:
+                # 重定向标准输出
+                sys.stdout = PrintLogger(log_file, mode, timestamp)
+                return func(*args, **kwargs)
+            finally:
+                # 恢复标准输出
+                if isinstance(sys.stdout, PrintLogger):
+                    sys.stdout.close()
+                sys.stdout = original_stdout
+        return wrapper
+    return decorator
+
+def printTitleInfo():
+    print ("")
+    print ("--------------Slot Det Model Auto Test On Image DataSet---------------")
+    print ("Algorithom vrsion : ", 'torch v0')
+    print ("NetWork Description : ", " (ddrnet_23_slim)")
+    #print "" 
 
 def initStatPack():
     StatPack =  {}
@@ -23,7 +105,6 @@ def initStatPack():
     StatPack['line_det_num'] = 0
     return StatPack
 
-
 def updatePack(StatPack, resultPack):
     print("StatPack['point_pixel_error_sum'] is: {}; resultPack['point_error'] is: {}".format(StatPack['point_pixel_error_sum'], resultPack['point_error']))
     print("StatPack['angle_error'] is: {}; resultPack['angle_error'] is: {}".format(StatPack['angle_error'], resultPack['angle_error']))
@@ -31,12 +112,12 @@ def updatePack(StatPack, resultPack):
     print("StatPack['point_true_num'] is: {}; resultPack['point_true_num'] is: {}".format(StatPack['point_true_num'], resultPack['point_true_num']))
     print("StatPack['point_miss_num'] is: {}; resultPack['point_miss_num'] is: {}".format(StatPack['point_miss_num'], resultPack['point_miss_num']))
     print("StatPack['point_false_num'] is: {}; resultPack['point_false_num'] is: {}".format(StatPack['point_false_num'], resultPack['point_false_num']))
-    print("StatPack['point_det_num'] is: {}; resultPack['point_det_num'] is: {}".format(StatPack['point_det_num'],resultPack['point_det_num']))
-
     print("StatPack['line_total_num'] is: {}; resultPack['line_total_num'] is: {}".format(StatPack['line_total_num'], resultPack['line_total_num']))
     print("StatPack['line_true_num'] is: {}; resultPack['line_true_num'] is: {}".format(StatPack['line_true_num'], resultPack['line_true_num']))
     print("StatPack['line_miss_num'] is: {}; resultPack['line_miss_num'] is: {}".format(StatPack['line_miss_num'], resultPack['line_miss_num']))
     print("StatPack['line_false_num'] is: {}; resultPack['line_false_num'] is: {}".format(StatPack['line_false_num'], resultPack['line_false_num']))
+    
+    print("StatPack['point_det_num'] is: {}; resultPack['point_det_num'] is: {}".format(StatPack['point_det_num'],resultPack['point_det_num'] ))
     print("StatPack['line_de_num'] is: {}; resultPack['line_det_num'] is: {}".format(StatPack['line_det_num'], resultPack['line_det_num']))
     
     StatPack['point_pixel_error_sum'] = StatPack['point_pixel_error_sum'] + resultPack['point_error']
@@ -45,28 +126,19 @@ def updatePack(StatPack, resultPack):
     StatPack['point_true_num'] = StatPack['point_true_num'] + resultPack['point_true_num']
     StatPack['point_miss_num'] = StatPack['point_miss_num'] + resultPack['point_miss_num']
     StatPack['point_false_num'] = StatPack['point_false_num'] + resultPack['point_false_num']
-    StatPack['point_det_num'] = StatPack['point_det_num'] + resultPack['point_det_num']
-
     StatPack['line_total_num'] = StatPack['line_total_num'] + resultPack['line_total_num']
     StatPack['line_true_num'] = StatPack['line_true_num'] + resultPack['line_true_num']
     StatPack['line_miss_num'] = StatPack['line_miss_num'] + resultPack['line_miss_num']
     StatPack['line_false_num'] = StatPack['line_false_num'] + resultPack['line_false_num']
+
+    StatPack['point_det_num'] = StatPack['point_det_num'] + resultPack['point_det_num']
     StatPack['line_det_num'] = StatPack['line_det_num'] + resultPack['line_det_num']
 
-def printTitleInfo(weight_name):
-    print("")
-    print("--------------Slot Det Model Auto Test On Image DataSet---------------")
-    print("Algorithom vrsion : ", 'torch v0')
-    print("NetWork Description : ", " (ddrnet_23_slim)")
-    print("trained model name : ", weight_name)
-    # print ""
-
-
-def outputStat(StatPack, weight_name):
+def outputStat(StatPack, save_path):
     if StatPack['point_total_num'] != 0:
-        StatPack['point_pixel_error_avg'] = StatPack['point_pixel_error_sum'] / StatPack['point_total_num']
+        StatPack['point_pixel_error_sum'] = StatPack['point_pixel_error_sum'] / StatPack['point_total_num']
     if StatPack['line_total_num'] != 0:
-        StatPack['angle_error_avg'] = StatPack['angle_error'] / StatPack['line_total_num']
+        StatPack['angle_error'] = StatPack['angle_error'] / StatPack['line_total_num']
     if StatPack['point_total_num'] != 0:
         StatPack['point_recall'] = StatPack['point_true_num']*1.0/ StatPack['point_total_num']
         StatPack['point_miss_rate'] = StatPack['point_miss_num'] * 1.0 / StatPack['point_total_num']
@@ -81,12 +153,12 @@ def outputStat(StatPack, weight_name):
         StatPack['line_precision'] = StatPack['line_true_num'] * 1.0 / StatPack['line_det_num']
         StatPack['line_FDR'] = StatPack['line_false_num'] * 1.0 / StatPack['line_det_num']
 
-    printTitleInfo(weight_name)
+    printTitleInfo()
     print ("--->point count result : ")
     
     print("point recall = ", StatPack['point_recall'])
     print("point_precision = ", StatPack['point_precision'])
-    print ("point average pixel error : ", StatPack['point_pixel_error_avg'])
+    print ("point average pixel error : ", StatPack['point_pixel_error_sum'])
     print("point FDR: ", StatPack['point_FDR'])
     print("point miss rate = ", StatPack['point_miss_rate'])
 
@@ -96,11 +168,11 @@ def outputStat(StatPack, weight_name):
     print("point_false_num = ", StatPack['point_false_num']) 
     print("point miss num = ", StatPack['point_miss_num'])
     
-   
+
     print ("--->line count result : ")
     print ("line recall = ", StatPack['line_recall'])
     print("line_precision = ", StatPack['line_precision'])
-    print ("point line angle error degree : ", np.degrees(StatPack['angle_error_avg']))
+    print ("point line angle error degree : ", np.degrees(StatPack['angle_error']))
     print("line FDR = ", StatPack['line_FDR']) 
     print("line miss rate = ", StatPack['line_miss_rate'])
 
@@ -111,89 +183,12 @@ def outputStat(StatPack, weight_name):
     print("line miss num = ", StatPack['line_miss_num'])
     
     print ("--------------------down------------------------")
-    return
+    log_to_file(log_file=save_path)
+    return 
 
+if __name__== "__main__":
+    staticpack = initStatPack()
+    resultPack = {}
+    updatePack(staticpack, resultPack)
+    outputStat(staticpack)
 
-def DrawVe(gt, pred, meta, save_path):
-    image_f = meta['last_img_path']
-    w, h = meta['wh']
-
-    img = cv2.imread(image_f, cv2.IMREAD_COLOR)
-    mask = cv2.resize(img, (w, h))
-
-    h, w, c = mask.shape
-    for i in range(len(pred)):
-        point = pred[i][0]
-        orients = pred[i][1]
-        for j in range(len(orients)):
-            ori = orients[j]
-            stp = (point[0], point[1])
-            edp = (int(stp[0] + ori[0]*ori[3]),
-                   int(stp[1] + ori[1]*ori[3]))
-            cv2.line(mask, stp, edp, (0, 250, 0), 2)
-            # mdp = ((edp[0]+stp[0])/2 , (edp[1]+stp[1])/2)
-            # line_label = 'p' + str(i) + '_l' + str(j)
-            # cv2.putText(mask, line_label, mdp, 1, 0.8, (0,0,0), 1)
-    for i in range(len(pred)):
-        point = pred[i][0]
-        cv2.circle(mask, (point[0], point[1]), 2, (0, 0, 250), -1)
-        dx = 5
-        if point[0] > w/2:
-            dx = -15
-        mdp = (point[0] + dx, point[1] + 5)
-        # point_label = 'p' + str(i)
-        # cv2.putText(mask, point_label, mdp, 1, 0.8, (0,0,200), 1)
-    os.makedirs(save_path, exist_ok=True)
-    print("save_path ", save_path)
-    cv2.imwrite(os.path.join(save_path, image_f.split('/')[-1]), mask)
-
-
-@EVALUATORS.register_module()
-class PARKING_IPM_STAEvaluator(BaseEvaluator):
-    def __init__(self, global_config, task_config, print_to_terminal=False):
-        super().__init__(global_config, task_config)
-        # self.pc_range = [0, -10.0, -2.0, 80.2, 10.2, 2.0]
-        # self.gt_range = [120, 16, 0, 0.0, -16.0, 0]
-
-        self.pread_all = []
-        self.gt_all = []
-        self.meta_all = []
-        self.load_from = global_config.load_from
-        self.save = os.path.join(global_config.save, "detect_res")
-
-    def generate_kpi(self) -> dict:
-        StatPackage = initStatPack()
-        point_num = 0
-        line_num = 0
-        for pred, gt, meta in zip(self.pread_all, self.gt_all, self.meta_all):
-            DrawVe(gt, pred, meta, self.save)
-            evaloator = TXTLabelLoader(self.sw, self.sh)
-            point_num = point_num + len(pred)
-            for i in range(len(pred)):
-                line_num = line_num + len(pred[i][1])
-
-            heatmapResultPack = evaloator.errorCaculate(pred, gt)
-            updatePack(StatPackage, heatmapResultPack)
-        StatPackage['detect_point_num'] = point_num
-        StatPackage['detect_line_num'] = line_num
-        outputStat(StatPackage, self.load_from)
-        return
-
-    def compute_metrics(self, pred, true, metadata):
-        """Compute the metrics from processed results.
-        Args:
-            results (List[dict]): The processed results of each batch.
-        Returns:
-            Dict[str, float]: The computed metrics. The keys are the names of
-            the metrics, and the values are corresponding results.
-        """
-        self.pread_all += pred
-        self.gt_all += true
-        self.meta_all += metadata
-
-        return
-
-    def process(self, pred: dict, true: dict, metadata: dict) -> None:
-        self.sw, self.sh = metadata[0]['sw_sh']
-        self.compute_metrics(pred, true, metadata)
-        pass

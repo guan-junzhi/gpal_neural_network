@@ -10,7 +10,7 @@ import argparse
 import time
 import pandas as pd
 import glob
-
+import json
 # 获取当前脚本所在的目录
 current_path = "/home/jovyan/gpal_neural_network"
 import sys
@@ -28,10 +28,12 @@ from gpal_nn.tasks.parking_ipm_sta.postprocess.heatmap_instance_p3 import HeatMa
 
 def parse_args():
     parser = argparse.ArgumentParser(description="slot_onnx")
-    parser.add_argument("--onnx_path", default="/home/jovyan/gpal_neural_network/20251022_log/20251022_int16_quantized_model.bc", type=str)
-    parser.add_argument("--img_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/1114_park_bad/all_2025_11_14_13_57_28/", type=str)
-    parser.add_argument("--label_path", default="/data/ai_group/datasets/bev_park/jira/jira3319/EKART_GPAL-MIFA7-004_tgr_2025-10-23_15-01-41/tgr_2025-10-23_15-01-41/tgr_2025-10-23_15-01-41/avm_image", type=str)
-    parser.add_argument("--save_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/1114_park_bad/all_2025_11_14_13_57_28_int16_quantized_bc_res", type=str)
+    parser.add_argument("--onnx_path", default="/home/jovyan/gpal_neural_network/20251022_log/20251022_int16_avm_quantized_model.bc", type=str)
+    parser.add_argument("--img_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/jira3716/all_2025_11_22_11_51_24_avm", type=str)
+    parser.add_argument("--save_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/jira3716/all_2025_11_22_11_51_24_avm_quantized_model_300w_quantized_20251022model_bc_res", type=str)
+    parser.add_argument("--save_txt_flag", default=0, type=bool)
+    parser.add_argument("--save_txt", default="300w_quat_serveravm_det_res", type=str)
+
     args = parser.parse_args()
     return args
 
@@ -179,6 +181,7 @@ def detect(orig_img, model, model_h, model_w, device):
         # SlotComposeInstance.DrawSlots(matchpair_img, savePath.replace('.jpg','_slot.jpg'))
     # return vertexElements, slotsList
 
+
 def bgr_to_nv12_split(img_rgb):
     # 转换为YUV420 (I420)
     yuv_i420 = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2YUV_I420)
@@ -200,76 +203,23 @@ def bgr_to_nv12_split(img_rgb):
     uv_interleaved = uv_interleaved.reshape(1, h//2, w//2, 2)   #.transpose(0, 3, 1, 2)
     return y_plane, uv_interleaved
 
-def detect_fisheye_nv12(fisheye_img, img_name, onnx_mode_path):
-    fisheye_config = '/data/ai_group/datasets/bev_park/park_slot_jira/1114_park_bad/calib'
-    mask_front_path = os.path.join(fisheye_config, "mask", 'mask_front_89.jpg')
-    mask_left_path = os.path.join(fisheye_config, "mask", 'mask_left_89.jpg')
-    mask_back_path = os.path.join(fisheye_config, "mask", 'mask_back_89.jpg')
-    mask_right_path = os.path.join(fisheye_config, "mask", 'mask_right_89.jpg')
-  
-    img_front = fisheye_img[0]
-    img_front_y, img_front_uv = bgr_to_nv12_split(img_front)
-    img_left = fisheye_img[1]
-    img_left_y, img_left_uv = bgr_to_nv12_split(img_left)
-    img_rear = fisheye_img[2]
-    img_rear_y, img_rear_uv = bgr_to_nv12_split(img_rear)
-    img_right = fisheye_img[3]
-    img_right_y, img_right_uv = bgr_to_nv12_split(img_right)
+def detect_avm_nv12(avm_img, img_name, onnx_mode_path):
+
+    avm_y, avm_uv = bgr_to_nv12_split(avm_img)
     
     avm_w = 768
     avm_h = 768
-    mask_back = cv2.imread(mask_back_path,0)
-    if mask_back is None:
-        print("mask back is None")
-        return
-    mask_back = cv2.resize(mask_back, (avm_w,avm_h))
-    mask_front = cv2.imread(mask_front_path,0)
-    mask_front = cv2.resize(mask_front, (avm_w,avm_h))
-    mask_left = cv2.imread(mask_left_path,0)
-    mask_left = cv2.resize(mask_left, (avm_w,avm_h))
-    mask_right = cv2.imread(mask_right_path,0)
-    mask_right = cv2.resize(mask_right, (avm_w,avm_h))
-
-    rear_front_path = os.path.join(fisheye_config, 'mask', 'grid_rear_and_front.npy')
-    left_right_path = os.path.join(fisheye_config, 'mask', 'grid_left_and_right.npy')
-    grid_rear_and_front = np.load(rear_front_path)
-    grid_left_and_right = np.load(left_right_path)
-
-    grid_rear_and_front = torch.tensor(grid_rear_and_front).type(torch.float32)
-    grid_left_and_right = torch.tensor(grid_left_and_right).type(torch.float32)
     
     ort_session = HBRuntime(onnx_mode_path)
     input_names = ort_session.input_names
     output_names = ort_session.output_names
-    print("input_names ", input_names)
-    print("output_names ", output_names)
-    
-    img_rear = img_rear.astype(np.float32)
-    img_front = img_front.astype(np.float32)
-    img_left = img_left.astype(np.float32)
-    img_right = img_right.astype(np.float32)
+    # print("input_names ", input_names)
+    # print("output_names ", output_names)
 
     test_inputs = {}
-    test_inputs['img_rear_y'] = img_rear_y
-    test_inputs['img_rear_uv'] = img_rear_uv
-    test_inputs['img_front_y'] = img_front_y
-    test_inputs['img_front_uv'] = img_front_uv
-    test_inputs['grid_rear_and_front'] = np.array(grid_rear_and_front)
-    test_inputs['img_left_y'] = img_left_y
-    test_inputs['img_left_uv'] = img_left_uv
-    test_inputs['img_right_y'] = img_right_y
-    test_inputs['img_right_uv'] = img_right_uv
-    test_inputs['grid_left_and_right'] = np.array(grid_left_and_right)
-    test_inputs['mask_rear'] = mask_back[None, :, :, None].astype(np.float32)
-    test_inputs['mask_front'] = mask_front[None, :, :, None].astype(np.float32) 
-    test_inputs['mask_left'] = mask_left[None, :, :, None].astype(np.float32)
-    test_inputs['mask_right'] = mask_right[None, :, :, None].astype(np.float32) 
-    if 0:
-        save_calib_data_dir = "ptq/nv12_input_data_20250819-094336_300w"
-        for k, v in test_inputs.items():
-            save_path = os.path.join(save_calib_data_dir)
-            os.makedirs(save_path, exist_ok=True)
-            np.save(save_path + f"/{k}.npy", v)
+    test_inputs['img_avm_y'] = avm_y
+    test_inputs['img_avm_uv'] = avm_uv
+
     outputs = ort_session.run(output_names, input_feed=test_inputs)
     
     if 0:
@@ -278,23 +228,23 @@ def detect_fisheye_nv12(fisheye_img, img_name, onnx_mode_path):
         slot_line = np.loadtxt("ptq/aarch64_hbm_outputs/model_infer_output_2_slot_line.txt").reshape(1, 1, 768, 768)
         outputs = (avm, slot_point, slot_line)
     # 处理输出
-    print("\n模型输出信息:")
-    for i, output in enumerate(outputs):
-        print(f"输出 {i+1}: 形状={output.shape}, 类型={output.dtype}")
+    # print("\n模型输出信息:")
+    # for i, output in enumerate(outputs):
+    #     print(f"输出 {i+1}: 形状={output.shape}, 类型={output.dtype}")
 
-    output_pt = outputs[1]
-    output_line = outputs[2]
+    output_pt = outputs[0]
+    output_line = outputs[1]
     _, _, h, w = output_pt.shape
     heatmapValue = output_pt[0,0,:,:]
     linemapValue = output_line[0,0,:,:]
-    point_img, line_img = getFeatureMap(heatmapValue, linemapValue, w, h)
+    # point_img, line_img = getFeatureMap(heatmapValue, linemapValue, w, h)
     # print(line_img)
     save_folder = onnx_mode_path.split('/')[-1].split('.')[0] + "_quantize_nv12_aarch64" 
     savePath = os.path.join(args.save_path, save_folder)
     if not os.path.exists(savePath):
         os.makedirs(savePath)
     savename = savePath + '/' + img_name
-    avm_img = np.array(np.clip(outputs[0], 0, 255)).astype(np.uint8)
+    # avm_img = np.array(np.clip(outputs[0], 0, 255)).astype(np.uint8)
 
     # cv2.imwrite(savename.replace('.jpg','_avm.jpg'), avm_img)
     # savePath = "/home/gpal/gpal_work/ParkingSlot/parking_slot/master_v3/code_train_segmentation/connvert_onnx/slot/{}.jpg".format(img_name[0:-4])
@@ -303,6 +253,7 @@ def detect_fisheye_nv12(fisheye_img, img_name, onnx_mode_path):
 
     SlotDetInstance = HeatMap(w, h)
     vertexElements = SlotDetInstance.doProc(heatmapValue, linemapValue)
+    # print("return vertextElement ", vertexElements)
     show_img = avm_img.copy()
     SlotDetInstance.drawVE(show_img, savename.replace('.jpg','_draw.jpg'))
     return vertexElements
@@ -426,62 +377,63 @@ def main(args):
 
 
     test_dir = args.img_path #"oneIMG" #"miniBatch" #"test_img"
-    test_pic_folder = glob.glob(os.path.join(test_dir, "*/"))
-    channel_fisheye_foler = ["img_front_fisheye", "img_left_fisheye", "img_rear_fisheye", "img_right_fisheye"]
+    test_pic_paths = glob.glob(os.path.join(test_dir, "*.jpg"))
     # do_save_img = False
     do_save_img = True
     frame_idx = 0
     # StatPackage = initStatPack()
-    for pic_folder in test_pic_folder:
-        
-        front_Path = os.path.join(pic_folder, channel_fisheye_foler[0])
-        left_Path = os.path.join(pic_folder, channel_fisheye_foler[1])
-        rear_Path = os.path.join(pic_folder, channel_fisheye_foler[2])
-        right_Path = os.path.join(pic_folder, channel_fisheye_foler[3])
-        img_file_list = os.listdir(front_Path)
-        for img_file in img_file_list:
-            if frame_idx >= 320:
-                continue
-            print(f"frame_idx: {frame_idx}")
-            frame_idx += 1
-            
-            front_img_path = os.path.join(front_Path, img_file)
-            left_img_path = os.path.join(left_Path, img_file)
-            rear_img_path = os.path.join(rear_Path, img_file)
-            right_img_path = os.path.join(right_Path, img_file)
-            fisheye_img = []
-            fisheye_img.append(cv2.imread(front_img_path))
-            fisheye_img.append(cv2.imread(left_img_path))
-            fisheye_img.append(cv2.imread(rear_img_path))
-            fisheye_img.append(cv2.imread(right_img_path))
-            
+    point_num = 0
+    line_num = 0
+    print("process img num= ", len(test_pic_paths))
+    valid_txt_path = "/data/ai_group/datasets/bev_park/park_slot_jira/1114_jira/datas/car_and_server_datas/server/pointline.txt"
+    with open(valid_txt_path, "r") as f:
+        file_paths = f.readlines()
 
-            # vertexElements, slotsList = detect_point(orig_img, model, model_h, model_w, device)
-            # vertexElements, slotsList = detect(orig_img, model, model_h, model_w, device)
-            model_h = 768
-            model_w = 768
-            # vertexElements = detect_fisheye(fisheye_img, img_file, onnx_mode_path)
-            detect_fisheye_nv12(fisheye_img, img_file, onnx_mode_path)
-            
-    #         print("img_file ", front_img_path)
-    #         print("vertexElements ", vertexElements)
-    #         label_img_raww = 768
-    #         label_img_rawh = 768
-    #         sw, sh = getImageSizeScale(label_img_raww, label_img_rawh, model_w, model_h)
-    #         valid_folders_list = front_img_path.split("/")[-4:]
-    #         valid_pic_folders = os.path.join(valid_folders_list[0], valid_folders_list[1], valid_folders_list[3])
-    #         #do Heatmap Statistics 
-    #         txtPath = os.path.join(ann_dir, valid_pic_folders.replace('.jpg', '.txt'))
-    #         if not os.path.exists(txtPath):
-    #             print("!!!!{} json path is not exist ".format(txtPath))
-    #         print("txtPath is: {}".format(txtPath))
-    #         labelInstance = TXTLabelLoader(sw, sh)
-    #         # heatmapResultPack = labelInstance.doHeatmapStatistics_json_anno(jsonPath, vertexElements)
-    #         heatmapResultPack = labelInstance.doHeatmapStatistics(txtPath, vertexElements)
-    #         updatePack(StatPackage, heatmapResultPack)
-    #     #do Slot Match Statistics
+    # img_valid_path = []
+    # for img_path in test_pic_paths:
+    #     img_name = os.path.basename(img_path)
+    #     for file_path in file_paths:
+    #         valid_img_path = file_path.split(" ")[1]
+    #         if img_name in valid_img_path:
+    #             img_valid_path.append(img_path)
+
+
+    img_valid_path = test_pic_paths
+    print("valid path ", len(img_valid_path))
+    if args.save_txt_flag:
+        if not os.path.exists(args.save_txt):
+            os.makedirs(args.save_txt)
     
-    # outputStat(StatPackage)
+    for test_path in img_valid_path:
+        # print("path ", test_path)
+        avm_img = cv2.imread(test_path)
+        model_h = 768
+        model_w = 768
+        # vertexElements = detect_fisheye(fisheye_img, img_file, onnx_mode_path)
+        img_name = os.path.basename(test_path)
+        vertexElements = detect_avm_nv12(avm_img, img_name, onnx_mode_path)
+        
+
+        if args.save_txt_flag:
+            save_txt_path = os.path.join(args.save_txt, img_name.replace(".jpg", ".txt"))
+            line_pt_info = []
+            
+            
+            for i in range(len(vertexElements)):
+                point = vertexElements[i][0]
+                orients = vertexElements[i][1]
+                line_num = line_num + len(orients)
+                line_pt_info.append({"pt":(point[0], point[1])})
+                for j in range(len(orients)):
+                    ori = orients[j]
+                    stp = (point[0], point[1])
+                    edp = (int(stp[0] + ori[0]*ori[3]), int(stp[1] + ori[1]*ori[3]))
+                    line_pt_info.append({"line":(point[0], point[1], edp[0], edp[1])})
+        # point_num = point_num + len(vertexElements)
+            with open(save_txt_path, "a") as f:
+                for det_info in line_pt_info:
+                    f.write(f"{json.dumps(det_info)}\n")
+
 
 if __name__ == '__main__':
     main(args)

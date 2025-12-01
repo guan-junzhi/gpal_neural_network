@@ -8,7 +8,8 @@ import pickle
 from typing import List, Union
 from torch import distributed
 import numpy as np
-
+# import sys
+# sys.path.append("/home/jovyan/gpal_neural_network")
 from gpal_lightning import const
 from gpal_lightning.neural_network.tasks.builder import DATASETS
 from gpal_lightning.neural_network.tasks.base.datasets.image_base_dataset import ImageBaseDataset
@@ -25,6 +26,7 @@ import multiprocessing
 from shapely.geometry import LineString
 import json
 from gpal_nn.tasks.parking_ipm_sta.datasets.txtlabel_instance_p3 import TXTLabelLoader
+import albumentations as A
 
 
 class PLAssigner:
@@ -221,7 +223,6 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT")
         LOCAL_DATASETS_ROOT = os.getenv(
             "ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT")
-
         root_dir = os.path.join(DATASETS_ROOT, root_dir)
 
         self.root_dir = root_dir
@@ -251,9 +252,16 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             self.h, self.w, self.point_sigma, self.line_sigma, self.line_pad)
 
         self.transforms = None
-        self.img_transforms = None
+        self.img_transforms = A.Compose([
+            # 色彩增强（之前关注的核心）
+            A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.2),  # 亮度/对比度
+            A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=0, p=0.2),  # 色调/饱和度
+            # A.RGBShift(r_shift_limit=10, g_shift_limit=10, b_shift_limit=10, p=0.2),  # 通道偏移
+        ])
+        
         self.task = task_config.name
         self.camera_names = camera_name
+        
 
     def _build_world_data_list(self):
         try:
@@ -379,6 +387,7 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         anno_f, image_f = self.dataset[idx]
 
         image, origin_shape = self.pull_img(image_f)
+        # cv2.imwrite(f"/data/ai_group/datasets/bev_park/parkslot_net/add_aug/test0/{idx}_ori.jpg", image)
         rawh, raww, _ = origin_shape
         model_h = self.h
         model_w = self.w
@@ -389,10 +398,12 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             anno = slot_maps
             # slot_maps = torch.from_numpy(slot_maps.astype(np.float32))
             slot_gt = np.zeros((2, self.h, self.w), dtype=np.float32)  # ch h w
-            if self.transforms is not None:
+            img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+           
+            if self.img_transforms is not None:
                 # image = self.img_transforms(image)
-                trans_1 = self.transforms(
-                    image=image, mask1=anno[0], mask2=anno[1])
+                trans_1 = self.img_transforms(
+                    image=img_rgb, mask1=anno[0], mask2=anno[1])
                 image_trans = trans_1['image']
                 point_gt = trans_1['mask1']
                 line_gt = trans_1['mask2']
@@ -411,9 +422,12 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             annotations = labelInstance.decodePointLineLabel(anno_f)
             gt = annotations
             # print("annotations\n", annotations)
-
-        image_gt = self.img_transforms(
-            image) if self.img_transforms is not None else image
+        
+        img_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        # cv2.imwrite(f"/data/ai_group/datasets/bev_park/parkslot_net/add_aug/test0/{idx}.jpg", img_bgr)
+        # image_gt = self.img_transforms(
+        #     image) if self.img_transforms is not None else image
+        image_gt = img_bgr
 
         image_gt = image_gt.astype(np.float32).transpose(2, 0, 1) / 255.0
         data_dict = {'label': gt, "image": image_gt, "meta": {}}
@@ -434,7 +448,7 @@ def Get(dataset_temp, i, j):
 
 def preprocess_img(avm_img):
     img_tensor = avm_img.clone().detach() / 255.0
-    img_tensor = img_tensor.permute(2, 0, 1)
+    img_tensor = img_tensor.permute(0, 3, 1, 2)
     # mean = torch.tensor([0.481093804, 0.457524588, 0.407870549]).view(3, 1, 1)
     # std = torch.tensor([1.0, 1.0, 1.0]).view(3, 1, 1)
     # normalized_tensor = (img_tensor - mean) / std  # 应用归一化公式
@@ -450,10 +464,16 @@ if __name__ == "__main__":
     os.environ['MASTER_PORT'] = '29501'
     os.environ['RANK'] = '0'
     os.environ['WORLD_SIZE'] = '1'
+    os.environ['ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT'] = '/data/ai_group/datasets/'
+
     distributed.init_process_group(backend='nccl')
     train_dataset = PARKING_IPM_STADataset(*inputs)
 
     print(len(train_dataset))
+    for idx, data in enumerate(train_dataset):
+        if idx > 5000:
+            break
+
 
     d = train_dataset[0]
     # print(d.keys())
@@ -466,4 +486,4 @@ if __name__ == "__main__":
     # print(ShowDataStruct("image_gt", d["image"]))
     # print(ShowDataStruct("slot_maps", d["label"]))
 
-    train_dataset.save_all_heatmap('experiments/data_visual')
+    # train_dataset.save_all_heatmap('experiments/data_visual')

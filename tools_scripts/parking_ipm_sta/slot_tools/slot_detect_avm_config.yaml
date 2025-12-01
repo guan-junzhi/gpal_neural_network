@@ -1,0 +1,77 @@
+# Copyright (c) 2023 Horizon Robotics.All Rights Reserved.
+#
+# The material in this file is confidential and contains trade secrets
+# of Horizon Robotics Inc. This is proprietary information owned by
+# Horizon Robotics Inc. No part of this work may be disclosed,
+# reproduced, copied, transmitted, or used in any way for any purpose,
+# without the express written permission of Horizon Robotics Inc.
+
+# Model conversion related parameters
+model_parameters:
+  # The model file of floating-point ONNX neural network data
+  onnx_model: '/home/jovyan/gpal_neural_network/20251022_log/epoch=146-step=150000_checkpoint_sim_avm.onnx'
+  # BPU architecture, with range: nash-e/nash-m
+  march: "nash-m"
+  # Specify the directory to store the model conversion output
+  working_dir: '/data/ai_group/workdirs/gpal_neural_network_group/zww/slot_version/20251022_log'
+  # Specify the name prefix for output model
+  output_model_file_prefix: '20251022_int16_avm_200w_quat_'
+  enable_vpu: True
+  # debug_mode: "dump_calibration_data"
+
+# Model input related parameters
+# For multiple input nodes, use ';' to separate them, for default setting, set None
+input_parameters:
+  # Specify the input node name of the original floating-point model,
+  # consistent with its name in the model, not specified will be obtained from the model
+  input_name: "img_avm"
+  # Specify the input data of the on-board model, with range: nv12/rgb/bgr/yuv444/gray/featuremap
+  input_type_rt: 'nv12'
+  # Specify the input data type of the original floating-point model, with range: rgb/bgr/gray/yuv444/featuremap
+  # The number/order specified need to be the same as in input_name
+  input_type_train: 'bgr'
+  # Specify the input data layout of the original floating-point model, with range: NHWC/NCHW
+  # The number/order specified need to be the same as in input_name
+  input_layout_train: 'NHWC'
+  # Specify the input shape of the original floating-point model, e.g. 1x3x224x224;1x2x224x224
+  # input_shape: '1x3x768x768'
+  # Specify the batch of the on-board model
+  # Only supported for single-input model and the input's first dimension is 1.
+  #input_batch: 1
+  # Specify the model input preprocessing method, with range: no_preprocess/data_mean_and_scale/data_mean/data_scale
+  # norm_type: 'data_scale'
+  # Specify the mean value to be subtracted by the preprocessing input image
+  # For channel mean values, use space or ';' for separation
+  # mean_value: 127.5
+  # Specify the scale factor of the preprocessing input image
+  # For channel scale, use space or ';' for separation
+  # scale_value: 0.003921569
+
+# Calibration related parameters
+calibration_parameters:
+  # Specify the directory to store the calibration data, support Jpeg, Bmp etc, which should cover the typical scenarios
+  # For multiple inputs, need to set multiple directories, and use ';' for separation
+  cal_data_dir: '/data/ai_group/datasets/bev_park/train_test_dataset/200w_camera_avm_for_bc_quat/img_avm_npy'
+  # cal_data_type: 'float32'
+  # Specify the type of algorithm used for calibration, with range: default/mix/kl/max/load
+  # Select skip for only performance verification, select load when using the QAT exported model
+  # Usually default is enough to meet the requirements, if not, try in the order of mix, kl/max
+  calibration_type: 'mix'
+  # quant_config: "config/quant_config.json"
+  quant_config: {
+    "model_config": {
+      "all_node_type": int16
+    },
+    "op_config": {
+    },
+    "node_config": {
+    }
+  }
+
+# Compilation related parameters
+compiler_parameters:
+  # Specify the model compilation optimization level
+  # O0 means no optimization, O1-O3 means more optimization as the level increases, but higher compilation time
+  optimize_level: 'O2'
+  jobs: 256
+  extra_params: {"input_no_padding": True, "output_no_padding": True}
