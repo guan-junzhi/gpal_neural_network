@@ -8,8 +8,8 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  EPOCH_LEN: 120000
-  CLIP_LENGTH: [64, 128]
+  EPOCH_LEN: 60000
+  CLIP_LENGTH: [15, 25]
   log_every: 10
   visualize_every: 200
   max_visu_img_num: 6
@@ -170,7 +170,8 @@ Tasks:
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_modeloutput/20251114-163925/20251114-163925_0_train_frame_pairs_sampled_excludeNoneFisheyeDirOnlyParking99.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_modeloutput/20251114-163925/20251114-163925_0_train_frame_pairs_sampled_excludeNoneFisheyeDir80.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251122-153458/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/combine_pkl/20251122-153458/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/combine_pkl/20251122-153458/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/combine_pkl/20251128-160418/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_fisheye', 'img_right_fisheye', 'img_rear_fisheye', 'img_left_fisheye'],
           shuffle: False,
           fast_buffer_path: "./fisheye" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT

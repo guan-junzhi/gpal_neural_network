@@ -1012,7 +1012,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
                 # img_path[camera_view] = image_file
                 # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
-                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx)
+                crop_start = self.img_crop_start[view_idx]
+                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx, crop_start)
 
                 input_dict[f'origin_images_input{view_idx}'] = current_img.astype(np.float32).copy()
 
