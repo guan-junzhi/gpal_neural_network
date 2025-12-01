@@ -286,7 +286,10 @@ class ODViewTransformer(BaseModule):
             nn.BatchNorm2d(transformer_config["out_channels"]),
             nn.ReLU(True)
         )
-        self.view_marker = SimpleViewMarker(num_views=len(self.input_source), feature_dim=transformer_config["out_channels"])
+        if self.subtask_name in ["DRIVING_BEV_DYN_FISHEYE"]:
+            self.view_marker = SimpleViewMarker(num_views=len(self.input_source), feature_dim=transformer_config["out_channels"])
+        else:
+            self.view_marker = nn.Identity()
 
     def forward(
         self,
