@@ -417,3 +417,15 @@ class DRIVING_BEV_DYNTask(BaseTask):
                 raise ValueError(
                     f"Unrecognized EVALUATION_FILES_EXTENSION: {const.EVALUATION_FILES_EXTENSION}")
         return json_list, metadata_list
+
+    def eval_visualize(self, save_root, metadata, data, dataloader_idx, preds, trues, batch, json_list, calib):
+        if not os.path.exists(save_root):
+            os.makedirs(save_root, exist_ok=True)
+        
+        bs = len(metadata)
+        for idx in range(bs):
+            vis_draw1 = self.GetVis(data, preds, trues, metadata, calib, idx)
+            # import cv2
+            # cv2.imwrite(f"eval_vis_online/{metadata[idx]['frame_id'].split('/')[0]}.jpg", vis)
+            image_filename = metadata[idx]['clip_id'] + '^' + metadata[idx]['timestamp']
+            cv2.imwrite(os.path.join(save_root, f"{image_filename}.jpg"), vis_draw1, [int(cv2.IMWRITE_JPEG_QUALITY), 100])

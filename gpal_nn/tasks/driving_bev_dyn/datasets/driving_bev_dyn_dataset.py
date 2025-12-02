@@ -603,7 +603,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 image = cv2.resize(image, self.image_resize[::-1])
                 image = image[crop_start:crop_start + self.img_h_len]
             self._slice_image_cache(
-                database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=95)
+                database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
         else:
             self.fast_buf_sec_cnt += 1
 

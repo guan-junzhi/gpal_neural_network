@@ -83,6 +83,13 @@ def create_logger(log_file=None, rank=0, log_level=logging.INFO, use_console=Tru
 
 
 def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08_44_34/od_eval_result"):
+
+    # 先根据 timestamp 排序
+    resorted_idx = np.argsort([i['timestamp'] for i in metas])
+    gts = [gts[i] for i in resorted_idx]
+    metas = [metas[i] for i in resorted_idx]
+    preds = [preds[i] for i in resorted_idx]
+    
     # if 'annos' not in self.infos[0].keys():
     #     return 'No ground-truth boxes for evaluation', {}
     # gt 需要去除补全框
@@ -215,7 +222,7 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     image_dir = DATA_COLLECT_ROOT
     
     # badcase 展示不生成
-    if True:
+    if False:
         frame_infos = evaluator.get_frame_infos_from_distance_errors(distance_errors_list=distance_errors_list,)
     
         # TODO 暂时调试使用，后续统一到函数接口内部
