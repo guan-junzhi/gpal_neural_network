@@ -419,26 +419,36 @@ def ProcessGt2(trues, preds, output_group):
 
         valid_mask = classes.new_zeros([num_query, shape_types.shape[0]]).bool()
         group_range = [0] + list(np.cumsum([group[1] for group in output_group]))
+        keep_mask = torch.zeros_like(classes).bool()
         for group_idx, group in enumerate(output_group):
             type_mask = torch.zeros_like(classes)
             for target_cls in group[0]:
                 type_mask += (target_cls == classes)
             type_mask = type_mask > 0
+            cur_indice = torch.argwhere(type_mask).squeeze(-1)
+            if type_mask.sum() > group[1]:
+                cur_pts = points_gt[cur_indice, 0]
+                min_distances = torch.min(torch.norm(cur_pts, dim=2), dim=1)[0]
+                keep_indices = torch.argsort(min_distances)[:group[1]]
+                keep_mask[cur_indice[keep_indices]] = True
+            else:
+                keep_mask[cur_indice] = True
+                
             valid_mask[group_range[group_idx]:group_range[group_idx+1], type_mask] = True
 
-        gt_batched["valid_mask"].append(valid_mask)
-        gt_batched["classes"].append(classes)
-        gt_batched["bboxes"].append(bboxes_gt)
-        gt_batched["points"].append(points_gt)
-        gt_batched["lane_marking_types"].append(lane_marking_types)
-        gt_batched["lane_marking_colors"].append(lane_marking_colors)
-        gt_batched["types"].append(shape_types)
-        gt_batched["centerline_types"].append(centerline_types)
-        gt_batched["centerline_directions"].append(centerline_directions)
-        gt_batched["keyp_cls"].append(keypoint_cls_gt)
-        gt_batched["keyp_reg"].append(keypoint_reg_gt)
-        gt_batched["polygon_classes"].append(polygon_classes)
-        gt_batched["arrow_classes"].append(arrow_classes)
+        gt_batched["valid_mask"].append(valid_mask[:, keep_mask])
+        gt_batched["classes"].append(classes[keep_mask])
+        gt_batched["bboxes"].append(bboxes_gt[keep_mask])
+        gt_batched["points"].append(points_gt[keep_mask])
+        gt_batched["lane_marking_types"].append(lane_marking_types[keep_mask])
+        gt_batched["lane_marking_colors"].append(lane_marking_colors[keep_mask])
+        gt_batched["types"].append(shape_types[keep_mask])
+        gt_batched["centerline_types"].append(centerline_types[keep_mask])
+        gt_batched["centerline_directions"].append(centerline_directions[keep_mask])
+        gt_batched["keyp_cls"].append(keypoint_cls_gt[keep_mask])
+        gt_batched["keyp_reg"].append(keypoint_reg_gt[keep_mask])
+        gt_batched["polygon_classes"].append(polygon_classes[keep_mask])
+        gt_batched["arrow_classes"].append(arrow_classes[keep_mask])
 
     return gt_batched
 
