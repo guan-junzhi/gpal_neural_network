@@ -86,9 +86,9 @@ def ap_per_class_with_curves(tp, conf, pred_cls, target_cls, class_names, precis
 
         if n_p == 0 and n_gt == 0:
             # 情况1: 既没有预测也没有真实标签 - 该类别不存在
-            ap.append(-1)  # 或者 np.nan，表示无法计算
-            r.append(-1)
-            p.append(-1)
+            ap.append(-1.0)  # 或者 np.nan，表示无法计算AP
+            r.append(-1.0)
+            p.append(-1.0)
             recall_curve = np.array([])
             precision_curve = np.array([])
             
@@ -96,14 +96,14 @@ def ap_per_class_with_curves(tp, conf, pred_cls, target_cls, class_names, precis
             # 情况2: 有真实标签但没有预测 - 完全漏检
             ap.append(0.0)  # AP = 0，因为召回率为0
             r.append(0.0)   # 召回率 = 0
-            p.append(-1)    # 精度无法定义（0/0）
+            p.append(-1.0)    # 精度无法定义（0/0）
             recall_curve = np.array([0.0])
             precision_curve = np.array([0.0])  # 可以设为 np.nan
             
         elif n_p > 0 and n_gt == 0:
             # 情况3: 有预测但没有真实标签 - 全部误检
             ap.append(0.0)  # AP = 0，因为精度为0
-            r.append(-1)    # 召回率无法定义（0/0）
+            r.append(-1.0)    # 召回率无法定义（0/0）
             p.append(0.0)   # 精度 = 0，所有预测都是FP
             recall_curve = np.array([0.0])     # 可以设为 np.nan
             precision_curve = tpc / (tpc + fpc)  # 实际计算，结果应该全为0
@@ -135,10 +135,10 @@ def ap_per_class_with_curves(tp, conf, pred_cls, target_cls, class_names, precis
         for p_val in precision_points:
             if len(precision_curve) == 0:
                 # 没有预测数据
-                recall_at_precision[c][f'R@P{p_val}'] = -1
+                recall_at_precision[c][f'R@P{p_val}'] = -1.0
             elif n_gt == 0:
                 # 没有真实标签，recall无法定义
-                recall_at_precision[c][f'R@P{p_val}'] = -1 if n_p == 0 else 0.0
+                recall_at_precision[c][f'R@P{p_val}'] = -1.0 if n_p == 0 else 0.0
             else:
                 # 正常计算
                 valid_indices = precision_curve >= p_val
