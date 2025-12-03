@@ -141,6 +141,61 @@ class GpNetDeploy(GpNet):
 
     
     def forward_one_DRIVING_BEV_DYN_fisheye(self, x, calib, metadata):
+        def create_composite_grid_map(src_w, src_h, norm=True):
+            """
+            创建复合网格映射，将两个变换序列合并为一个
+            变换序列：1920x1536 → resize(2214x1772) → crop(1080x1920) → resize(960x540) → crop(512x960)
+            正确实现：通过像素坐标计算，然后转换为归一化坐标
+            """
+            # 目标图像尺寸
+            tgt_h, tgt_w = 512, 960
+            
+            if norm:
+                # 生成目标图像(512x960)的归一化坐标网格
+                ws = np.linspace(-1.0, 1.0, tgt_w, endpoint=True)[np.newaxis, :, np.newaxis].repeat(tgt_h, 0)
+                hs = np.linspace(-1.0, 1.0, tgt_h, endpoint=True)[:, np.newaxis, np.newaxis].repeat(tgt_w, 1)
+            else:
+                ws = np.linspace(0.0, tgt_w-1.0, tgt_w, endpoint=True)[np.newaxis, :, np.newaxis].repeat(tgt_h, 0)
+                hs = np.linspace(0.0, tgt_h-1.0, tgt_h, endpoint=True)[:, np.newaxis, np.newaxis].repeat(tgt_w, 1)
+            
+            # 目标图像坐标网格
+            target_map = np.concatenate([ws, hs], axis=-1)
+            
+            # 转换为像素坐标进行计算
+            if norm:
+                # 将归一化坐标转换为像素坐标
+                pixel_map = (target_map + 1.0) * 0.5
+                pixel_map[..., 0] *= tgt_w  # x坐标
+                pixel_map[..., 1] *= tgt_h  # y坐标
+            else:
+                pixel_map = target_map.copy()
+            
+            # 第一步逆变换：逆裁剪(512x960 → 540x960)
+            # 裁剪从0开始，裁剪长度为512，所以需要将坐标映射回540x960
+            pixel_map[..., 1] = pixel_map[..., 1] + 0  # 裁剪起始位置为0，不需要偏移
+            
+            # 第二步逆变换：逆resize(540x960 → 1080x1920)
+            pixel_map[..., 0] = pixel_map[..., 0] * (1920 / 960)  # x方向缩放
+            pixel_map[..., 1] = pixel_map[..., 1] * (1080 / 540)  # y方向缩放
+            
+            # 第三步逆变换：逆裁剪(1080x1920 → 1772x2214)
+            # 裁剪起始位置：y=314, x=127
+            pixel_map[..., 1] = pixel_map[..., 1] + 314  # y方向偏移
+            pixel_map[..., 0] = pixel_map[..., 0] + 127  # x方向偏移
+            
+            # 第四步逆变换：逆resize(1772x2214 → 1536x1920)
+            pixel_map[..., 0] = pixel_map[..., 0] * (1920 / 2214)  # x方向缩放
+            pixel_map[..., 1] = pixel_map[..., 1] * (1536 / 1772)  # y方向缩放
+            
+            # 将像素坐标转换回归一化坐标
+            if norm:
+                # 转换为归一化坐标
+                target_map[..., 0] = (pixel_map[..., 0] / src_w) * 2 - 1  # x坐标归一化
+                target_map[..., 1] = (pixel_map[..., 1] / src_h) * 2 - 1  # y坐标归一化
+            else:
+                target_map = pixel_map
+            
+            return target_map
         
         
         def DistGridMapFisheye(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True):
@@ -176,7 +231,7 @@ class GpNetDeploy(GpNet):
         batch_size = B = len(metadata)
 
         if (self.dyn_od_stream_feature_bank == None):
-            self.dyn_od_stream_feature_bank = torch.zeros(B, 128, 96, 120).cuda()
+            self.dyn_od_stream_feature_bank = torch.zeros(B, 128, 48, 60).cuda()
 
         # 矩阵 and torch, 再分发到batch
         seq_flags, dts = self.SeqCheck(self.dyn_od_stream_metas_bank, metadata)
@@ -202,28 +257,19 @@ class GpNetDeploy(GpNet):
             img_slice = {k: np.concatenate([img_slice[k], np.zeros_like(img_slice[k])[:, :H_gap, ...]], axis=1) for k in img_slice}
             
             images_grid = np.stack([
-                DistGridMapFisheye(
+                create_composite_grid_map(
                 # src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True
                 img_slice[k].shape[2],
                 img_slice[k].shape[1],
-                None,
-                None,
-                int(ONLINE_HW[1]/2),
-                int(ONLINE_HW[0]/2),
-                int(image_crop_config["IMAGE_CROP_H_LEN"]),
-                int(image_crop_config['CROP_HeSai_ID4']['CROP_START'][img_i]),
+                
             ) for img_i, k in enumerate(img_slice)], axis=0)
-            
-            #H, W, div, Z, Y, X,
-            #(64, 120, 8, 4, 96, 120)
 
             extrinsic_matrix = calib['extrinsic'][i]
             distortion_coeffs= calib['cam_dist'][i]
             intrinsic_matrix = calib['intrinsic'][i]
-            H, W, div, Z, Y, X = 64, 120, 8, 4, 96, 120
+            H, W, div, Z, Y, X = 64, 120, 8, 4, 48, 60
             xyz_camAX = self.model[self._transformers["DRIVING_BEV_DYN"]].xyz_camA.clone()
             
-            # breakpoint()
             vt_grid, vt_grid_valid = GetProjectGridByEgo2ImgsFisheye(
                 extrinsic_matrix,
                 distortion_coeffs,
@@ -261,10 +307,12 @@ class GpNetDeploy(GpNet):
             )
 
             if self.global_config.calib_data_save_path != "None":
-                for k in inputs_dict:
-                    single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
-                    os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
-                    np.save(single_calib_data_save_path, inputs_dict[k])
+
+                if self.calib_data_cnt %10 == 0:
+                    for k in inputs_dict:
+                        single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
+                        os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
+                        np.save(single_calib_data_save_path, inputs_dict[k])
                 self.calib_data_cnt+=1
 
             self.session = HBRuntime(self.global_config.onnx_path)
@@ -382,10 +430,11 @@ class GpNetDeploy(GpNet):
             )
 
             if self.global_config.calib_data_save_path != "None":
-                for k in inputs_dict:
-                    single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
-                    os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
-                    np.save(single_calib_data_save_path, inputs_dict[k])
+                if self.calib_data_cnt % 10 == 0:
+                    for k in inputs_dict:
+                        single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
+                        os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
+                        np.save(single_calib_data_save_path, inputs_dict[k])
                 self.calib_data_cnt+=1
 
             self.session = HBRuntime(self.global_config.onnx_path)

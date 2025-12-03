@@ -260,10 +260,10 @@ class PytorchToOnnx:
                     merged_input_dict["calib"]["images_grid"] = torch.rand(
                         4, 512, 960, 2).cuda()
                     merged_input_dict["calib"]["vt_grid"] = torch.rand(
-                        4, 384, 120, 2).cuda()
+                        4, 192, 60, 2).cuda()
                     merged_input_dict["metadata"] = {}
-                    merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 96, 120).cuda()
-                    merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 96, 120, 2).cuda()
+                    merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 60).cuda()
+                    merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 60, 2).cuda()
                     pass
                 else:
                     merged_input_dict = {"task": task.name, "image": input_dict}
