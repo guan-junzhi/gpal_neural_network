@@ -25,6 +25,8 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             OD_RANGE=OD_RANGE,
         )
         self.bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,)
+        self.deploy_eval = (global_config.validation) and (global_config.onnx_path != None)
+        # self.deploy_eval = (phase != const.PHASE_TRAINING) and (global_config.onnx_path != None)
 
 
     @staticmethod
@@ -246,7 +248,12 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             torch.atan2(pred_dir[:, :, 4], pred_dir[:, :, 5]) * (1.0-bin_flag.float())).unsqueeze(-1)
 
         pred_vel = outputs['estimation_vel'].permute(0, 2, 1)
-        pred_score = outputs['estimation_score'].sigmoid().permute(0, 2, 1)  # 得分，时序特征融合后的得分
+        
+        if self.deploy_eval:
+            # onnx部署时
+            pred_score = outputs['estimation_score'].permute(0, 2, 1)  # 得分，时序特征融合后的得分
+        else:
+            pred_score = outputs['estimation_score'].sigmoid().permute(0, 2, 1)  # 得分，时序特征融合后的得分
 
         track_boxes = torch.cat([pred_cen,
                                 pred_z,

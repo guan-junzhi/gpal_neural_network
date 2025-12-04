@@ -77,7 +77,33 @@ class WrappedGpNet(GpNet):
             if task_name == "DRIVING_BEV_DYN":
                 output = self.model[task_name](bev_feature,metadata = metadata )
                 output = output[0]
+                output['hm_cen'] = self.simple_nms(output['hm_cen'])
+                
         return output
+    
+    def simple_nms(self, heatmap, kernel_size=3, threshold=0.1):
+        """
+        简单的NMS抑制处理
+        Args:
+            heatmap: 热力图张量，shape为[B, C, H, W]
+            kernel_size: 最大池化核大小
+            threshold: 阈值，低于该值的点将被抑制
+        Returns:
+            经过NMS抑制后的热力图
+        """
+        # 使用最大池化找到局部最大值
+        heatmap = torch.sigmoid(heatmap)
+        pad = (kernel_size - 1) // 2
+        hmax = F.max_pool2d(heatmap, (kernel_size, kernel_size), stride=1, padding=pad)
+        
+        # 保留局部最大值点
+        keep = (hmax == heatmap) 
+        
+        # 抑制非局部最大值点
+        nms_heatmap = heatmap * keep.float()
+        
+        return nms_heatmap
+    
     def forward_dyn_fish(self, input):
         outputs = []
         x = input["image"]
@@ -106,6 +132,8 @@ class WrappedGpNet(GpNet):
             if task_name == "DRIVING_BEV_DYN":
                 output = self.model[task_name](bev_feature,metadata = metadata )
                 output = output[0]
+                output['hm_cen'] = self.simple_nms(output['hm_cen'])
+                
         return output
 
     def forward_sta(self, input):

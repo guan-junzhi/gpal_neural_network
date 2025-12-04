@@ -17,6 +17,9 @@ Train:
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
     after_scheduler: CosineAnnealingLR, T_max: 120000}
 
+Test:
+  visulization: True
+
 Backbones:
   backbone0:
     type: EncoderRes34
@@ -188,13 +191,16 @@ Tasks:
 
           root_dir: "bev_park/PointLineData_Test/",
           # fish equal data
+          # L4 测试集合
+          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251127-110911/_0_val_l4_frame_pairs_sampled_clips6_frames3000.pkl"],
+
+          # ID4 测试集合
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320_clips48_frames9408_key1872_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320_clips48_frames9408_key1872_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          # 7V data
-          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames2808_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames14256_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: True,
           fast_buffer_path: "./buf_eval_origin_size" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
