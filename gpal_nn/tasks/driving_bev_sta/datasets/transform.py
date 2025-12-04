@@ -96,10 +96,10 @@ class MultiViewPhotoMetricDistortion(object):
 
     1. random brightness
     2. random contrast (mode 0)
-    3. convert color from BGR to HSV
+    3. convert color from RGB to HSV
     4. random saturation
     5. random hue
-    6. convert color from HSV to BGR
+    6. convert color from HSV to RGB
     7. random contrast (mode 1)
 
     Required Keys:
@@ -175,13 +175,13 @@ class MultiViewPhotoMetricDistortion(object):
                     img *= alpha_value
             # img = np.clip(img, 0, 255)
 
-            # convert color from BGR to HSV
+            # convert color from RGB to HSV
             img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
             # random saturation
             if saturation_flag:
                 img[..., 1] *= saturation_value
-                # For image(type=float32), after convert bgr to hsv by opencv,
+                # For image(type=float32), after convert rgb to hsv by opencv,
                 # valid saturation value range is [0, 1]
                 if saturation_value > 1:
                     img[..., 1] = img[..., 1].clip(0, 1)
@@ -192,7 +192,7 @@ class MultiViewPhotoMetricDistortion(object):
                 img[..., 0][img[..., 0] > 360] -= 360
                 img[..., 0][img[..., 0] < 0] += 360
 
-            # convert color from HSV to BGR
+            # convert color from HSV to RGB
             img = cv2.cvtColor(img, cv2.COLOR_HSV2RGB)
 
             # random contrast
