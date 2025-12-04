@@ -1006,6 +1006,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 if 'SKYWELL' in sequence_name:
                     WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
                     image_file = os.path.join(WORKDIRS_ROOT, f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli_fisheye_eq_image_data/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg')
+                    if self.deploy_eval:
+                        image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                        camera_view = camera_view + "_deploy_raw"
                     assert os.path.exists(image_file), f"image_file {image_file} not exists"
                 else:
                     image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'

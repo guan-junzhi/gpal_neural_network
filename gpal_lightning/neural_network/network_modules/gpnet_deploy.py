@@ -198,7 +198,7 @@ class GpNetDeploy(GpNet):
             return target_map
         
         
-        def DistGridMapFisheye(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True):
+        def DistGridMapFisheyeID4(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True):
             if norm:
                 ws = np.linspace(-1.0, 1.0, src_w,
                                 endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
@@ -250,20 +250,52 @@ class GpNetDeploy(GpNet):
         image_crop_config = copy.deepcopy(self.image_crop_config)
         image_crop_config['CROP_HeSai_ID4']['CROP_START'] = [0, 0, 0, 0]  # ATTENTION: 泛化车和实际车都需要crop_start为0，统一为0
         
+        x_draw = {k: [] for k in x}
         for i in tqdm(range(batch_size)):
-
-            img_slice = {k: x[k][i].unsqueeze(0).float().detach().cpu().numpy() for k in x}
-            H_gap = ONLINE_HW[0] - OFFLINE_HW[0]
-            img_slice = {k: np.concatenate([img_slice[k], np.zeros_like(img_slice[k])[:, :H_gap, ...]], axis=1) for k in img_slice}
             
-            images_grid = np.stack([
-                create_composite_grid_map(
-                # src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True
-                img_slice[k].shape[2],
-                img_slice[k].shape[1],
-                
-            ) for img_i, k in enumerate(img_slice)], axis=0)
+            # 输入到onnx的 255 1HW3
+            img_slice = {k: x[k][i].unsqueeze(0).float().detach().cpu().numpy() for k in x}
 
+            # L4为原图
+            if 'SKYWELL' in metadata[i]['clip_id']:
+                # curr_view_img = cv2.resize(curr_view_img, (2214, 1772))
+                # curr_view_img = curr_view_img[314:314 + 1080]
+                # curr_view_img = curr_view_img[:, 127:127 + 1920].transpose(2, 0, 1)
+                # x[img_name] = curr_view_img.to(img_tensor) / 255.0
+                images_grid = np.stack([
+                    create_composite_grid_map(
+                    img_slice[k].shape[2],
+                    img_slice[k].shape[1],
+                    
+                ) for img_i, k in enumerate(img_slice)], axis=0)
+                
+            # ID4鱼眼尺寸是 1080*1920, 需要pad到 1536*1920, 和线上对齐
+            # elif 'HeSai' in metadata[i]['clip_id']:
+            else:
+                H_gap = ONLINE_HW[0] - OFFLINE_HW[0]
+                img_slice = {k: np.concatenate([img_slice[k], np.zeros_like(img_slice[k])[:, :H_gap, ...]], axis=1) for k in img_slice}
+                images_grid = np.stack([
+                    DistGridMapFisheyeID4(
+                    # src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True
+                    img_slice[k].shape[2],
+                    img_slice[k].shape[1],
+                    None,
+                    None,
+                    int(ONLINE_HW[1]/2),
+                    int(ONLINE_HW[0]/2),
+                    int(image_crop_config["IMAGE_CROP_H_LEN"]),
+                    int(image_crop_config['CROP_HeSai_ID4']['CROP_START'][img_i]),
+                ) for img_i, k in enumerate(img_slice)], axis=0)
+            
+            # 为可视化
+            curr_bs_i_tensor_cat = torch.concat([torch.from_numpy(img_slice[k]).to(self.dyn_od_stream_feature_bank) 
+                                                 for k in img_slice], dim=0).permute(0, 3, 1, 2) # BC HW
+            curr_bs_i_tensor = F.grid_sample(curr_bs_i_tensor_cat, 
+                                             torch.from_numpy(images_grid).float().to(curr_bs_i_tensor_cat.device), 
+                                             align_corners=True, padding_mode='border', mode="nearest") / 255.0
+            for draw_img_i, img_name in enumerate(x_draw.keys()):
+                x_draw[img_name].append(curr_bs_i_tensor[[draw_img_i]])
+            
             extrinsic_matrix = calib['extrinsic'][i]
             distortion_coeffs= calib['cam_dist'][i]
             intrinsic_matrix = calib['intrinsic'][i]
@@ -319,6 +351,12 @@ class GpNetDeploy(GpNet):
             outputs = self.session.run(self.output_names, inputs_dict)
             for k, o in zip(batch_ret, outputs):
                 batch_ret[k].append(o)
+
+        # 可视化, 同时验证image grid 是否正确
+        for k in x_draw:
+            x_draw[k] = torch.concat(x_draw[k], dim=0)
+        for key_name in x:
+            x[key_name] = x_draw[key_name]
 
         for k in batch_ret:
             batch_ret[k] = torch.from_numpy(np.concatenate(batch_ret[k], axis = 0)).cuda()

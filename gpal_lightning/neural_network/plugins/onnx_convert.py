@@ -357,6 +357,9 @@ class PytorchToOnnx:
                 output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "centerline_directions_preds", "keypoint_classes_preds", "keypoint_regs_preds"]
                 do_constant_folding = False
             with torch.no_grad():
+                print(f"net.training = {net.training}")
+                net.eval()
+                print(f"net.training = {net.training}")
                 torch.onnx.export(
                     net,
                     (input_dummy, {}),

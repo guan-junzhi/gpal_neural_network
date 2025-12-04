@@ -300,7 +300,6 @@ class ODViewTransformer(BaseModule):
 
         if torch.onnx.is_in_onnx_export():
             feats = feats[0].unsqueeze(0)
-            feats = self.view_marker(feats)
             B = 1
         else:
             image_feats_stack = []
