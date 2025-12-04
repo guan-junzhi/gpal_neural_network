@@ -175,6 +175,10 @@ def build_centerline_graph(centerline_list):
                 continue
             q = id_to_centerline[forward_id]
 
+            # turn_waiting_lane不连接非turn_waiting_lane
+            if int(p['class'] == "turn_waiting_lane") + int(q['class'] == "turn_waiting_lane") == 1:
+                continue
+
             # 获取四个端点
             p_head = p['points'][0]
             p_tail = p['points'][-1]

@@ -176,7 +176,7 @@ class MultiViewPhotoMetricDistortion(object):
             # img = np.clip(img, 0, 255)
 
             # convert color from BGR to HSV
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
             # random saturation
             if saturation_flag:
@@ -193,13 +193,21 @@ class MultiViewPhotoMetricDistortion(object):
                 img[..., 0][img[..., 0] < 0] += 360
 
             # convert color from HSV to BGR
-            img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+            img = cv2.cvtColor(img, cv2.COLOR_HSV2RGB)
 
             # random contrast
             if mode == 0:
                 if contrast_flag:
                     img *= alpha_value
             img = np.clip(img, 0, 255)
+
+            # 应对mifa和吉祥车相机对比度低
+            if random.random() < 0.3:
+                mean_value = np.mean(img)
+                scale = random.uniform(0.3, 0.5)
+                ideal_offset = mean_value - mean_value * scale
+                random_offset = random.uniform(-20, 20)
+                img = cv2.convertScaleAbs(img, alpha=scale, beta=ideal_offset + random_offset)
 
             data['image'][cam_name] = img
 
