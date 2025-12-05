@@ -404,7 +404,7 @@ class GpNetDeploy(GpNet):
         
         
         # breakpoint()
-        
+        x_draw = {k: [] for k in x}
         for i in tqdm(range(batch_size)):
 
             img_slice = {k: x[k][i].unsqueeze(0).float().detach().cpu().numpy() for k in x}
@@ -422,7 +422,25 @@ class GpNetDeploy(GpNet):
                                                 int(img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][ki]),
                                                 )
                                    for ki, k in enumerate(img_slice)], axis=0)
-
+            
+            # 为可视化
+            front_120_30 = ['img_front_120', 'img_front_30']
+            # 顺序和定义一致
+            curr_bs_i_tensor_cat_120_30 = torch.concat([torch.from_numpy(img_slice[k]).to(self.dyn_od_stream_feature_bank) 
+                                                        for k in img_slice if k in front_120_30], dim=0).permute(0, 3, 1, 2) # BC HW
+            curr_bs_i_tensor_cat_100 = torch.concat([torch.from_numpy(img_slice[k]).to(self.dyn_od_stream_feature_bank) 
+                                                     for k in img_slice if k not in front_120_30], dim=0).permute(0, 3, 1, 2) # BC HW
+            curr_bs_i_tensor_120_30 = F.grid_sample(curr_bs_i_tensor_cat_120_30, 
+                                                    torch.from_numpy(images_grid[:2]).float().to(curr_bs_i_tensor_cat_120_30.device), 
+                                                    align_corners=True, padding_mode='border', mode="nearest") / 255.0
+            curr_bs_i_tensor_100 = F.grid_sample(curr_bs_i_tensor_cat_100, 
+                                                 torch.from_numpy(images_grid[2:]).float().to(curr_bs_i_tensor_cat_100.device), 
+                                                 align_corners=True, padding_mode='border', mode="nearest") / 255.0
+            curr_bs_i_tensor = torch.concat([curr_bs_i_tensor_120_30, curr_bs_i_tensor_100], dim=0)
+            
+            for draw_img_i, img_name in enumerate(x_draw.keys()):
+                x_draw[img_name].append(curr_bs_i_tensor[[draw_img_i]])
+                
             """
              H, W, div, Z, Y, X,
              (40, 96, 8, 4, 48, 120)
@@ -479,6 +497,12 @@ class GpNetDeploy(GpNet):
             outputs = self.session.run(self.output_names, inputs_dict)
             for k, o in zip(batch_ret, outputs):
                 batch_ret[k].append(o)
+        
+        # 可视化, 同时验证image grid 是否正确
+        for k in x_draw:
+            x_draw[k] = torch.concat(x_draw[k], dim=0)
+        for key_name in x:
+            x[key_name] = x_draw[key_name]
 
         for k in batch_ret:
             batch_ret[k] = torch.from_numpy(np.concatenate(batch_ret[k], axis = 0)).cuda()

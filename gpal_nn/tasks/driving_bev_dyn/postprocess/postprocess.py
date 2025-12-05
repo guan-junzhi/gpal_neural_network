@@ -25,7 +25,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             OD_RANGE=OD_RANGE,
         )
         self.bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,)
-        self.deploy_eval = (global_config.validation) and (global_config.onnx_path != None)
+        self.deploy_eval = (global_config.onnx_path != None)
         # self.deploy_eval = (phase != const.PHASE_TRAINING) and (global_config.onnx_path != None)
 
 
