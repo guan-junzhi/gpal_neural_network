@@ -771,6 +771,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
             polygon_homo = np.concatenate([polygon, np.ones((polygon.shape[0],1))], axis=-1)
             polygon = (bev_real2aug @ polygon_homo.T).T[:,:3]
+            if len(polygon) < 4:
+                continue
             polygon = _fix_pts_interpolate(polygon, max(int(LineString(polygon).length / 0.2), 20))
             if len(polygon) <= 1:
                 continue
