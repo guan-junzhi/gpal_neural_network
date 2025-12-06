@@ -115,6 +115,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                  bev_aug_deg=3,
                  lmdb_path='static_data_lmdb',
                  cut_start_h=0,
+                 navi_info_ratio=0.6,
                  ):
         '''
         :param root_dict:
@@ -228,7 +229,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         else:
             print(f"{self.lmdb_path_local} 存在")
         distributed.barrier()
-        self.navi_info_ratio = 0.6
+        self.navi_info_ratio = navi_info_ratio
 
         if self.lmdb_path_local != '':
             self.label_buffer = FastLoaderBuffer(self.lmdb_path_local)
