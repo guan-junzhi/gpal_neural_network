@@ -28,9 +28,9 @@ from gpal_nn.tasks.parking_ipm_sta.postprocess.heatmap_instance_p3 import HeatMa
 
 def parse_args():
     parser = argparse.ArgumentParser(description="slot_onnx")
-    parser.add_argument("--onnx_path", default="/home/jovyan/gpal_neural_network/20251022_log/20251022_int16_avm_200w_quat__quantized_model.bc", type=str)
-    parser.add_argument("--img_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/1114_jira/datas/car_and_server_datas/j6", type=str)
-    parser.add_argument("--save_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/1114_jira/res/1114_j6avm_quantized_model_200w_quantized_20251022model_bc_res", type=str)
+    parser.add_argument("--onnx_path", default="/home/jovyan/gpal_neural_network/20251201_log/20251201_int16_avm_200w_quat_1000num_quantized_model.bc", type=str)
+    parser.add_argument("--img_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/jira3716/all_2025_11_22_11_51_24_avm", type=str)
+    parser.add_argument("--save_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/jira3716/all_2025_11_22_11_51_24_avm_1201model_bc_res", type=str)
     parser.add_argument("--save_txt", default="200w_quat_j6avm_det_res", type=str)
     args = parser.parse_args()
     return args
@@ -148,37 +148,6 @@ def getFeatureMap(point_out, line_out, w, h):
             line_map[j][i]=int(l_value)
     return point_map, line_map
 
-def detect(orig_img, model, model_h, model_w, device):
-    # orig_img = cv2.imread(imgfile)
-    rawh, raww, _ = orig_img.shape
-
-    img = preprocess(orig_img, model_h, model_w)
-    # if do_save_img:
-    #     cv2.imwrite('./img.jpg', img)
-    model.eval()
-    with torch.no_grad():
-        heatmapValueTensor, vecmapValueTensor, = model(img.to(device))
-
-    #get heatmap w h ch 
-    _, _, h, w = heatmapValueTensor.shape
-    heatmapValue = heatmapValueTensor[0,0,:,:].cpu().detach().numpy()
-    vecmapValue = vecmapValueTensor[0,0,:,:].cpu().detach().numpy()
-    # point_img, line_img = getFeatureMap(heatmapValue, vecmapValue, w, h)
-    # savePath = imgfile.replace(test_dir, out_dir)
-    # print(savePath)
-    # if do_save_img:
-    #     cv2.imwrite(savePath.replace('.jpg','_point_map.jpg'), point_img)
-    #     cv2.imwrite(savePath.replace('.jpg','_line_map.jpg'), line_img)
-    SlotDetInstance = HeatMap(w, h)
-    vertexElements = SlotDetInstance.doProc(heatmapValue, vecmapValue)
-    # SlotDetInstance.drawVE(heatmap_img, savePath.replace('.jpg','_draw.jpg'))
-    # SlotComposeInstance = Matcher(w, h)
-    # slotsList = []
-    # SlotComposeInstance.ComposeSlots(vertexElements)
-    # if do_save_img:
-        # SlotComposeInstance.DrawSlots(matchpair_img, savePath.replace('.jpg','_slot.jpg'))
-    # return vertexElements, slotsList
-
 
 def bgr_to_nv12_split(img_rgb):
     # 转换为YUV420 (I420)
@@ -253,105 +222,10 @@ def detect_avm_nv12(avm_img, img_name, onnx_mode_path):
     vertexElements = SlotDetInstance.doProc(heatmapValue, linemapValue)
     # print("return vertextElement ", vertexElements)
     show_img = avm_img.copy()
-    # SlotDetInstance.drawVE(show_img, savename.replace('.jpg','_draw.jpg'))
+    SlotDetInstance.drawVE(show_img, savename.replace('.jpg','_draw.jpg'))
     return vertexElements
 
-def detect_point(ori_img,model, model_h, model_w, device):
-    img = preprocess(ori_img, model_h, model_w)
-    # if do_save_img:
-    #     cv2.imwrite('./img.jpg', img)
-    model.eval()
-    with torch.no_grad():
-        heatmapValueTensor = model(img.to(device))
-
-    #get heatmap w h ch 
-    _, _, h, w = heatmapValueTensor.shape
-    heatmapValue = heatmapValueTensor[0,0,:,:].cpu().detach().numpy()
-    # vecmapValue = vecmapValueTensor[0,0,:,:].cpu().detach().numpy()
-    # point_img, line_img = getFeatureMap(heatmapValue, vecmapValue, w, h)
-    # savePath = imgfile.replace(test_dir, out_dir)
-    # print(savePath)
-    # if do_save_img:
-    #     cv2.imwrite(savePath.replace('.jpg','_point_map.jpg'), point_img)
-    #     cv2.imwrite(savePath.replace('.jpg','_line_map.jpg'), line_img)
-    SlotDetInstance = HeatMap(w, h)
-    vertexElements = SlotDetInstance.doProcPoint(heatmapValue)
-    # SlotDetInstance.drawVE(heatmap_img, savePath.replace('.jpg','_draw.jpg'))
-    # SlotComposeInstance = Matcher(w, h)
-    slotsList = []
-    # SlotComposeInstance.ComposeSlots(vertexElements)
-    # if do_save_img:
-        # SlotComposeInstance.DrawSlots(matchpair_img, savePath.replace('.jpg','_slot.jpg'))
-    return vertexElements, slotsList
-############################################################
-def initStatPack():
-    StatPack =  {}
-    StatPack['point_pixel_error_sum'] = 0.0
-    StatPack['angle_error'] = 0.0
-    StatPack['point_total_num'] = 0
-    StatPack['point_true_num'] = 0
-    StatPack['point_miss_num'] = 0
-    StatPack['point_false_num'] = 0
-    StatPack['line_total_num'] = 0
-    StatPack['line_true_num'] = 0
-    StatPack['line_miss_num'] = 0
-    StatPack['line_false_num'] = 0
-    return StatPack
-
-def updatePack(StatPack, resultPack):
-    print("StatPack['point_pixel_error_sum'] is: {}; resultPack['point_error'] is: {}".format(StatPack['point_pixel_error_sum'], resultPack['point_error']))
-    print("StatPack['angle_error'] is: {}; resultPack['angle_error'] is: {}".format(StatPack['angle_error'], resultPack['angle_error']))
-    print("StatPack['point_total_num'] is: {}; resultPack['point_total_num'] is: {}".format(StatPack['point_total_num'], resultPack['point_total_num']))
-    print("StatPack['point_true_num'] is: {}; resultPack['point_true_num'] is: {}".format(StatPack['point_true_num'], resultPack['point_true_num']))
-    print("StatPack['point_miss_num'] is: {}; resultPack['point_miss_num'] is: {}".format(StatPack['point_miss_num'], resultPack['point_miss_num']))
-    print("StatPack['point_false_num'] is: {}; resultPack['point_false_num'] is: {}".format(StatPack['point_false_num'], resultPack['point_false_num']))
-    print("StatPack['line_total_num'] is: {}; resultPack['line_total_num'] is: {}".format(StatPack['line_total_num'], resultPack['line_total_num']))
-    print("StatPack['line_true_num'] is: {}; resultPack['line_true_num'] is: {}".format(StatPack['line_true_num'], resultPack['line_true_num']))
-    print("StatPack['line_miss_num'] is: {}; resultPack['line_miss_num'] is: {}".format(StatPack['line_miss_num'], resultPack['line_miss_num']))
-    print("StatPack['line_false_num'] is: {}; resultPack['line_false_num'] is: {}".format(StatPack['line_false_num'], resultPack['line_false_num']))
-    
-    StatPack['point_pixel_error_sum'] = StatPack['point_pixel_error_sum'] + resultPack['point_error']
-    StatPack['angle_error'] = StatPack['angle_error'] + resultPack['angle_error']
-    StatPack['point_total_num'] = StatPack['point_total_num'] + resultPack['point_total_num']
-    StatPack['point_true_num'] = StatPack['point_true_num'] + resultPack['point_true_num']
-    StatPack['point_miss_num'] = StatPack['point_miss_num'] + resultPack['point_miss_num']
-    StatPack['point_false_num'] = StatPack['point_false_num'] + resultPack['point_false_num']
-    StatPack['line_total_num'] = StatPack['line_total_num'] + resultPack['line_total_num']
-    StatPack['line_true_num'] = StatPack['line_true_num'] + resultPack['line_true_num']
-    StatPack['line_miss_num'] = StatPack['line_miss_num'] + resultPack['line_miss_num']
-    StatPack['line_false_num'] = StatPack['line_false_num'] + resultPack['line_false_num']
-
-@log_to_file(os.path.join(args.save_path,"static_pointline.log"))
-def outputStat(StatPack):
-    StatPack['point_pixel_error_sum'] = StatPack['point_pixel_error_sum'] / StatPack['point_total_num']
-    StatPack['angle_error'] = StatPack['angle_error'] / StatPack['line_total_num']
-    StatPack['point_recall'] = StatPack['point_true_num']*1.0/ StatPack['point_total_num']
-    StatPack['point_false_rate'] = StatPack['point_false_num']*1.0/ (StatPack['point_false_num'] + StatPack['point_true_num'])
-    StatPack['line_recall'] = StatPack['line_true_num']*1.0/ StatPack['line_total_num']
-    StatPack['line_false_rate'] = StatPack['line_false_num']*1.0/ (StatPack['line_false_num'] + StatPack['line_true_num'])
-    printTitleInfo()
-    print ("--->point count result : ")
-    print ("total point numbers = ", StatPack['point_total_num'], " | point recall = ", StatPack['point_recall'], " | point false rate = ", StatPack['point_false_rate'])
-    print ("point average pixel error : ", StatPack['point_pixel_error_sum'])
-    print ("--->line count result : ")
-    print ("total line numbers = ", StatPack['line_total_num'], " | line recall = ", StatPack['line_recall'], " | line false rate = ", StatPack['line_false_rate'])
-    print ("point line angle error degree : ", np.degrees(StatPack['angle_error']))
-    print ("--------------------down------------------------")
-    return 
-    
-def getImageSizeScale(img_w, img_h, model_w, model_h):
-    # sw = 240.0 / img_w
-    # sh = 288.0 / img_h
-    sw = float(model_w) / img_w
-    sh = float(model_h) / img_h
-    return sw, sh
-
-def printTitleInfo():
-    print ("")
-    print ("--------------Slot Det Model Auto Test On Image DataSet---------------")
-    print ("Algorithom vrsion : ", 'torch v0')
-    print ("NetWork Description : ", " (ddrnet_23_slim)")
-    #print "" 
+ 
 
 def save_csv(d, out_data,result_path):
     data_pd = pd.DataFrame(data=out_data, index=None, columns=None)
@@ -375,7 +249,7 @@ def main(args):
 
 
     test_dir = args.img_path #"oneIMG" #"miniBatch" #"test_img"
-    test_pic_paths = glob.glob(os.path.join(test_dir, "*/*/*.jpg"))
+    test_pic_paths = glob.glob(os.path.join(test_dir, "*.jpg"))
     # do_save_img = False
     do_save_img = True
     frame_idx = 0
@@ -383,9 +257,9 @@ def main(args):
     point_num = 0
     line_num = 0
     print("process img num= ", len(test_pic_paths))
-    valid_txt_path = "/data/ai_group/datasets/bev_park/park_slot_jira/1114_jira/datas/car_and_server_datas/server/pointline.txt"
-    with open(valid_txt_path, "r") as f:
-        file_paths = f.readlines()
+    # valid_txt_path = "/data/ai_group/datasets/bev_park/park_slot_jira/1114_jira/datas/car_and_server_datas/server/pointline.txt"
+    # with open(valid_txt_path, "r") as f:
+    #     file_paths = f.readlines()
 
     # img_valid_path = []
     # for img_path in test_pic_paths:
@@ -398,8 +272,8 @@ def main(args):
 
     img_valid_path = test_pic_paths
     print("valid path ", len(img_valid_path))
-    if not os.path.exists(args.save_txt):
-        os.makedirs(args.save_txt)
+    # if not os.path.exists(args.save_txt):
+    #     os.makedirs(args.save_txt)
     
     for test_path in img_valid_path:
         # print("path ", test_path)
@@ -409,7 +283,7 @@ def main(args):
         # vertexElements = detect_fisheye(fisheye_img, img_file, onnx_mode_path)
         img_name = os.path.basename(test_path)
         vertexElements = detect_avm_nv12(avm_img, img_name, onnx_mode_path)
-        save_txt_path = os.path.join(args.save_txt, img_name.replace(".jpg", ".txt"))
+        # save_txt_path = os.path.join(args.save_txt, img_name.replace(".jpg", ".txt"))
         line_pt_info = []
         
         for i in range(len(vertexElements)):
@@ -425,9 +299,9 @@ def main(args):
         point_num = point_num + len(vertexElements)
 
 
-        with open(save_txt_path, "a") as f:
-            for det_info in line_pt_info:
-                f.write(f"{json.dumps(det_info)}\n")
+        # with open(save_txt_path, "a") as f:
+        #     for det_info in line_pt_info:
+        #         f.write(f"{json.dumps(det_info)}\n")
 
 
         #     print("cur frame line ", len(orients))
@@ -435,27 +309,6 @@ def main(args):
         
     print("sum point num ", point_num)
     print("sum line num ", line_num)
-    
-        
-#         print("img_file ", front_img_path)
-#         print("vertexElements ", vertexElements)
-#         label_img_raww = 768
-#         label_img_rawh = 768
-#         sw, sh = getImageSizeScale(label_img_raww, label_img_rawh, model_w, model_h)
-#         valid_folders_list = front_img_path.split("/")[-4:]
-#         valid_pic_folders = os.path.join(valid_folders_list[0], valid_folders_list[1], valid_folders_list[3])
-#         #do Heatmap Statistics 
-#         txtPath = os.path.join(ann_dir, valid_pic_folders.replace('.jpg', '.txt'))
-#         if not os.path.exists(txtPath):
-#             print("!!!!{} json path is not exist ".format(txtPath))
-#         print("txtPath is: {}".format(txtPath))
-#         labelInstance = TXTLabelLoader(sw, sh)
-#         # heatmapResultPack = labelInstance.doHeatmapStatistics_json_anno(jsonPath, vertexElements)
-#         heatmapResultPack = labelInstance.doHeatmapStatistics(txtPath, vertexElements)
-#         updatePack(StatPackage, heatmapResultPack)
-#     #do Slot Match Statistics
-
-# outputStat(StatPackage)
 
 if __name__ == '__main__':
     main(args)

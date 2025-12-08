@@ -25,19 +25,19 @@ def initStatPack():
 
 
 def updatePack(StatPack, resultPack):
-    print("StatPack['point_pixel_error_sum'] is: {}; resultPack['point_error'] is: {}".format(StatPack['point_pixel_error_sum'], resultPack['point_error']))
-    print("StatPack['angle_error'] is: {}; resultPack['angle_error'] is: {}".format(StatPack['angle_error'], resultPack['angle_error']))
-    print("StatPack['point_total_num'] is: {}; resultPack['point_total_num'] is: {}".format(StatPack['point_total_num'], resultPack['point_total_num']))
-    print("StatPack['point_true_num'] is: {}; resultPack['point_true_num'] is: {}".format(StatPack['point_true_num'], resultPack['point_true_num']))
-    print("StatPack['point_miss_num'] is: {}; resultPack['point_miss_num'] is: {}".format(StatPack['point_miss_num'], resultPack['point_miss_num']))
-    print("StatPack['point_false_num'] is: {}; resultPack['point_false_num'] is: {}".format(StatPack['point_false_num'], resultPack['point_false_num']))
-    print("StatPack['point_det_num'] is: {}; resultPack['point_det_num'] is: {}".format(StatPack['point_det_num'],resultPack['point_det_num']))
+    # print("StatPack['point_pixel_error_sum'] is: {}; resultPack['point_error'] is: {}".format(StatPack['point_pixel_error_sum'], resultPack['point_error']))
+    # print("StatPack['angle_error'] is: {}; resultPack['angle_error'] is: {}".format(StatPack['angle_error'], resultPack['angle_error']))
+    # print("StatPack['point_total_num'] is: {}; resultPack['point_total_num'] is: {}".format(StatPack['point_total_num'], resultPack['point_total_num']))
+    # print("StatPack['point_true_num'] is: {}; resultPack['point_true_num'] is: {}".format(StatPack['point_true_num'], resultPack['point_true_num']))
+    # print("StatPack['point_miss_num'] is: {}; resultPack['point_miss_num'] is: {}".format(StatPack['point_miss_num'], resultPack['point_miss_num']))
+    # print("StatPack['point_false_num'] is: {}; resultPack['point_false_num'] is: {}".format(StatPack['point_false_num'], resultPack['point_false_num']))
+    # print("StatPack['point_det_num'] is: {}; resultPack['point_det_num'] is: {}".format(StatPack['point_det_num'],resultPack['point_det_num']))
 
-    print("StatPack['line_total_num'] is: {}; resultPack['line_total_num'] is: {}".format(StatPack['line_total_num'], resultPack['line_total_num']))
-    print("StatPack['line_true_num'] is: {}; resultPack['line_true_num'] is: {}".format(StatPack['line_true_num'], resultPack['line_true_num']))
-    print("StatPack['line_miss_num'] is: {}; resultPack['line_miss_num'] is: {}".format(StatPack['line_miss_num'], resultPack['line_miss_num']))
-    print("StatPack['line_false_num'] is: {}; resultPack['line_false_num'] is: {}".format(StatPack['line_false_num'], resultPack['line_false_num']))
-    print("StatPack['line_de_num'] is: {}; resultPack['line_det_num'] is: {}".format(StatPack['line_det_num'], resultPack['line_det_num']))
+    # print("StatPack['line_total_num'] is: {}; resultPack['line_total_num'] is: {}".format(StatPack['line_total_num'], resultPack['line_total_num']))
+    # print("StatPack['line_true_num'] is: {}; resultPack['line_true_num'] is: {}".format(StatPack['line_true_num'], resultPack['line_true_num']))
+    # print("StatPack['line_miss_num'] is: {}; resultPack['line_miss_num'] is: {}".format(StatPack['line_miss_num'], resultPack['line_miss_num']))
+    # print("StatPack['line_false_num'] is: {}; resultPack['line_false_num'] is: {}".format(StatPack['line_false_num'], resultPack['line_false_num']))
+    # print("StatPack['line_de_num'] is: {}; resultPack['line_det_num'] is: {}".format(StatPack['line_det_num'], resultPack['line_det_num']))
     
     StatPack['point_pixel_error_sum'] = StatPack['point_pixel_error_sum'] + resultPack['point_error']
     StatPack['angle_error'] = StatPack['angle_error'] + resultPack['angle_error']
@@ -127,7 +127,7 @@ def DrawVe(gt, pred, meta, save_path):
         orients = pred[i][1]
         for j in range(len(orients)):
             ori = orients[j]
-            stp = (point[0], point[1])
+            stp = (int(point[0]), int(point[1]))
             edp = (int(stp[0] + ori[0]*ori[3]),
                    int(stp[1] + ori[1]*ori[3]))
             cv2.line(mask, stp, edp, (0, 250, 0), 2)
@@ -136,7 +136,7 @@ def DrawVe(gt, pred, meta, save_path):
             # cv2.putText(mask, line_label, mdp, 1, 0.8, (0,0,0), 1)
     for i in range(len(pred)):
         point = pred[i][0]
-        cv2.circle(mask, (point[0], point[1]), 2, (0, 0, 250), -1)
+        cv2.circle(mask, (int(point[0]), int(point[1])), 2, (0, 0, 250), -1)
         dx = 5
         if point[0] > w/2:
             dx = -15
@@ -144,7 +144,6 @@ def DrawVe(gt, pred, meta, save_path):
         # point_label = 'p' + str(i)
         # cv2.putText(mask, point_label, mdp, 1, 0.8, (0,0,200), 1)
     os.makedirs(save_path, exist_ok=True)
-    print("save_path ", save_path)
     cv2.imwrite(os.path.join(save_path, image_f.split('/')[-1]), mask)
 
 

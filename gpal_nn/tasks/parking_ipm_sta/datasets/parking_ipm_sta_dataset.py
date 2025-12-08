@@ -252,12 +252,12 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             self.h, self.w, self.point_sigma, self.line_sigma, self.line_pad)
 
         self.transforms = None
-        self.img_transforms = A.Compose([
-            # 色彩增强（之前关注的核心）
-            A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.2),  # 亮度/对比度
-            A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=0, p=0.2),  # 色调/饱和度
-            # A.RGBShift(r_shift_limit=10, g_shift_limit=10, b_shift_limit=10, p=0.2),  # 通道偏移
-        ])
+        # self.img_transforms = A.Compose([
+        #     A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.2),  # 亮度/对比度
+        #     A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=0, p=0.2),  # 色调/饱和度
+        #     # A.RGBShift(r_shift_limit=10, g_shift_limit=10, b_shift_limit=10, p=0.2),  # 通道偏移
+        # ])
+        self.img_transforms = None
         
         self.task = task_config.name
         self.camera_names = camera_name
@@ -318,10 +318,18 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             cv2.imwrite(savePath + '/' + str(idx) + '_line.jpg', line_img)
 
     def pull_img(self, image_f):
-        # print("image_f:", image_f)
-        image = cv2.imread(image_f)
+        self.fast_buf_try_cnt += 1
+        database_key = "_".join(image_f.split('/')[-4:])
+        image, hw_origin = self._image_buffer_access(database_key)
         if image is None:
-            print("!!!!image is None = ", image_f)
+            image = cv2.imread(image_f)
+            if image is None:
+                print("!!!!image is None = ", image_f)
+            self._image_cache(
+                database_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
+        else:
+            self.fast_buf_sec_cnt += 1
+
         origin_shape = image.shape
         image = cv2.resize(image, (self.w, self.h))
         # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -374,6 +382,10 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         sh = float(model_h) / img_h
         return sw, sh
 
+    def ClearFastBufCnt(self):
+        self.fast_buf_try_cnt = 0
+        self.fast_buf_sec_cnt = 0
+
     @TimeProf
     def __getitem__(self, idx):
         """
@@ -383,6 +395,7 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         Returns:
             tuple: (image, target) where target is the image segmentation.
         """
+        self.ClearFastBufCnt()
 
         anno_f, image_f = self.dataset[idx]
 
@@ -398,10 +411,10 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             anno = slot_maps
             # slot_maps = torch.from_numpy(slot_maps.astype(np.float32))
             slot_gt = np.zeros((2, self.h, self.w), dtype=np.float32)  # ch h w
-            img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-           
+            
             if self.img_transforms is not None:
                 # image = self.img_transforms(image)
+                img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 trans_1 = self.img_transforms(
                     image=img_rgb, mask1=anno[0], mask2=anno[1])
                 image_trans = trans_1['image']
@@ -411,9 +424,12 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
                 slot_gt[0] = point_gt
                 slot_gt[1] = line_gt
                 image = image_trans
+                img_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                image_gt = img_bgr
             else:
                 slot_gt[0] = anno[0]
                 slot_gt[1] = anno[1]
+                image_gt = image
 
             slot_maps = slot_gt.astype(np.float32)
             gt = slot_maps
@@ -423,11 +439,10 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             gt = annotations
             # print("annotations\n", annotations)
         
-        img_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         # cv2.imwrite(f"/data/ai_group/datasets/bev_park/parkslot_net/add_aug/test0/{idx}.jpg", img_bgr)
         # image_gt = self.img_transforms(
         #     image) if self.img_transforms is not None else image
-        image_gt = img_bgr
+        
 
         image_gt = image_gt.astype(np.float32).transpose(2, 0, 1) / 255.0
         data_dict = {'label': gt, "image": image_gt, "meta": {}}
@@ -438,6 +453,8 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         data_dict['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
         data_dict['meta']['sw_sh'] = [sw, sh]
         data_dict['meta']['wh'] = [self.w, self.h]
+        data_dict['fast_buf_try_cnt'] = self.fast_buf_try_cnt
+        data_dict['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
 
         return data_dict
 

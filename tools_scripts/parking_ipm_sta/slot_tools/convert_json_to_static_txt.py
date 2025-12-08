@@ -12,7 +12,7 @@ def cal_point_line_match(key_pt, line_pt):
     return res
 
 def json_txt(json_root, txt_root):
-    json_paths = glob.glob(os.path.join(json_root, "*/*/*/*.json"))
+    json_paths = glob.glob(os.path.join(json_root, "*/*/*/*/*.json"))
     print('label ', len(json_paths))
     for json_path in json_paths:
         json_file = json_path.split("/")[-1]
@@ -58,7 +58,7 @@ def json_txt(json_root, txt_root):
         txt_file.close()
 
 def convert_to_txt(root):
-    img_paths = glob.glob(os.path.join(root, "*/*/*/*.jpg"))
+    img_paths = glob.glob(os.path.join(root, "*/*/*/*/*.jpg"))
     print("img lenth ", len(img_paths))
     txt_file = open(os.path.join(root, 'pointline.txt'), "w")
 
@@ -78,7 +78,7 @@ def convert_to_txt(root):
     txt_file.close()
 
 if __name__ == '__main__':
-    json_root = '/data/ai_group/datasets/bev_park/train_test_dataset/jac1_300w'
+    json_root = '/data/ai_group/datasets/bev_park/train_test_dataset/PointLineData_Test'
     txtroot = os.path.join(json_root, 'pointline_txt')
     json_txt(json_root, txtroot)
 

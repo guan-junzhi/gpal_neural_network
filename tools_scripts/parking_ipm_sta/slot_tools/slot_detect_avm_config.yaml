@@ -9,13 +9,13 @@
 # Model conversion related parameters
 model_parameters:
   # The model file of floating-point ONNX neural network data
-  onnx_model: '/home/jovyan/gpal_neural_network/20251022_log/epoch=146-step=150000_checkpoint_sim_avm.onnx'
+  onnx_model: '/home/jovyan/gpal_neural_network/workspace/20251205_03_35_56_1201bgr_slot_onnx/checkpoint/epoch=106-step=150000_checkpoint_sim.onnx'
   # BPU architecture, with range: nash-e/nash-m
   march: "nash-m"
   # Specify the directory to store the model conversion output
-  working_dir: '/data/ai_group/workdirs/gpal_neural_network_group/zww/slot_version/20251022_log'
+  working_dir: '/data/ai_group/workdirs/gpal_neural_network_group/zww/slot_version/20251201_log'
   # Specify the name prefix for output model
-  output_model_file_prefix: '20251022_int16_avm_200w_quat_'
+  output_model_file_prefix: '20251201_int16_avm_200w_quat_1000num'
   enable_vpu: True
   # debug_mode: "dump_calibration_data"
 
@@ -51,7 +51,7 @@ input_parameters:
 calibration_parameters:
   # Specify the directory to store the calibration data, support Jpeg, Bmp etc, which should cover the typical scenarios
   # For multiple inputs, need to set multiple directories, and use ';' for separation
-  cal_data_dir: '/data/ai_group/datasets/bev_park/train_test_dataset/200w_camera_avm_for_bc_quat/img_avm_npy'
+  cal_data_dir: '/data/ai_group/datasets/bev_park/train_test_dataset/PointLineData_Test_quat_npy_1000'
   # cal_data_type: 'float32'
   # Specify the type of algorithm used for calibration, with range: default/mix/kl/max/load
   # Select skip for only performance verification, select load when using the QAT exported model
