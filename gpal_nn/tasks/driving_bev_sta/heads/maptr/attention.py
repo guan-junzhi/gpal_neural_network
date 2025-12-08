@@ -1186,11 +1186,6 @@ class DetrTransformerDecoderLayer(nn.Module):
         self.dropout1 = nn.Dropout(dropout)
         self.num_points = crossattention.num_points
         self.navi_embed = nn.Linear(self.num_points * 2, embed_dims)
-        self.sd_fusion = torch.nn.MultiheadAttention(
-            embed_dim=embed_dims, num_heads=num_heads, dropout=dropout
-        )
-        self.dropout2 = nn.Dropout(dropout)
-        self.sd_fusion_norm = nn.LayerNorm(embed_dims)
 
     def forward(
         self,
@@ -1209,6 +1204,10 @@ class DetrTransformerDecoderLayer(nn.Module):
             sa_query = torch.add(query, query_pos)
         else:
             sa_query = query
+        sa_query = nn.ReLU6()(sa_query)
+        sd_query = self.navi_embed(navi_info['points'].flatten(1)[None])
+        sd_query = nn.ReLU6()(sd_query)
+        sa_query = torch.cat([sa_query[:-1], sd_query], dim=0)
         sa_key = sa_query
         sa_query = self.sa(
             sa_query,
@@ -1229,18 +1228,6 @@ class DetrTransformerDecoderLayer(nn.Module):
             to_onnx=to_onnx,
         )
         query = self.ca_norm(query)
-        sd_key = self.navi_embed(navi_info['points'].flatten(1)[None])
-        sd_value = sd_key
-        sd_query = self.sd_fusion(
-            query,
-            key=sd_value,
-            value=sd_key,
-            attn_mask=None,
-            # to_onnx=to_onnx,
-        )[0]
-
-        query = torch.add(query, self.dropout2(sd_query))
-        query = self.sd_fusion_norm(query)
 
         query = self.ffn(query, query)
         query = self.ffn_norm(query)

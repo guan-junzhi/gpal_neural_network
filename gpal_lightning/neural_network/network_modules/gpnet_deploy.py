@@ -40,8 +40,6 @@ class GpNetDeploy(GpNet):
         self.model_file = global_config.onnx_path
         self.calib_data_cnt = 0
         
-        # od
-        self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
         
         self.dyn_od_stream_feature_bank = None
         self.dyn_od_stream_metas_bank = None
@@ -49,7 +47,8 @@ class GpNetDeploy(GpNet):
         for task in self.tasks:
             if "DRIVING_BEV_DYN" == task:
                 self.xyz_camA = self.gen_xyz_camA()
-        self.subtask_name = self.global_config.Tasks['DRIVING_BEV_DYN'].get("SWITCH_SUBTASK", "DRIVING_BEV_DYN")
+                self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
+
 
     def gen_xyz_camA(self):
         transformer_config = self.global_config.Transformer["transformer_config"]
@@ -556,6 +555,8 @@ class GpNetDeploy(GpNet):
                 'all_centerline_directions_preds',
                 'all_keypoint_classes_preds',
                 'all_keypoint_regs_preds',
+                'all_polygon_classes_preds',
+                'all_arrow_classes_preds',
             ]
         batch_ret ={}
         for k in out_keys:
@@ -670,7 +671,7 @@ class GpNetDeploy(GpNet):
 
         # Stack to tensors
         for k in out_keys:
-            batch_ret[k] = torch.from_numpy(np.stack(batch_ret[k], axis=0)).cuda()
+            batch_ret[k] = torch.from_numpy(np.concatenate(batch_ret[k], axis=0)).cuda()
         return [batch_ret]
 
     def forward(self, x, calib=None, metadata=None, phase=const.PHASE_TRAINING):

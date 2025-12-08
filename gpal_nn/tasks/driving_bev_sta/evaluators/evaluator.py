@@ -53,6 +53,8 @@ class DRIVING_BEV_STAEvaluator(BaseEvaluator):
                     'shape_type': gt['shape_type'],
                     'centerline_type': gt['centerline_type'],
                     'centerline_direction': gt['centerline_direction'],
+                    'polygon_class': gt['polygon_class'],
+                    'arrow_class': gt['arrow_class'],
                 }
                 gt_lanes['vectors'].append(gt_lane)
             gt_all_data.append(gt_lanes)
