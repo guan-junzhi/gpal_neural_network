@@ -48,7 +48,7 @@ class GpNetDeploy(GpNet):
             if "DRIVING_BEV_DYN" == task:
                 self.xyz_camA = self.gen_xyz_camA()
                 self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
-
+                self.subtask_name = self.global_config.Tasks['DRIVING_BEV_DYN'].get("SWITCH_SUBTASK", "DRIVING_BEV_DYN")
 
     def gen_xyz_camA(self):
         transformer_config = self.global_config.Transformer["transformer_config"]
@@ -411,6 +411,10 @@ class GpNetDeploy(GpNet):
             intrins = calib["intrinsic"][i].detach().cpu().numpy()
             cam_dists = calib["cam_dist"][i].detach().cpu().numpy()
             img_crop_dict = self.image_crop_config
+            
+            scale = copy.deepcopy(metadata[i]["scale"])
+            crop_start = copy.deepcopy(metadata[i]["crop"])
+            
             images_grid = np.stack([DistGridMap(img_slice[k].shape[2],
                                                 img_slice[k].shape[1],
                                                 cam_dists[ki],
@@ -418,7 +422,8 @@ class GpNetDeploy(GpNet):
                                                 int(img_crop_dict["IMAGE_RESIZE"][1]),
                                                 int(img_crop_dict["IMAGE_RESIZE"][0]),
                                                 int(img_crop_dict["IMAGE_CROP_H_LEN"]),
-                                                int(img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][ki]),
+                                                # int(img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][ki]),
+                                                int(crop_start[ki]),
                                                 )
                                    for ki, k in enumerate(img_slice)], axis=0)
             

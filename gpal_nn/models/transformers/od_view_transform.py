@@ -290,6 +290,8 @@ class ODViewTransformer(BaseModule):
             self.view_marker = SimpleViewMarker(num_views=len(self.input_source), feature_dim=transformer_config["out_channels"])
         else:
             self.view_marker = nn.Identity()
+        
+        self.conv_out_placeholder = nn.BatchNorm2d(transformer_config["out_channels"])
 
     def forward(
         self,

@@ -235,7 +235,7 @@ class PytorchToOnnx:
                     "img_rear_fisheye": [1920, 1536, 3],
                     "img_left_fisheye": [1920, 1536, 3],
                 }
-            else:
+            elif subtask_name=="DRIVING_BEV_DYN":
                 # used_image_shapes: dict = {
                 #     "img_front_120": [768, 320, 3],
                 #     "img_front_30": [768, 320, 3],
@@ -254,6 +254,8 @@ class PytorchToOnnx:
                     "img_rear_left": [1920, 1080, 3],
                     "img_rear_right": [1920, 1080, 3],
                 }
+            else:
+                raise ValueError(f"Unknown subtask_name: {subtask_name}")
             return used_image_shapes
         elif task_name in ["DRIVING_BEV_STA"]:
             used_image_shapes: dict = {
@@ -276,7 +278,11 @@ class PytorchToOnnx:
         input_dict = {}
            
         for task in tasks:
-            used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name, task.subtask_name)
+            if task.name in ["DRIVING_BEV_DYN"]:
+                subtask_name = task.subtask_name  # "DRIVING_BEV_DYN_FISHEYE"
+            else:
+                subtask_name = None
+            used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name, subtask_name)
             for cam in used_image_shapes:
                 if cam not in input_dict.keys():
                     vector_shape = 1, used_image_shapes[cam][1], used_image_shapes[cam][0], 3
