@@ -324,8 +324,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 f"{camera_name}_read_single_camera", time_dp_sub)
             if img is None:
                 return None, time_dp
-            elif self.eval_phase in ["EVAL_ONNX", "EVAL_BC"]:
-                imgs[camera_name] = img_src  # onnx中直接使用rgb原图; bc推理使用rgb_to_nv12_split
+            # elif self.eval_phase in ["EVAL_ONNX", "EVAL_BC"]:
+            #     imgs[camera_name] = img_src  # onnx中直接使用rgb原图; bc推理使用rgb_to_nv12_split
             else:
                 imgs[camera_name] = img
             ego2cam.append(ext)
@@ -844,9 +844,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 continue
 
             if self.transforms is not None:
-                if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
-                    # 保留cut_h更新的meta信息，但不实际cut图像
-                    self.transforms = [CutImageUpper(self.cut_start_h, just_update_meta=True)]
+                # if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
+                #     # 保留cut_h更新的meta信息，但不实际cut图像
+                #     self.transforms = [CutImageUpper(self.cut_start_h, just_update_meta=True)]
                 for transform in self.transforms:
                     data = transform(data)
 
