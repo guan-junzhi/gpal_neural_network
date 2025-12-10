@@ -437,6 +437,7 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             labelInstance = TXTLabelLoader(sw, sh)
             annotations = labelInstance.decodePointLineLabel(anno_f)
             gt = annotations
+            image_gt = image
             # print("annotations\n", annotations)
         
         # cv2.imwrite(f"/data/ai_group/datasets/bev_park/parkslot_net/add_aug/test0/{idx}.jpg", img_bgr)
