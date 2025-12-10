@@ -338,7 +338,7 @@ class PytorchToOnnx:
                 input_names=["img_avm"]
                 output_names=['slot_point', 'slot_line']
 	    
-	    if task.name == "DRIVING_BEV_STA":
+            if task.name == "DRIVING_BEV_STA":
                 input_names = ["img_30", "img_120", "images_grid", "reference_points_rebatch", "queries_rebatch_grid", "restore_bev_grid", "bev_pillar_counts", "navi_info"]
                 output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "centerline_directions_preds", 
                                 "keypoint_classes_preds", "keypoint_regs_preds", "polygon_classes_preds", "arrow_classes_preds"]
