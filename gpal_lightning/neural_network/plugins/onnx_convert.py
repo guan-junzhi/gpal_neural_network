@@ -199,14 +199,7 @@ class WrappedGpNet(GpNet):
         # print('backbone0', bb_output[0].shape)
         
         g0_output = self.model['group0'](bb_output)
-        # print("group0", backbone_name, g0_output[0].shape)
-
         neck0_output = self.model['neck0'](g0_output)
-        # print("neck0", neck0_output[0].shape)
-                    
-        # print(self._transformers)
-        # bev_feature = self.model[self._transformers[task]](
-        #     neck0_output,  calib)
         bev_feature = neck0_output
             
         for task_name in self.tasks_to_run.keys():
