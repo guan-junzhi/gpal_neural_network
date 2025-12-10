@@ -13,44 +13,18 @@ from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
 class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
     def __init__(self, global_config, task_config):
         super().__init__(global_config, task_config)
-        OD_RANGE = [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-
-        self.POST_PROCESSING = dict(
-            RECALL_THRESH_LIST=[0.3, 0.5, 0.7],
-            SCORE_THRESH=0.28,
-            OUTPUT_RAW_SCORE=False,
-            EVAL_METRIC="kitti",
-            NMS_CONFIG=dict(
-                MULTI_CLASSES_NMS=False,
-                NMS_TYPE="nms_gpu",
-                NMS_THRESH=0.1,
-                NMS_PRE_MAXSIZE=4096,
-                NMS_POST_MAXSIZE=500
-            ),
-            DET_RANGE_LIST=[
-                OD_RANGE,
-            ],
-            IOU_THRESH_LIST=[0.5, 0.5, 0.25, 0.25]
-        )
+        OD_RANGE = task_config.POST_PROCESSING['od_range']
+        
+        self.POST_PROCESSING = task_config.POST_PROCESSING
         self.num_class = len(task_config.class_dict)
         self.class_name = list(task_config.class_dict.values())
+        
         BEV_TO_POINTS = dict(
-            NAME="Bev_To_Points",
-            NUM_BEV_FEATURES=64,
-            VOXEL_SIZE=[0.64, 0.64],
-            SCORE_THRESH=0.28,
-            DOWN_RATIO=2,
+            VOXEL_SIZE=task_config.POST_PROCESSING['out_feat_voxel_size'],
             NUM_KEYPOINTS=256,
-            TRAIN=True,
-            NUM_OUTPUT_FEATURES=64
+            OD_RANGE=OD_RANGE,
         )
-        self.bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,
-                                                  grid_size=[480, 192,  12],
-                                                  voxel_size=[0.32, 0.32, 0.5],
-                                                  point_cloud_range=[-51.2, -
-                                                                     30.72, -1., 102.4, 30.72, 5.],
-                                                  num_bev_features=[64, 64, 128, 64, 128, 128, 128])
-
+        self.bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,)
 
 
     @staticmethod
@@ -97,8 +71,6 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
             gt_iou = box_preds.new_zeros(box_preds.shape[0])
         return recall_dict
 
-
-    
     def generate_prediction_dicts(self, pred_dicts, class_names, output_path=None):
         """
         Args:
@@ -263,29 +235,24 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
 
     @torch.no_grad()
     def generate_predicted_boxes(self, outputs, batch_size, **kwargs):
-        # template_xyz = outputs['template_xyz'][:, :, :2].view(-1, 2)
-        pred_cen = outputs['estimation_cen'].permute(0, 2, 1)
+        pred_cen = outputs['estimation_cen'].permute(0, 2, 1)  # -> B 256 2
         pred_z = outputs['estimation_z'].permute(0, 2, 1)
         pred_dim = outputs['estimation_dim'].permute(0, 2, 1)
         pred_dir = outputs['estimation_dir'].permute(0, 2, 1)
         
         bin_flag = (pred_dir[:, :, 0] < pred_dir[:, :, 1])
+
         pred_yaw =( torch.atan2(pred_dir[:, :, 2], pred_dir[:, :, 3]) * bin_flag.float() + \
             torch.atan2(pred_dir[:, :, 4], pred_dir[:, :, 5]) * (1.0-bin_flag.float())).unsqueeze(-1)
 
         pred_vel = outputs['estimation_vel'].permute(0, 2, 1)
-        pred_score = outputs['estimation_score'].sigmoid().permute(
-            0, 2, 1)  # 得分，时序特征融合后的得分
-
-        indicee = torch.arange(0, 256).to(pred_vel).float().view(-1, 256, 1)
+        pred_score = outputs['estimation_score'].sigmoid().permute(0, 2, 1)  # 得分，时序特征融合后的得分
 
         track_boxes = torch.cat([pred_cen,
                                 pred_z,
                                 pred_dim,
                                 pred_yaw,
                                 pred_vel*80,
-                                # template_xyz.view(-1, 256, 2),
-                                #   indicee
                                 ], dim=-1
                                 )
 
