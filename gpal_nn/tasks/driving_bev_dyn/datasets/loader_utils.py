@@ -73,12 +73,14 @@ class CameraIntrinsic:
     p2: float
     k3: float
     
-    def __init__(self, cam_K: List[List[float]], cam_dist: List[float]):
+    def __init__(self, cam_K: List[List[float]], cam_dist: List):
         """从K矩阵和畸变系数初始化"""
         self.fx = cam_K[0][0]
         self.fy = cam_K[1][1]
         self.cx = cam_K[0][2]
         self.cy = cam_K[1][2]
+        if len(cam_dist) == 1:
+            cam_dist = cam_dist[0]
         self.k1 = cam_dist[0]
         self.k2 = cam_dist[1]
         self.p1 = cam_dist[2]
@@ -127,7 +129,7 @@ class CameraInfo:
             camera_data['intrinsic']['cam_dist']
         )
         self.extrinsic = CameraExtrinsic(camera_data['extrinsic'])
-        self.image_size = tuple(camera_data['image_size'])
+        # self.image_size = tuple(camera_data['image_size'])
     
     def project_3d_to_2d(self, points_3d: np.ndarray) -> np.ndarray:
         """将3D点投影到2D图像平面"""
@@ -844,8 +846,7 @@ class InitJsonFile:
     
     def _init(self):
         self.cameras: Dict[str, CameraInfo] = {}
-        # self.bounding_boxes: List[BoundingBox3D] = []
-        self.freespace = []
+        self.bounding_boxes: List[BoundingBox3D] = []
         self.meta_info = {}
         self.special_labels = []
 
@@ -862,34 +863,12 @@ class InitJsonFile:
         self.meta_info = json_data.get('meta_infos', {})
         
         # 加载相机信息
-        camera_infos = self.meta_info.get('camera_infos', {})
-        for camera_name, camera_data in camera_infos.items():
-            try:
-                self.cameras[camera_name] = CameraInfo(camera_name, camera_data)
-            except Exception as e:
-                print(f"警告: 加载相机 {camera_name} 失败: {e}")
+        if 'camera_infos' not in self.meta_info:
+            camera_infos = self.meta_info
+            # assert len(camera_infos) == 7, "相机信息必须为7个相机"
+        else:
+            camera_infos = self.meta_info.get('camera_infos', {})
         
-      
-            freespace_str = json_data["3d_attributes"]["position"]
-            self.freespace = np.array(freespace_str, dtype=np.float32)
-
-
-        
-        # 加载特殊标签
-        # special_labels_data = json_data.get('special_labels', {})
-        # self.special_labels = json_data.get('special_labels', [])
-        
-        return self.meta_info, self.cameras, self.freespace
-    
-    def parse_json_freespace(self, json_data):
-        
-        self._init()  # 重置
-        
-        # 加载元信息
-        self.meta_info = json_data.get('meta_infos', {})
-        
-        # 加载相机信息
-        camera_infos = self.meta_info.get('camera_infos', {})
         for camera_name, camera_data in camera_infos.items():
             try:
                 self.cameras[camera_name] = CameraInfo(camera_name, camera_data)

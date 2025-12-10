@@ -18,13 +18,15 @@ from gpal_nn.tasks.driving_bev_sta.datasets.transform import *
 from gpal_nn.tasks.driving_bev_sta.datasets.letter_box import letterbox_image, random_scale_and_translate
 from gpal_nn.tasks.driving_bev_sta.datasets.LaneData_utils import *
 from gpal_nn.tasks.driving_bev_sta.datasets.centerline_connector import merge_connected_centerlines, get_centerline_dict
+from gpal_nn.tasks.driving_bev_sta.datasets.lane_marking_connector import connect_lane_markings
+from gpal_nn.tasks.driving_bev_sta.datasets.edge_connector import connect_edges
 from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
 from gpal_lightning.utils.profiling import TimeProf
 import random
 from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
 import time
 import multiprocessing
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 from tools_scripts.data_format_cvt import ShowDataStruct
 import shutil
 
@@ -64,6 +66,75 @@ def yaw_rotation_matrix(yaw_rad):
         [sin_y,  cos_y, 0],
         [0,      0,     1],
     ])
+
+def filter_linestring_by_x_positive(linestring):
+    """
+    将LineString只保留x>0的部分，如果被截成多段，则保留离(0,0)最近的一根线
+    
+    参数:
+        linestring: shapely.geometry.LineString对象
+    
+    返回:
+        LineString: 处理后的LineString对象
+    """
+    
+    # 如果LineString为空，直接返回
+    if linestring.is_empty:
+        return linestring
+    
+    # 创建x=0的垂直线作为切割线
+    cutting_line = LineString([(0, -1000), (0, 1000)])
+    
+    # 用切割线分割原LineString
+    split_result = linestring.difference(cutting_line)
+    
+    # 如果分割后是MultiLineString，获取所有线段
+    if split_result.geom_type == 'MultiLineString':
+        segments = list(split_result.geoms)
+    else:
+        segments = [split_result]
+    
+    # 筛选x>0的线段
+    positive_segments = []
+    for segment in segments:
+        # 检查线段是否有任何点在x>0的区域
+        if not segment.is_empty and any(p[0] > 0 for p in segment.coords):
+            positive_segments.append(segment)
+    
+    # 如果没有x>0的线段，返回空LineString
+    if not positive_segments:
+        return LineString()
+    
+    # 如果只有一个线段，直接返回
+    if len(positive_segments) == 1:
+        return positive_segments[0]
+    
+    # 如果有多个线段，找到离(0,0)最近的那个
+    origin = Point(0, 0)
+    closest_segment = min(positive_segments, key=lambda seg: seg.distance(origin))
+    
+    return closest_segment
+
+def clip_fix_length(linestring, max_length=150.0):
+    if linestring.is_empty or linestring.length <= max_length:
+        return linestring
+    
+    # 使用interpolate API找到截取点
+    cut_point = linestring.interpolate(max_length)
+    
+    # 获取LineString的所有坐标点
+    coords = list(linestring.coords)
+    
+    # 找到截取点所在的线段
+    for i in range(1, len(coords)):
+        segment = LineString([coords[i-1], coords[i]])
+        if segment.distance(cut_point) < 1e-6:  # 截取点在这个线段上
+            # 构造从起点到截取点的LineString
+            truncated_coords = coords[:i] + [cut_point.coords[0]]
+            return LineString(truncated_coords)
+    
+    # 如果没找到精确的线段，返回简化版本
+    return LineString([coords[0], cut_point.coords[0]])
 
 @DATASETS.register_module()
 class DRIVING_BEV_STADataset(SliceBaseDataset):
@@ -179,19 +250,19 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                              )
                          )
         self.cut_start_h = cut_start_h
-        mean = (0., 0., 0.)
-        std = (255., 255., 255.)
+        self.mean = (0., 0., 0.)
+        self.std = (255., 255., 255.)
         if phase == const.PHASE_TRAINING:
             self.transforms = [
                 CutImageUpper(cut_start_h),
                 MultiViewRandomCutOut(0.65, 6, [[40, 40]]),
                 MultiViewPhotoMetricDistortion(),
-                Normalize(mean=mean, std=std),
+                Normalize(mean=self.mean, std=self.std),
             ]
         else:
             self.transforms = [
                 CutImageUpper(cut_start_h),
-                Normalize(mean=mean, std=std),
+                Normalize(mean=self.mean, std=self.std),
             ]
         self.task = task_config.name
         self.rpy_aug = rpy_aug
@@ -210,10 +281,19 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         else:
             print(f"{self.lmdb_path_local} 存在")
         distributed.barrier()
+        self.navi_info_ratio = 0.6
 
         if self.lmdb_path_local != '':
             self.label_buffer = FastLoaderBuffer(self.lmdb_path_local)
-        
+        self.eval_phase = ""
+        self.onnx_path = self.global_config.config['onnx_path'] if 'onnx_path' in self.global_config.config else ''
+        if self.phase != const.PHASE_TRAINING and self.onnx_path != '':
+            if self.onnx_path[-3:] == '.bc' or self.onnx_path[-4:] == '.hbm':
+                self.eval_phase = "EVAL_BC"
+            elif self.onnx_path[-5:] == '.onnx':
+                self.eval_phase = "EVAL_ONNX"
+        print(f"Dataset phase: {self.phase}")
+        print(f"Dataset eval_phase: {self.eval_phase}")
 
     def _build_world_data_list(self):
         try:
@@ -286,16 +366,20 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         ists_norm = []
         dists = []
         ori_shape = []
+        _Ks, _dists = [], []
         time_dp = DetailProf()
         time_dp.Tic("begin")
         for camera_name in self.camera_names:
-            img_src, img, K, norm_K, ext, dist, ori_img_h, ori_img_w, img_path, time_dp_sub = self.read_single_camera(
+            img_src, img, K, norm_K, ext, dist, ori_img_h, ori_img_w, img_path, _K, _dist, time_dp_sub = self.read_single_camera(
                 data_info['sensor'], camera_name)
             time_dp.AddSubProf(
                 f"{camera_name}_read_single_camera", time_dp_sub)
             if img is None:
                 return None, time_dp
-            imgs[camera_name] = img
+            elif self.eval_phase in ["EVAL_ONNX", "EVAL_BC"]:
+                imgs[camera_name] = img_src  # onnx中直接使用rgb原图; bc推理使用rgb_to_nv12_split
+            else:
+                imgs[camera_name] = img
             ego2cam.append(ext)
             cam2ego.append(np.linalg.inv(np.concatenate(
                 [ext, np.array([[0, 0, 0, 1]])], axis=0)))
@@ -303,6 +387,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             ists_norm.append(norm_K)
             dists.append(dist)
             ori_shape.append([ori_img_h, ori_img_w])
+            _Ks.append(_K)
+            _dists.append(_dist)
 
         data_dict['image'] = imgs
         data_dict['calib'] = {'exts': np.stack(ego2cam), 'cam2egos': np.stack(
@@ -312,7 +398,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['meta']['camera_name'] = self.camera_names
         data_dict['meta']['task_name'] = self.task
         data_dict['meta']['clip_id'] = '_'.join(img_path.split('/')[:2])
-
+        data_dict['calib'].update({'_Ks': np.stack(_Ks), '_dists': np.stack(_dists)})
         return data_dict, time_dp
 
     def read_single_camera(self, sensor, camera_name):
@@ -328,35 +414,41 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         T = camera['extr']['T']
         K = camera['intr']['K']
         dist = camera['intr']['dist']
-
+        _K, _dist = copy.deepcopy(K), copy.deepcopy(dist)
         # read img
         root_path = self.root_dir
         img_path = os.path.join(root_path, img_name)
         time_dp = DetailProf()
         time_dp.Tic("begin")
         try:
-            self.fast_buf_try_cnt += 1
-            database_key = "_".join(img_path.split('/')[-4:])
-            image, hw_origin = self._image_buffer_access(
-                database_key)
-            if image is None:
+            if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
                 image = cv2.undistort(image, K, dist)
-                self._image_cache(
-                    database_key, image, pre_resize=(960, 540), quality=95)
-                # print("cache")
+                assert image is not None, f"image is None: {img_path}"
             else:
-                self.fast_buf_sec_cnt += 1
-                # print("fast load")
-                K[0, :] *= image.shape[1]/hw_origin[1]
-                K[1, :] *= image.shape[0]/hw_origin[0]
+                self.fast_buf_try_cnt += 1
+                database_key = "_".join(img_path.split('/')[-4:])
+                image, hw_origin = self._image_buffer_access(
+                    database_key)
+                if image is None:
+                    image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+                    image = cv2.undistort(image, K, dist)
+                    self._image_cache(
+                        database_key, image, pre_resize=(960, 540), quality=95)
+                    # print("cache")
+                else:
+                    self.fast_buf_sec_cnt += 1
+                    # print("fast load")
+                    K[0, :] *= image.shape[1]/hw_origin[1]
+                    K[1, :] *= image.shape[0]/hw_origin[0]
 
             time_dp.Duration("imread", "begin")
             ori_img_h, ori_img_w, _ = image.shape
             resize_image, K = letterbox_image(image, self.in_shape, K=K)
             if self.is_random_scale_and_translate:
                 resize_image, K = random_scale_and_translate(resize_image, self.in_shape, K=K, scale=0.1,
-                                                             offset=0.1)
+                                                            offset=0.1)
+
 
             if self.rpy_aug:
                 aug_r, aug_p, aug_y = random.uniform(-self.rpy_aug_rad[0], self.rpy_aug_rad[0]), \
@@ -401,15 +493,74 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         ext[:3, :3] = rot
         ext[:3, 3:] = T.reshape(3, 1)
 
-        return image, resize_image, K, norm_K, ext[:3, :], dist, ori_img_h, ori_img_w, img_name, time_dp
+        return image, resize_image, K, norm_K, ext[:3, :], dist, ori_img_h, ori_img_w, img_name, _K, _dist, time_dp
+    
+    def process_navi_points(self, navi_points, bev_real2aug):
+        navi_points_homo = np.concatenate([navi_points, np.ones((navi_points.shape[0],1))], axis=-1)
+
+        noise_matrix = np.eye(4, dtype=np.float32)
+        if self.phase == const.PHASE_TRAINING:
+            noise_matrix[:3,:3] = yaw_rotation_matrix(random.uniform(-np.deg2rad(5.0), np.deg2rad(5.0)))
+            noise_matrix[0,3] = random.uniform(-10, 10)
+            noise_matrix[1,3] = random.uniform(-10, 10)
+
+        navi_points_noise = (noise_matrix @ bev_real2aug @ navi_points_homo.T).T[:,:2]
+        navi_points_noise_ls = filter_linestring_by_x_positive(LineString(navi_points_noise))
+        if navi_points_noise_ls.is_empty or len(navi_points_noise_ls.coords) < 2 or navi_points_noise_ls.length < 10:
+            return np.zeros((self.pts_per_vector, 2), dtype=np.float32)
+        
+        navi_points_noise = np.array(clip_fix_length(navi_points_noise_ls, max_length=150.0).coords, dtype=np.float32)
+        # 降低分辨率
+        navi_points_noise = _fix_pts_interpolate(_fix_pts_interpolate(navi_points_noise, 6), self.pts_per_vector)
+
+        return navi_points_noise
+    
+    def process_guideline(self, guideline_ego_path, bev_real2aug):
+        guideline_ego_path_homo = np.concatenate([guideline_ego_path, np.ones((guideline_ego_path.shape[0],1))], axis=-1)
+        guideline_ego_path = (bev_real2aug @ guideline_ego_path_homo.T).T[:,:3]
+        guideline_ego_path = _fix_pts_interpolate(
+            guideline_ego_path, max(int(LineString(guideline_ego_path).length / 0.2), self.pts_per_vector))
+        try:
+            mask = guideline_ego_path[..., 0] <= self.gt_range[0]
+            mask *= guideline_ego_path[..., 0] >= self.gt_range[3]
+            mask *= guideline_ego_path[..., 1] <= self.gt_range[1]
+            mask *= guideline_ego_path[..., 1] >= self.gt_range[4]
+            guideline_ego_path = guideline_ego_path[mask]
+        except:
+            exit(1)
+
+        if len(guideline_ego_path) <= 1:
+            return np.zeros((self.pts_per_vector, 3), dtype=np.float32)
+
+        guideline_ego_path = _fix_pts_interpolate(guideline_ego_path, self.pts_per_vector)
+        return guideline_ego_path
 
     def parse_annotations(self, data_info, data_dict, bev_real2aug):
         annot = data_info['annotation']
+        data_dict['navi_info'] = {}
+        data_dict['guideline'] = {}
+        navi_points = np.zeros((self.pts_per_vector, 2), dtype=np.float32)
+        guideline_ego_path = np.zeros((1, self.pts_per_vector, 3), dtype=np.float32)
+        if self.phase != const.PHASE_TRAINING or random.random() < self.navi_info_ratio:
+            navi_points = self.process_navi_points(data_info['annotation']['navi_info']['points'][0], bev_real2aug)
+            guideline_ego_path = self.process_guideline(annot['ego_path']['points'][0], bev_real2aug)[None]
+        data_dict['navi_info']['points'] = navi_points
+        data_dict['guideline']['ego_path'] = guideline_ego_path
+
         self.process_edges(annot['edges'], data_dict, bev_real2aug)
         self.process_polylines(annot['polylines'], data_dict, bev_real2aug)
-        self.process_polygons_arrow(annot['polygons'], data_dict, bev_real2aug)
+        if 'points' in data_dict['polylines']:
+            data_dict['polylines'] = connect_lane_markings(data_dict['polylines'])
+            for i in range(len(data_dict['polylines']['points'])):
+                data_dict['polylines']['points'][i] = _fix_pts_interpolate(data_dict['polylines']['points'][i], self.pts_per_vector)
+            data_dict['polylines']['points'] = np.array(data_dict['polylines']['points'], dtype=np.float32)
+            if len(data_dict['polylines']['points']) == 0:
+                data_dict['polylines'] = {}
         if 'centerlines' in annot:
             self.process_centerline(annot['centerlines'], data_dict, bev_real2aug)
+
+        self.process_polygons_arrow(annot['polygons'], data_dict, bev_real2aug)
+
         if 'points' in data_dict['edges']:
             edges_visible_dict = {}
             edges_visible_mask = np.ones(len(data_dict['edges']['points']), dtype=bool)
@@ -430,7 +581,15 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             if edges_visible_mask.sum() > 0:
                 edges_visible_dict['points'] = data_dict['edges']['points'][edges_visible_mask]
                 edges_visible_dict['classes'] = np.array(data_dict['edges']['classes'])[edges_visible_mask]
+                edges_visible_dict['id'] = np.array(data_dict['edges']['id'])[edges_visible_mask]
             data_dict['edges'] = edges_visible_dict
+        if 'points' in data_dict['edges']:
+            data_dict['edges'] = connect_edges(data_dict['edges'])
+            for i in range(len(data_dict['edges']['points'])):
+                data_dict['edges']['points'][i] = _fix_pts_interpolate(data_dict['edges']['points'][i], self.pts_per_vector)
+            data_dict['edges']['points'] = np.array(data_dict['edges']['points'], dtype=np.float32)
+            if len(data_dict['edges']['points']) == 0:
+                data_dict['edges'] = {}
 
         data_dict["calib_type"] = data_info['sensor']['calib_type']
 
@@ -498,25 +657,29 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         shape_type = []
         color_type = []
         stop_type = []
+        ids = []
 
         assert len(polylines['points']) == len(masks) == \
                len(polylines['shape_type']) == len(polylines['color_type']) == len(polylines['stop_type'])
         
-        for mask, name, shape, color, stop in zip(masks, polylines['classes'],
+        for mask, name, shape, color, stop, id in zip(masks, polylines['classes'],
                                                   polylines['shape_type'],
                                                   polylines['color_type'],
-                                                  polylines['stop_type']):
+                                                  polylines['stop_type'],
+                                                  polylines['id']):
             if mask == False:
                 continue
             classes.append(lane_marking_type_map[name])
             shape_type.append(shape_type_map[shape])
             color_type.append(color_type_map[color])
             stop_type.append(stop_type_map[stop])
+            ids.append(id)
 
         data_dict['polylines']['classes'] = classes
         data_dict['polylines']['shape_type'] = shape_type
         data_dict['polylines']['color_type'] = color_type
         data_dict['polylines']['stop_type'] = stop_type
+        data_dict['polylines']['id'] = ids
 
     def process_edges(self, edges, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
         data_dict['edges'] = {}
@@ -554,15 +717,18 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
     def get_edge_attributes(self, edges, data_dict, masks):
         classes = []
+        ids = []
 
         assert len(edges['points']) == len(masks) == len(edges['classes'])
 
-        for mask, name in zip(masks, edges['classes']):
+        for mask, name, id in zip(masks, edges['classes'], edges['id']):
             if mask == False:
                 continue
             classes.append(edge_type_map[name])
+            ids.append(id)
 
         data_dict['edges']['classes'] = classes
+        data_dict['edges']['id'] = ids
 
     def process_centerline(self, centerlines, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
 
@@ -644,44 +810,64 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['centerlines']['points'] = np.array(data_dict['centerlines']['points'])
 
     def process_polygons_arrow(self, polygons, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
-        data_dict['polygon_arrows'] = {}
-        polygons_points = []
+        data_dict['polygons'] = {}
+        data_dict['arrows'] = {}
 
-        polygon_mask = np.zeros(len(polygons['points']), dtype=bool)
         for idx, polygon in enumerate(polygons['points']):
             # TODO: move range filter to pipeline
+            if polygons['classes'][idx] != 'arrow' and polygon_type_map[polygons['classes'][idx]] < 0:
+                continue
+            first_point = polygon[0]
+            last_point = polygon[-1]
+            if not np.allclose(first_point, last_point, atol=1e-3):
+                polygon = np.vstack([polygon, first_point.reshape(1, -1)])
+
             polygon_homo = np.concatenate([polygon, np.ones((polygon.shape[0],1))], axis=-1)
             polygon = (bev_real2aug @ polygon_homo.T).T[:,:3]
+            polygon = _fix_pts_interpolate(polygon, max(int(LineString(polygon).length / 0.2), 20))
+            if len(polygon) <= 1:
+                continue
             mask = polygon[..., 0] <= self.gt_range[0]
             mask *= polygon[..., 0] >= self.gt_range[3]
             mask *= polygon[..., 1] <= self.gt_range[1]
             mask *= polygon[..., 1] >= self.gt_range[4]
             filter_polygon = polygon[mask]
-            if len(filter_polygon) < 3:
+            if len(filter_polygon) < 4:
                 continue
+            first_point = filter_polygon[0]
+            last_point = filter_polygon[-1]
+            if not np.allclose(first_point, last_point, atol=1e-3):
+                filter_polygon = np.vstack([filter_polygon, first_point.reshape(1, -1)])
+            pts = _fix_pts_interpolate(filter_polygon, self.pts_per_vector)
+            if 'points' in data_dict['edges']:
+                num_cross_edge = 0
+                edges_points = data_dict['edges']['points']
+                for polygon_pt in pts:
+                    ego_ls = LineString(np.stack([polygon_pt[:2], np.array([0,0])], axis=0))
+                    for edge in edges_points:
+                        edge_ls = LineString(edge[:,:2])
+                        if ego_ls.intersects(edge_ls):
+                            num_cross_edge += 1
+                            break
+                if num_cross_edge > self.pts_per_vector - 4:
+                    continue
+            if polygons['classes'][idx] == 'arrow':
+                if 'points' not in data_dict['arrows']:
+                    data_dict['arrows']['points'] = []
+                    data_dict['arrows']['classes'] = []
+                data_dict['arrows']['points'].append(pts)
+                data_dict['arrows']['classes'].append(arrow_type_map[polygons['arrow_type'][idx]])
+            else:
+                if 'points' not in data_dict['polygons']:
+                    data_dict['polygons']['points'] = []
+                    data_dict['polygons']['classes'] = []
+                data_dict['polygons']['points'].append(pts)
+                data_dict['polygons']['classes'].append(polygon_type_map[polygons['classes'][idx]])
 
-            polygon_mask[idx] = True
-            polygons_points.append(filter_polygon)
-
-        # process labels
-        if len(polygons_points) > 0:
-            data_dict['polygon_arrows']['points'] = polygons_points
-            self.get_polygon_arrow_attributes(polygons, data_dict, polygon_mask)
-
-    def get_polygon_arrow_attributes(self, polygons, data_dict, masks):
-        polygon_classes = []
-        arrow_types = []
-
-        assert len(polygons['points']) == len(masks) == len(polygons['classes']) == len(polygons['arrow_type'])
-
-        for mask, name, arrow_type in zip(masks, polygons['classes'], polygons['arrow_type']):
-            if mask == False:
-                continue
-            polygon_classes.append(polygon_type_map[name])
-            arrow_types.append(arrow_type_map[arrow_type])
-
-        data_dict['polygon_arrows']['classes'] = polygon_classes
-        data_dict['polygon_arrows']['arrow_type'] = arrow_types
+        if 'points' in data_dict['arrows']:
+            data_dict['arrows']['points'] = np.array(data_dict['arrows']['points'])
+        if 'points' in data_dict['polygons']:
+            data_dict['polygons']['points'] = np.array(data_dict['polygons']['points'])
 
     def ClearFastBufCnt(self):
         self.fast_buf_try_cnt = 0
@@ -708,13 +894,20 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 continue
 
             if self.transforms is not None:
+                if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
+                    # 保留cut_h更新的meta信息，但不实际cut图像
+                    self.transforms = [CutImageUpper(self.cut_start_h, just_update_meta=True)]
                 for transform in self.transforms:
                     data = transform(data)
 
             time_dp.Duration("transform", "prepare_data")
+            if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
+                data['image'] = {k: data['image'][k] for k in data['image']}
+            else:
+                data['image'] = {k: data['image'][k].transpose(
+                    2, 0, 1) for k in data['image']}
+            data['meta']['eval_phase'] = self.eval_phase
 
-            data['image'] = {k: data['image'][k].transpose(
-                2, 0, 1) for k in data['image']}
             data['calib']["ego2imgs"] = np.stack(
                 [i@e for e, i in zip(data['calib']['exts'], data['calib']['ists'])], axis=0)
             data['calib']["ego2imgs"] = np.stack([np.concatenate([ele, np.array(
@@ -729,6 +922,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
             data['calib']["img_shapes"] = np.stack(
                 [np.array(list(img.shape)) for img in data["image"].values()], axis=0)
+            data['calib']['navi_info'] = data['label']['navi_info']
 
             time_dp.Duration("tail", "transform")
             time_dp.Duration("dataset_all", "begin")

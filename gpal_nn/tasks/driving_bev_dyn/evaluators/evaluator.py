@@ -53,7 +53,12 @@ def test_dynamic_thresholds(loggerinfo=print, restricted_ratio=[0.05, 0.005]):
 
 
 def create_logger(log_file=None, rank=0, log_level=logging.INFO, use_console=True):
-    logger = logging.getLogger(__name__)
+    logger_name = __name__ if log_file is None else f"{__name__}.{log_file}"
+    logger = logging.getLogger(logger_name)
+
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
     # 根据 rank 设置日志级别（仅 rank=0 时记录指定级别，否则 ERROR）
     logger.setLevel(log_level if rank == 0 else logging.ERROR)
     
@@ -185,6 +190,10 @@ def evaluation(preds, gts, metas, class_names, result_dir="workspace/20250907_08
     for i in range(len(gts)):
         det_annos[i].update(gts[i])
     
+    logger.info(f'det_annos: len: {len(det_annos)}')
+    key_det_annos = [det_annos[i] for i in range(len(det_annos)) if metas[i]['is_key']]
+    det_annos = key_det_annos
+    logger.info(f'key_det_annos: len{len(key_det_annos)}')
     # det_annox = evaluator.load_det_annos(
     #     det_annos)  # 文件路径 or list[dict, dict, ...]
     
@@ -324,5 +333,12 @@ if __name__ == "__main__":
     # print(inputs[-1])
     # evaluation(*inputs)
     evaluation(preds, gts, metas, inputs[3])
-
-    
+    # class_names = [
+    #     "vehicle_car",
+    #     "vehicle_truck",
+    #     "vehicle_construction_vehicle",
+    #     "vehicle_cyclist",
+    #     "vehicle_tricycle",
+    #     "human_pedestrian",
+    # ]
+    # evaluation(preds, gts, metas, class_names)

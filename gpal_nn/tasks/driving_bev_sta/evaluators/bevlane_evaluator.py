@@ -105,7 +105,8 @@ class Bevlane_Evaluator(object):
             if not isinstance(mean_ap, list):
                 mean_ap = [mean_ap]
 
-            header = ['gts', 'dets', 'Recall', 'Precision', 'AP', 'Dist', 'Dist@95', 'ShapeTypeAcc']
+            header = ['gts', 'dets', 'Recall', 'Precision', 'AP', 'Dist', 'Dist@95', 'LaneTypeAcc', 'LaneColorAcc', 
+                      'ShapeTypeAcc', 'CenterlineTypeAcc', 'CenterlineDirectionAcc', 'PolygonAcc', 'ArrowAcc']
             for i in range(num_scales):
                 table_data = []
                 index = []
@@ -117,14 +118,26 @@ class Bevlane_Evaluator(object):
                         "aps": aps[i, j],
                         "mean_dist_error": results[j]['mean_dist_error'],
                         "dist_error_95": results[j]['dist_error_95'],
+                        "lane_marking_type_acc": results[j]["lane_marking_type_acc"],
+                        "lane_marking_color_acc": results[j]["lane_marking_color_acc"],
                         "shape_type_acc": results[j]["shape_type_acc"],
+                        "centerline_type_acc": results[j]["centerline_type_acc"],
+                        "centerline_direction_acc": results[j]["centerline_direction_acc"],
+                        "polygon_acc": results[j]["polygon_acc"],
+                        "arrow_acc": results[j]["arrow_acc"],
                     }
 
                     row_data = [
                         num_gts[i, j], results[j]['num_dets'],
                         f'{recalls[i, j]:.3f}', f'{precisions[i, j]:.3f}', f'{aps[i, j]:.3f}',
                         f'{results[j]["mean_dist_error"]:.3f}', f'{results[j]["dist_error_95"]:.3f}',
+                        f'{results[j]["lane_marking_type_acc"]:.3f}',
+                        f'{results[j]["lane_marking_color_acc"]:.3f}',
                         f'{results[j]["shape_type_acc"]:.3f}',
+                        f'{results[j]["centerline_type_acc"]:.3f}',
+                        f'{results[j]["centerline_direction_acc"]:.3f}',
+                        f'{results[j]["polygon_acc"]:.3f}',
+                        f'{results[j]["arrow_acc"]:.3f}',
                     ]
                     index.append(rois[j])
                     table_data.append(row_data)
@@ -139,6 +152,8 @@ class Bevlane_Evaluator(object):
     def evaluate_single(self, gen_results, annotations, metric='chamfer'):
         from .mean_ap import eval_map
         from .mean_ap import format_res_gt_by_classes
+        # 初始化混淆矩阵
+        shape_cm = None  # 形状类型混淆矩阵
         cls_gens, cls_gts = format_res_gt_by_classes(gen_results,
                                                      annotations,
                                                      cls_names=self.main_classes,

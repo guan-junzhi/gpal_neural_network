@@ -229,7 +229,7 @@ class MultiScaleDeformableAttentionBase(nn.Module):
                 )
             )
             sampling_grid_l_ = (
-                sampling_grids[level].transpose(1, 2).flatten(0, 1)
+                sampling_grids[level].transpose(1, 2)#.flatten(0, 1)
             )
             sampling_grid_l_ = sampling_grid_l_.reshape(
                 bs * self.num_heads,
@@ -257,6 +257,7 @@ class MultiScaleDeformableAttentionBase(nn.Module):
         output = self.reduce_sum(sampling_value_list_outs)
         output = output.view(bs, num_heads * embed_dims, num_queries)
         return output
+
 
     def forward(
         self,

@@ -1184,6 +1184,8 @@ class DetrTransformerDecoderLayer(nn.Module):
         # self.add_pos2 = FF()
         # self.add_self_attn = FF()
         self.dropout1 = nn.Dropout(dropout)
+        self.num_points = crossattention.num_points
+        self.navi_embed = nn.Linear(self.num_points * 2, embed_dims)
 
     def forward(
         self,
@@ -1194,6 +1196,7 @@ class DetrTransformerDecoderLayer(nn.Module):
         attn_masks: Tensor = None,
         reference_points: Tensor = None,
         spatial_shapes: Tensor = None,
+        navi_info: dict = None,
         to_onnx: bool=False
     ) -> Tensor:
         """Foward DetrTransformerDecoderLayer."""
@@ -1201,6 +1204,10 @@ class DetrTransformerDecoderLayer(nn.Module):
             sa_query = torch.add(query, query_pos)
         else:
             sa_query = query
+        sa_query = nn.ReLU6()(sa_query)
+        sd_query = self.navi_embed(navi_info['points'].flatten(1)[None])
+        sd_query = nn.ReLU6()(sd_query)
+        sa_query = torch.cat([sa_query[:-1], sd_query], dim=0)
         sa_key = sa_query
         sa_query = self.sa(
             sa_query,
@@ -1221,6 +1228,7 @@ class DetrTransformerDecoderLayer(nn.Module):
             to_onnx=to_onnx,
         )
         query = self.ca_norm(query)
+
         query = self.ffn(query, query)
         query = self.ffn_norm(query)
         return query

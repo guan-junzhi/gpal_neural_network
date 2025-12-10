@@ -8,8 +8,7 @@ import pickle
 from typing import List, Union
 from torch import distributed
 import numpy as np
-# import sys
-# sys.path.append("/home/jovyan/gpal_neural_network")
+
 from gpal_lightning import const
 from gpal_lightning.neural_network.tasks.builder import DATASETS
 from gpal_lightning.neural_network.tasks.base.datasets.image_base_dataset import ImageBaseDataset

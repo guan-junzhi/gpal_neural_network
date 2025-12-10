@@ -43,3 +43,28 @@ def bgr_to_nv12_split(img_bgr):
     uv_interleaved = uv_interleaved.reshape(
         1, h//2, w//2, 2)  # .transpose(0, 3, 1, 2)
     return y_plane, uv_interleaved
+
+def rgb_to_nv12_split(img_rgb):
+    img_rgb = img_rgb.squeeze(axis=0).astype(np.uint8)
+    # 转换为YUV420 (I420)
+    yuv_i420 = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2YUV_I420)
+    h, w = img_rgb.shape[:2]
+    
+    # 提取Y平面
+    y_plane = yuv_i420[:h, :]
+    
+    # 提取U和V平面（注意I420的UV排列为UUUUVVVV）
+    uv_start = h
+    uv_height = h // 4  # I420的U/V平面高度为h/4
+    u_plane = yuv_i420[uv_start:uv_start+uv_height, :]
+    v_plane = yuv_i420[uv_start+uv_height:uv_start+2*uv_height, :]
+    
+    # 将U和V平面合并成交替的UV平面（NV12）
+    # 需要将U和V从 (h//4, w//2) 上采样到 (h//2, w)
+    uv_interleaved = np.zeros((h//2 * w//2 * 2), dtype=np.uint8)
+    uv_interleaved[0::2] = u_plane.flatten()
+    uv_interleaved[1::2] = v_plane.flatten()
+    
+    # 组合NV12数据
+    # nv12 = np.vstack([y_plane, uv_interleaved])
+    return  y_plane.reshape(1, h, w, 1), uv_interleaved.reshape(1, h//2, w//2, 2)

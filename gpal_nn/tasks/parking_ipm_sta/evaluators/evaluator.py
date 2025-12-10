@@ -165,7 +165,7 @@ class PARKING_IPM_STAEvaluator(BaseEvaluator):
         point_num = 0
         line_num = 0
         for pred, gt, meta in zip(self.pread_all, self.gt_all, self.meta_all):
-            DrawVe(gt, pred, meta, self.save)
+            #DrawVe(gt, pred, meta, self.save)
             evaloator = TXTLabelLoader(self.sw, self.sh)
             point_num = point_num + len(pred)
             for i in range(len(pred)):

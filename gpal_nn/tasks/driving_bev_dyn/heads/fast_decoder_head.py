@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
     print(ShowDataStruct("x", x))
 
-    head_config = {"in_channels": 256, "num_stages": 6, "out_channels": 1}
+    head_config = {"in_channels": 256, "num_stages": 6, "out_channels": 21}
 
     head = FastDecoderHead(head_config)
     head = head.cuda()

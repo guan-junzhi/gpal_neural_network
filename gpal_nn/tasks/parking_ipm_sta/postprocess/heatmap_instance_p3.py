@@ -64,7 +64,6 @@ class HeatMap(object):
 
     def drawVE(self, mask, savePath):
         h, w, c = mask.shape
-        # print("draw vertexElement ", self.vertexElements)
         for i in range(len(self.vertexElements)):
             point = self.vertexElements[i][0]
             orients = self.vertexElements[i][1]
@@ -211,8 +210,6 @@ class HeatMap(object):
                 else :
                     if (actlen[bin] > 0 and data < detect_thr):
                        break
-        # print("++hist ", hist)
-        # print("++actlen ", actlen)
         candidateOrients = []
         for bin in range(bins):
             if (actlen[bin] < min_active_thr):

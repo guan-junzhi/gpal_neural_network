@@ -11,7 +11,36 @@ from functools import partial
 from .tpfp import custom_tpfp_gen
 from .tgfg import tpfp_gen
 from gpal_nn.tasks.driving_bev_sta.datasets.collect import _fix_pts_interpolate
+from sklearn.metrics import confusion_matrix
 
+def update_confusion_matrix(pred_labels, true_labels, num_classes, cm=None):
+    """
+    累积更新混淆矩阵（支持多批次数据）
+    
+    Args:
+        pred_labels (list[int]): 预测标签列表（整数编码，如0,1,2...）
+        true_labels (list[int]): 真实标签列表（整数编码，需与预测标签一一对应）
+        num_classes (int): 总类别数量
+        cm (np.ndarray, optional): 已有的混淆矩阵，None则表示新建
+        
+    Returns:
+        np.ndarray: 更新后的混淆矩阵，形状为 (num_classes, num_classes)
+    """
+    # 计算当前批次的混淆矩阵
+    # labels参数确保矩阵行列与类别数量严格对应（包含所有类别，即使某些类别无样本）
+    batch_cm = confusion_matrix(
+        y_true=true_labels,
+        y_pred=pred_labels,
+        labels=np.arange(num_classes)  # 强制包含所有类别索引
+    )
+    
+    # 合并到总混淆矩阵：若已有矩阵则累加，否则直接使用当前批次矩阵
+    if cm is None:
+        updated_cm = batch_cm
+    else:
+        updated_cm = cm + batch_cm
+    
+    return updated_cm
 
 def average_precision(recalls, precisions, mode='area'):
     """Calculate average precision (for single or multiple scales).
@@ -100,7 +129,8 @@ def get_cls_results_roi(gen_results,
     """
     # if len(gen_results) == 0 or
 
-    cls_gens, cls_scores, shape_types = [], [], []
+    cls_gens, cls_scores, lane_marking_types, lane_marking_colors, shape_types, \
+    centerline_types, centerline_directions, polygon_classes, arrow_classes = [], [], [], [], [], [], [], [], []
     # import pdb;pdb.set_trace()
     # if len(rois) > 1:
     #     num_sample = num_sample * len(rois)
@@ -138,13 +168,25 @@ def get_cls_results_roi(gen_results,
             # 这一帧的某一条车道线
             cls_gens.append(roi_lines_)  # [{},{},{}] 每一条线按roi划分
             cls_scores.append(res['confidence_level'])
+            lane_marking_types.append(res['lane_marking_type'])
+            lane_marking_colors.append(res['lane_marking_color'])
             shape_types.append(res['shape_type'])
+            centerline_types.append(res['centerline_type'])
+            centerline_directions.append(res['centerline_direction'])
+            polygon_classes.append(res['polygon_class'])
+            arrow_classes.append(res['arrow_class'])
 
     # 处理cls_gens 生成roi车道线 1->5
 
     # import pdb;pdb.set_trace()
     cls_gts = []
+    lane_marking_types_gt = []
+    lane_marking_colors_gt = []
     shape_types_gt = []
+    centerline_types_gt = []
+    centerline_directions_gt = []
+    polygon_classes_gt = []
+    arrow_classes_gt = []
     for ann in annotations['vectors']:
         if ann['type'] == class_id:
             line = ann['pts']
@@ -166,7 +208,13 @@ def get_cls_results_roi(gen_results,
                 # roi_lines_gt[roi] = sampled_points
 
             cls_gts.append(roi_lines_gt_)
+            lane_marking_types_gt.append(ann['lane_marking_type'])
+            lane_marking_colors_gt.append(ann['lane_marking_color'])
             shape_types_gt.append(ann['shape_type'])
+            centerline_types_gt.append(ann['centerline_type'])
+            centerline_directions_gt.append(ann['centerline_direction'])
+            polygon_classes_gt.append(ann['polygon_class'])
+            arrow_classes_gt.append(ann['arrow_class'])
 
     roi_gen_dict = {}
     roi_gt_dict = {}
@@ -175,46 +223,78 @@ def get_cls_results_roi(gen_results,
 
         cls_gens_ = [i[roi] for i in cls_gens]
         cls_scores_ = []
+        lane_marking_types_ = []
+        lane_marking_colors_ = []
         shape_types_ = []
+        centerline_types_ = []
+        centerline_directions_ = []
+        polygon_classes_ = []
+        arrow_classes_ = []
 
         for i, cg in enumerate(cls_gens_):
             if isinstance(cg, np.ndarray):
                 cls_scores_.append(cls_scores[i])
+                lane_marking_types_.append(lane_marking_types[i])
+                lane_marking_colors_.append(lane_marking_colors[i])
                 shape_types_.append(shape_types[i])
+                centerline_types_.append(centerline_types[i])
+                centerline_directions_.append(centerline_directions[i])
+                polygon_classes_.append(polygon_classes[i])
+                arrow_classes_.append(arrow_classes[i])
         cls_gens_ = [i for i in cls_gens_ if isinstance(i, np.ndarray)]
         num_res = len(cls_gens_)
         if num_res > 0:
             cls_gens_ = np.stack(cls_gens_).reshape(num_res, -1)
             cls_scores_ = np.array(cls_scores_)[:, np.newaxis]
+            cls_lane_marking_types_ = np.array(lane_marking_types_)[:, np.newaxis]
+            cls_lane_marking_colors_ = np.array(lane_marking_colors_)[:, np.newaxis]
             cls_shape_types_ = np.array(shape_types_)[:, np.newaxis]
+            cls_centerline_types_ = np.array(centerline_types_)[:, np.newaxis]
+            cls_centerline_directions_ = np.array(centerline_directions_)[:, np.newaxis]
+            cls_polygon_classes_ = np.array(polygon_classes_)[:, np.newaxis]
+            cls_arrow_classes_ = np.array(arrow_classes_)[:, np.newaxis]
             # print(roi,cls_gens_.shape,cls_scores_.shape)
             # import pdb;pdb.set_trace()
-            cls_gens_ = np.concatenate([cls_gens_, cls_scores_, cls_shape_types_], axis=-1)
+            cls_gens_ = np.concatenate([cls_gens_, cls_scores_, cls_lane_marking_types_, 
+                cls_lane_marking_colors_, cls_shape_types_, cls_centerline_types_, 
+                cls_centerline_directions_, cls_polygon_classes_, cls_arrow_classes_], axis=-1)
 
         else:
             if not eval_use_same_gt_sample_num_flag:
-                cls_gens_ = np.zeros((0, num_pred_pts_per_instance * code_size + 2))
+                cls_gens_ = np.zeros((0, num_pred_pts_per_instance * code_size +8))
             else:
-                cls_gens_ = np.zeros((0, num_sample * code_size + 2))
+                cls_gens_ = np.zeros((0, num_sample * code_size + 8))
             # print(f'for class {i}, cls_gens has shape {cls_gens.shape}')
         roi_gen_dict[roi] = cls_gens_
 
         # gt
         cls_gts_ = [i[roi] for i in cls_gts if roi in i]
         cls_gts_ = [i for i in cls_gts_ if isinstance(i, np.ndarray)]
+        lane_marking_types_gt_ = [lane_marking_types_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
+        lane_marking_colors_gt_ = [lane_marking_colors_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
         shape_types_gt_ = [shape_types_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
+        centerline_types_gt_ = [centerline_types_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
+        centerline_directions_gt_ = [centerline_directions_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
+        polygon_classes_gt_ = [polygon_classes_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
+        arrow_classes_gt_ = [arrow_classes_gt[i] for i in range(len(cls_gts)) if roi in cls_gts[i]]
         num_gts = len(cls_gts_)
         if num_gts > 0:
             # print([gg for gg in cls_gts_ if not isinstance(gg,np.ndarray)])
 
             cls_gts_ = np.stack(cls_gts_).reshape(num_gts, -1)
+            lane_marking_types_gt_ = np.array(lane_marking_types_gt_)[:, np.newaxis]
+            lane_marking_colors_gt_ = np.array(lane_marking_colors_gt_)[:, np.newaxis]
             shape_types_gt_ = np.array(shape_types_gt_)[:, np.newaxis]
-            cls_gts_ = np.concatenate([cls_gts_, shape_types_gt_], axis=-1)
+            centerline_types_gt_ = np.array(centerline_types_gt_)[:, np.newaxis]
+            centerline_directions_gt_ = np.array(centerline_directions_gt_)[:, np.newaxis]
+            polygon_classes_gt_ = np.array(polygon_classes_gt_)[:, np.newaxis]
+            arrow_classes_gt_ = np.array(arrow_classes_gt_)[:, np.newaxis]
+            cls_gts_ = np.concatenate([cls_gts_, lane_marking_types_gt_, lane_marking_colors_gt_, shape_types_gt_, 
+            centerline_types_gt_, centerline_directions_gt_, polygon_classes_gt_, arrow_classes_gt_], axis=-1)
 
         else:
-            cls_gts_ = np.zeros((0, num_sample * code_size + 1))
+            cls_gts_ = np.zeros((0, num_sample * code_size + 7))
         roi_gt_dict[roi] = cls_gts_
-
     return roi_gen_dict, roi_gt_dict
 
 
@@ -371,19 +451,26 @@ def eval_map(gen_results,
              num_pred_pts_per_instance=30,
              nproc=1,  # 24
              code_size=2):
+    # SHAPE_TYPES = ['solid', 'dashed', 'double_left_solid', 'double_right_solid', 'other']  # 0.0->unknown, 1.0->line, 2.0->curve
+    SHAPE_TYPES = ['single_solid', 'single_dashed', 'double_left_solid', 'double_right_solid', 'double_solid', 'double_dashed', 'thick_dashed', 'wide_solid', 'colored_three_line', 'reversible_line', 'variable_line', 'point_line', 'others'] 
+    SHAPE_TYPE_TO_ID = {float(i): i for i in range(len(SHAPE_TYPES))}  # 浮点数映射
+    NUM_SHAPE_CLASSES = len(SHAPE_TYPES)
     timer = Timer()
     pool = Pool(nproc)
 
     eval_results = {}
+    # 初始化混淆矩阵字典：{类别: {ROI: 混淆矩阵}}
+    shape_cm_dict = {cls: {roi: None for roi in ["0-10", "10-30", "30-50", "50-80"]} for cls in cls_names}
 
     for i, clsname in enumerate(cls_names):
-
         # get gt and det bboxes of this class
         cls_gen_roi = cls_gens[clsname]
         cls_gt_roi = cls_gts[clsname]
 
         roi_result = []
         for roi in ["0-10", "10-30", "30-50", "50-80"]:
+             # 初始化当前ROI的混淆矩阵
+            roi_shape_cm = None if clsname == 'lane_marking' else None
             cls_gt = [i[roi] for i in cls_gt_roi]
             cls_gen = [i[roi] for i in cls_gen_roi]
             # choose proper function according to datasets to compute tp and fp
@@ -409,17 +496,73 @@ def eval_map(gen_results,
                 zip(cls_gen, cls_gt, *args))
 
             # import pdb;pdb.set_trace()
-            tp, fp, dist_error_tuple, shape_type_acc = tuple(zip(*tpfp))
+            tp, fp, dist_error_tuple, lane_marking_type_acc, lane_marking_color_acc, \
+                shape_type_acc, pred_shapes_list, true_shapes_list, centerline_type_acc, centerline_direction_acc,\
+                polygon_acc, arrow_acc = tuple(zip(*tpfp))
+
+            if clsname == 'lane_marking':
+                all_pred_ids = []
+                all_true_ids = []
+                
+                # 遍历所有预测形状标签列表
+                for pred_shapes in pred_shapes_list:
+                    for label in pred_shapes:
+                        if label in SHAPE_TYPE_TO_ID:
+                            all_pred_ids.append(SHAPE_TYPE_TO_ID[label])
+                        else:
+                            all_pred_ids.append(SHAPE_TYPE_TO_ID[max(SHAPE_TYPE_TO_ID.values())])
+                
+                # 遍历所有真实形状标签列表
+                for true_shapes in true_shapes_list:
+                    for label in true_shapes:
+                        if label in SHAPE_TYPE_TO_ID:
+                            all_true_ids.append(SHAPE_TYPE_TO_ID[label])
+                        else:
+                            all_true_ids.append(SHAPE_TYPE_TO_ID[max(SHAPE_TYPE_TO_ID.values())])
+                
+                # 更新当前类别的混淆矩阵
+                if all_pred_ids and all_true_ids:
+                    roi_shape_cm = update_confusion_matrix(
+                        all_pred_ids, all_true_ids, NUM_SHAPE_CLASSES, roi_shape_cm
+                    )
+                # 保存当前ROI的混淆矩阵
+                shape_cm_dict[clsname][roi] = roi_shape_cm
+
             dist_error_list = []
+
             shape_type_acc_list = []
+            centerline_type_acc_list = []
+            centerline_direction_acc_list = []
+            lane_marking_type_acc_list = []
+            lane_marking_color_acc_list = []
+            polygon_acc_list = []
+            arrow_acc_list = []
             for dist in dist_error_tuple:
                 dist_error_list.extend(dist)
+            for acc in lane_marking_type_acc:
+                lane_marking_type_acc_list.extend(acc)   
+            for acc in lane_marking_color_acc:
+                lane_marking_color_acc_list.extend(acc)          
             for acc in shape_type_acc:
                 shape_type_acc_list.extend(acc)
+            for acc in centerline_type_acc:
+                centerline_type_acc_list.extend(acc)
+            for acc in centerline_direction_acc:
+                centerline_direction_acc_list.extend(acc)
+            for acc in polygon_acc:
+                polygon_acc_list.extend(acc)
+            for acc in arrow_acc:
+                arrow_acc_list.extend(acc)
 
             mean_dist_error = np.nanmean(dist_error_list)
             dist_error_95 = np.nanpercentile(dist_error_list, 95)
             shape_type_acc = np.sum(shape_type_acc_list) / len(shape_type_acc_list)
+            centerline_type_acc = np.sum(centerline_type_acc_list) / len(centerline_type_acc_list)
+            centerline_direction_acc = np.sum(centerline_direction_acc_list) / len(centerline_direction_acc_list)
+            lane_marking_type_acc = np.sum(lane_marking_type_acc_list) / len(lane_marking_type_acc_list)
+            lane_marking_color_acc = np.sum(lane_marking_color_acc_list) / len(lane_marking_color_acc_list)
+            polygon_acc = np.sum(polygon_acc_list) / len(polygon_acc_list)
+            arrow_acc = np.sum(arrow_acc_list) / len(arrow_acc_list)
 
             # map_results = map(
             #     tpfp_fn,
@@ -477,8 +620,13 @@ def eval_map(gen_results,
                 'roi': roi,
                 'mean_dist_error':mean_dist_error,
                 'dist_error_95':dist_error_95,
-                'shape_type_acc':shape_type_acc
-
+                'shape_type_acc':shape_type_acc,
+                'centerline_type_acc': centerline_type_acc,
+                'centerline_direction_acc': centerline_direction_acc,
+                'lane_marking_type_acc': lane_marking_type_acc,
+                'lane_marking_color_acc': lane_marking_color_acc,
+                'polygon_acc': polygon_acc,
+                'arrow_acc': arrow_acc,
             })
             # print('cls:{} done in {:2f}s!!'.format(clsname,float(timer.since_last_check())))
 
@@ -495,7 +643,33 @@ def eval_map(gen_results,
 
     # print_map_summary(
     #     mean_aps, eval_results, class_name=cls_names, logger=logger)
-
+    # 仅打印'lane_marking'的混淆矩阵
+    # 按距离区间打印'lane_marking'的混淆矩阵
+    print("\n===== 按距离区间的形状类型混淆矩阵 =====")
+    print("行: 真实标签, 列: 预测标签")
+    print("形状类型映射:", {k: v for k, v in zip(SHAPE_TYPE_TO_ID.keys(), SHAPE_TYPES)})
+    if 'lane_marking' in cls_names:
+        for roi in ["0-10", "10-30", "30-50", "50-80"]:
+            cm = shape_cm_dict['lane_marking'][roi]
+            if cm is not None:
+                print(f"\n类别: lane_marking, 距离区间: {roi}m")
+                print(cm)
+                # 计算每类形状的准确率
+                total_samples = np.sum(cm, axis=1)  # 按行求和（每个类别的总样本数）
+                correct_samples = np.diag(cm)       # 对角线元素（正确预测数）
+                
+                for i in range(len(SHAPE_TYPES)):
+                    total = total_samples[i]
+                    correct = correct_samples[i]
+                    # 处理总样本数为0的情况，避免除零错误
+                    if total == 0:
+                        acc = 0.0
+                    else:
+                        acc = correct / total  # 正确公式：准确率=正确数/总数
+                    # 确保结果在[0, 1]范围内（避免浮点误差导致的微小超界）
+                    acc = np.clip(acc, 0.0, 1.0)
+                    # 打印时保留合理小数位数（如4位）
+                    print(f"形状 {SHAPE_TYPES[i]} ({float(i)}) 准确率: {acc:.4f}")
     # print(eval_results)
     return mean_aps, eval_results
 
