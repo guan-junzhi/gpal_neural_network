@@ -67,74 +67,21 @@ def yaw_rotation_matrix(yaw_rad):
         [0,      0,     1],
     ])
 
-def filter_linestring_by_x_positive(linestring):
-    """
-    将LineString只保留x>0的部分，如果被截成多段，则保留离(0,0)最近的一根线
-    
-    参数:
-        linestring: shapely.geometry.LineString对象
-    
-    返回:
-        LineString: 处理后的LineString对象
-    """
-    
-    # 如果LineString为空，直接返回
+def clip_navi_navi_points(linestring):    
     if linestring.is_empty:
         return linestring
-    
-    # 创建x=0的垂直线作为切割线
-    cutting_line = LineString([(0, -1000), (0, 1000)])
-    
-    # 用切割线分割原LineString
-    split_result = linestring.difference(cutting_line)
-    
-    # 如果分割后是MultiLineString，获取所有线段
-    if split_result.geom_type == 'MultiLineString':
-        segments = list(split_result.geoms)
-    else:
-        segments = [split_result]
-    
-    # 筛选x>0的线段
-    positive_segments = []
-    for segment in segments:
-        # 检查线段是否有任何点在x>0的区域
-        if not segment.is_empty and any(p[0] > 0 for p in segment.coords):
-            positive_segments.append(segment)
-    
-    # 如果没有x>0的线段，返回空LineString
-    if not positive_segments:
-        return LineString()
-    
-    # 如果只有一个线段，直接返回
-    if len(positive_segments) == 1:
-        return positive_segments[0]
-    
-    # 如果有多个线段，找到离(0,0)最近的那个
     origin = Point(0, 0)
-    closest_segment = min(positive_segments, key=lambda seg: seg.distance(origin))
+    projection_distance = linestring.project(origin)
+    start_distance = max(0, projection_distance - 60)
+    end_distance = min(linestring.length, projection_distance + 150)
+    start_point = linestring.interpolate(start_distance)
+    end_point = linestring.interpolate(end_distance)
     
-    return closest_segment
-
-def clip_fix_length(linestring, max_length=150.0):
-    if linestring.is_empty or linestring.length <= max_length:
-        return linestring
-    
-    # 使用interpolate API找到截取点
-    cut_point = linestring.interpolate(max_length)
-    
-    # 获取LineString的所有坐标点
-    coords = list(linestring.coords)
-    
-    # 找到截取点所在的线段
-    for i in range(1, len(coords)):
-        segment = LineString([coords[i-1], coords[i]])
-        if segment.distance(cut_point) < 1e-6:  # 截取点在这个线段上
-            # 构造从起点到截取点的LineString
-            truncated_coords = coords[:i] + [cut_point.coords[0]]
-            return LineString(truncated_coords)
-    
-    # 如果没找到精确的线段，返回简化版本
-    return LineString([coords[0], cut_point.coords[0]])
+    # 筛选范围内的点并确保包含起点终点
+    coords = [coord for coord in linestring.coords 
+              if start_distance < linestring.project(Point(coord)) < end_distance]
+    coords = [start_point.coords[0]] + coords + [end_point.coords[0]]
+    return LineString(coords)
 
 @DATASETS.register_module()
 class DRIVING_BEV_STADataset(SliceBaseDataset):
@@ -168,6 +115,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                  bev_aug_deg=3,
                  lmdb_path='static_data_lmdb',
                  cut_start_h=0,
+                 navi_info_ratio=0.6,
                  ):
         '''
         :param root_dict:
@@ -281,7 +229,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         else:
             print(f"{self.lmdb_path_local} 存在")
         distributed.barrier()
-        self.navi_info_ratio = 0.6
+        self.navi_info_ratio = navi_info_ratio
 
         if self.lmdb_path_local != '':
             self.label_buffer = FastLoaderBuffer(self.lmdb_path_local)
@@ -376,8 +324,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 f"{camera_name}_read_single_camera", time_dp_sub)
             if img is None:
                 return None, time_dp
-            elif self.eval_phase in ["EVAL_ONNX", "EVAL_BC"]:
-                imgs[camera_name] = img_src  # onnx中直接使用rgb原图; bc推理使用rgb_to_nv12_split
+            # elif self.eval_phase in ["EVAL_ONNX", "EVAL_BC"]:
+            #     imgs[camera_name] = img_src  # onnx中直接使用rgb原图; bc推理使用rgb_to_nv12_split
             else:
                 imgs[camera_name] = img
             ego2cam.append(ext)
@@ -505,13 +453,13 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             noise_matrix[1,3] = random.uniform(-10, 10)
 
         navi_points_noise = (noise_matrix @ bev_real2aug @ navi_points_homo.T).T[:,:2]
-        navi_points_noise_ls = filter_linestring_by_x_positive(LineString(navi_points_noise))
+        navi_points_noise_ls = clip_navi_navi_points(LineString(navi_points_noise))
         if navi_points_noise_ls.is_empty or len(navi_points_noise_ls.coords) < 2 or navi_points_noise_ls.length < 10:
             return np.zeros((self.pts_per_vector, 2), dtype=np.float32)
         
-        navi_points_noise = np.array(clip_fix_length(navi_points_noise_ls, max_length=150.0).coords, dtype=np.float32)
+        navi_points_noise = np.array(navi_points_noise_ls.coords, dtype=np.float32)
         # 降低分辨率
-        navi_points_noise = _fix_pts_interpolate(_fix_pts_interpolate(navi_points_noise, 6), self.pts_per_vector)
+        navi_points_noise = _fix_pts_interpolate(_fix_pts_interpolate(navi_points_noise, 8), self.pts_per_vector)
 
         return navi_points_noise
     
@@ -824,6 +772,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
 
             polygon_homo = np.concatenate([polygon, np.ones((polygon.shape[0],1))], axis=-1)
             polygon = (bev_real2aug @ polygon_homo.T).T[:,:3]
+            if len(polygon) < 4:
+                continue
             polygon = _fix_pts_interpolate(polygon, max(int(LineString(polygon).length / 0.2), 20))
             if len(polygon) <= 1:
                 continue
@@ -894,9 +844,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
                 continue
 
             if self.transforms is not None:
-                if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
-                    # 保留cut_h更新的meta信息，但不实际cut图像
-                    self.transforms = [CutImageUpper(self.cut_start_h, just_update_meta=True)]
+                # if self.eval_phase in ["EVAL_BC", "EVAL_ONNX"]:
+                #     # 保留cut_h更新的meta信息，但不实际cut图像
+                #     self.transforms = [CutImageUpper(self.cut_start_h, just_update_meta=True)]
                 for transform in self.transforms:
                     data = transform(data)
 

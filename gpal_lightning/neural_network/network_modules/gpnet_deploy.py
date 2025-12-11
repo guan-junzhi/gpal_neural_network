@@ -383,7 +383,7 @@ class GpNetDeploy(GpNet):
                     inputs_dict.update({f"{img_input[img_name]}": img_data})
 
             inputs_dict.update({
-                'images_grid': images_grid.astype(np.float32),
+                # 'images_grid': images_grid.astype(np.float32),
                 'queries_rebatch_grid': queries_rebatch_grid.detach().cpu().numpy(),
                 'reference_points_rebatch': reference_points_rebatch.detach().cpu().numpy(),
                 'restore_bev_grid': restore_bev_grid.detach().cpu().numpy(),
