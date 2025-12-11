@@ -594,7 +594,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         return image
 
-    def get_image_by_slice(self, filepath, slice_timestamp, view_key, view_idx, crop_start):
+    def get_image_by_slice(self, filepath, slice_timestamp, view_key, view_idx, crop_start, calib_intrin, calib_dist):
         """统一处理不同视角的图像"""
         img_file = filepath
         self.fast_buf_try_cnt += 1
@@ -605,6 +605,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         if image is None:
             image = read_img(str(img_file), self.image_resize + [3])
             if self.phase == const.PHASE_TRAINING:
+                if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
+                    pass
+                else:
+                    image = cv2.undistort(image, calib_intrin, calib_dist, calib_intrin)  # 原图去畸变
+
                 image = cv2.resize(image, self.image_resize[::-1])
                 image = image[crop_start:crop_start + self.img_h_len]
             self._slice_image_cache(
@@ -809,39 +814,42 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx] = img_crop_dict['CROP_HeSai_ID4']['CROP_START_SKYWELL'][view_idx]
                 crop_start = img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx]
                 # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
-                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx, crop_start)
+                
+                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx, crop_start,
+                                                      calib_intrin, calib_dist)
 
                 if self.phase != const.PHASE_TRAINING:
                     input_dict[f'origin_images_input{view_idx}'] = current_img.astype(np.float32).copy()
-                    # current_img2 = cv2.undistort(
-                    #     current_img, calib_intrin, calib_dist, calib_intrin)
-                    # current_img2 = cv2.resize(current_img2, self.image_resize[::-1])
-                    # current_img2 = current_img2[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
-                    img_grid = DistGridMap(
-                        current_img.shape[1],
-                        current_img.shape[0],
-                        calib_dist,
-                        calib_intrin,
-                        int(img_crop_dict["IMAGE_RESIZE"][1]),
-                        int(img_crop_dict["IMAGE_RESIZE"][0]),
-                        int(img_crop_dict["IMAGE_CROP_H_LEN"]),
-                        int(img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][view_idx]),
-                        norm=False
-                    ).astype(np.float32)
                     
-                    current_img = cv2.remap(
-                        current_img,
-                        img_grid[...,0], 
-                        img_grid[...,1],
-                        interpolation=cv2.INTER_NEAREST
-                    )
+                    current_img2 = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
+                    current_img2 = cv2.resize(current_img2, self.image_resize[::-1])
+                    current_img = current_img2[crop_start:crop_start + self.img_h_len]
+                    # img_grid = DistGridMap(
+                    #     current_img.shape[1],
+                    #     current_img.shape[0],
+                    #     calib_dist,
+                    #     calib_intrin,
+                    #     int(img_crop_dict["IMAGE_RESIZE"][1]),
+                    #     int(img_crop_dict["IMAGE_RESIZE"][0]),
+                    #     int(img_crop_dict["IMAGE_CROP_H_LEN"]),
+                    #     int(img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][view_idx]),
+                    #     norm=False
+                    # ).astype(np.float32)
+                    
+                    # current_img = cv2.remap(
+                    #     current_img,
+                    #     img_grid[...,0], 
+                    #     img_grid[...,1],
+                    #     interpolation=cv2.INTER_NEAREST
+                    # )
                     calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
                     calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
                 else:
                     calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
                     calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
-                    current_img = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
+                    # current_img = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
 
+                # image augmentation
                 if self.phase == const.PHASE_TRAINING:
                     current_img = torch.from_numpy(current_img).unsqueeze(0).to("cpu").permute(0, 3, 1, 2).float()
                     cam_to_vehicle = np.linalg.inv(calib_extrin)
@@ -858,7 +866,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
                     input_dict["extrinsic"][view_idx] = np.linalg.inv(cam_to_vehicle)
                     current_img = current_img.squeeze(0).permute(1, 2, 0).cpu().numpy()
-    
+
                 input_dict[f'images_input{view_idx}'] = current_img.astype(np.float32) / 255.0
 
             time_dp.Duration("image", "cur_json")
@@ -875,6 +883,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 else:
                     data_dict_ret['image'][data_dict["camera_names"]
                                            [i]] = data_dict[f"origin_images_input{i}"]
+                    
+                    # 7V区分 3.0/4.0 主要是onnx的推理的图像输入尺寸
+                    if hasattr(self.task_config, 'DEPLOY_CFG'):
+                        if self.task_config.DEPLOY_CFG['mode'] == "gpal30_in_model_with_small_image":
+                            data_dict_ret['image'][data_dict["camera_names"][i]] = input_dict[f"images_input{i}"] * 255.0
 
             for key in data_dict:
                 if "gt_curr_" in key:
@@ -1020,7 +1033,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 # img_path[camera_view] = image_file
                 # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
                 crop_start = self.img_crop_start[view_idx]
-                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx, crop_start)
+                current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx, crop_start,
+                                                      None, None)
 
                 input_dict[f'origin_images_input{view_idx}'] = current_img.astype(np.float32).copy()
 

@@ -51,19 +51,27 @@ class WrappedGpNet(GpNet):
         task = input["task"]
         images_grid = calib["images_grid"]
         metadata = input["metadata"]
+        
+        deploy_cfg = self.tasks_to_run[task].deploy_cfg
+        if deploy_cfg is not None:
+            if deploy_cfg['mode'] == "gpal30_in_model_with_small_image":
+                cam_set = ["img_front_120", "img_front_30","img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
+                imgs = torch.cat([x[k] for k in cam_set], dim=0).permute(0, 3, 1, 2) / 255.0
+            else:
+                raise ValueError(f"{deploy_cfg['mode']} must be -> gpal30_in_model_with_small_image")
+        else:
+            cam8m_set = ["img_front_120", "img_front_30"]
+            cam2m_set = ["img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
 
-        cam8m_set = ["img_front_120", "img_front_30"]
-        cam2m_set = ["img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
+            img8ms = torch.cat([x[k] for k in cam8m_set], dim=0).permute(0, 3, 1, 2)
+            img2ms = torch.cat([x[k] for k in cam2m_set], dim=0).permute(0, 3, 1, 2)
 
-        img8ms = torch.cat([x[k] for k in cam8m_set], dim=0).permute(0, 3, 1, 2)
-        img2ms = torch.cat([x[k] for k in cam2m_set], dim=0).permute(0, 3, 1, 2)
+            udist_img8ms = F.grid_sample(
+                img8ms, images_grid[:len(cam8m_set)].float(), align_corners=True, padding_mode='border', mode="nearest")
+            udist_img2ms = F.grid_sample(
+                img2ms, images_grid[len(cam8m_set):].float(), align_corners=True, padding_mode='border', mode="nearest")
 
-        udist_img8ms = F.grid_sample(
-            img8ms, images_grid[:len(cam8m_set)].float(), align_corners=True, padding_mode='border', mode="nearest")
-        udist_img2ms = F.grid_sample(
-            img2ms, images_grid[len(cam8m_set):].float(), align_corners=True, padding_mode='border', mode="nearest")
-
-        imgs = torch.cat([udist_img8ms, udist_img2ms], dim = 0) / 255.0
+            imgs = torch.cat([udist_img8ms, udist_img2ms], dim = 0) / 255.0
         mono3d, mono_od, gate_lever, side_od, neck2_in = [], [], [], [], []
 
         for backbone_name, camera_list in self.backbone_camera_mapping.items():
@@ -226,16 +234,16 @@ class WrappedGpNet(GpNet):
 
 class PytorchToOnnx:
     @staticmethod
-    def TaskImageShapeDict(task_name, subtask_name=None):
+    def TaskImageShapeDict(task_name, task):
         if task_name in ["DRIVING_BEV_DYN"]:
-            if subtask_name=="DRIVING_BEV_DYN_FISHEYE":
+            if task.subtask_name=="DRIVING_BEV_DYN_FISHEYE":
                 used_image_shapes: dict = {
                     "img_front_fisheye": [1920, 1536, 3],
                     "img_right_fisheye": [1920, 1536, 3],
                     "img_rear_fisheye": [1920, 1536, 3],
                     "img_left_fisheye": [1920, 1536, 3],
                 }
-            elif subtask_name=="DRIVING_BEV_DYN":
+            elif task.subtask_name=="DRIVING_BEV_DYN":
                 # used_image_shapes: dict = {
                 #     "img_front_120": [768, 320, 3],
                 #     "img_front_30": [768, 320, 3],
@@ -254,8 +262,19 @@ class PytorchToOnnx:
                     "img_rear_left": [1920, 1080, 3],
                     "img_rear_right": [1920, 1080, 3],
                 }
+                if task.deploy_cfg is not None:
+                    if task.deploy_cfg['mode'] == "gpal30_in_model_with_small_image":
+                        used_image_shapes: dict = {
+                            "img_front_120": [960, 512, 3],
+                            "img_front_30": [960, 512, 3],
+                            "img_back": [960, 512, 3],
+                            "img_front_left": [960, 512, 3],
+                            "img_front_right": [960, 512, 3],
+                            "img_rear_left": [960, 512, 3],
+                            "img_rear_right": [960, 512, 3],
+                        }
             else:
-                raise ValueError(f"Unknown subtask_name: {subtask_name}")
+                raise ValueError(f"Unknown subtask_name: {task.subtask_name}")
             return used_image_shapes
         elif task_name in ["DRIVING_BEV_STA"]:
             used_image_shapes: dict = {
@@ -278,11 +297,11 @@ class PytorchToOnnx:
         input_dict = {}
            
         for task in tasks:
-            if task.name in ["DRIVING_BEV_DYN"]:
-                subtask_name = task.subtask_name  # "DRIVING_BEV_DYN_FISHEYE"
-            else:
-                subtask_name = None
-            used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name, subtask_name)
+            # if task.name in ["DRIVING_BEV_DYN"]:
+            #     subtask_name = task.subtask_name  # "DRIVING_BEV_DYN_FISHEYE"
+            # else:
+            #     subtask_name = None
+            used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name, task)
             for cam in used_image_shapes:
                 if cam not in input_dict.keys():
                     vector_shape = 1, used_image_shapes[cam][1], used_image_shapes[cam][0], 3
@@ -293,10 +312,8 @@ class PytorchToOnnx:
                 if task.subtask_name=="DRIVING_BEV_DYN_FISHEYE":
                     merged_input_dict = {"task": task.name, "image": input_dict,"task_sub":task.subtask_name}
                     merged_input_dict["calib"]={}
-                    merged_input_dict["calib"]["images_grid"] = torch.rand(
-                        4, 512, 960, 2).cuda()
-                    merged_input_dict["calib"]["vt_grid"] = torch.rand(
-                        4, 192, 60, 2).cuda()
+                    merged_input_dict["calib"]["images_grid"] = torch.rand(4, 512, 960, 2).cuda()
+                    merged_input_dict["calib"]["vt_grid"] = torch.rand(4, 192, 60, 2).cuda()
                     merged_input_dict["metadata"] = {}
                     merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 60).cuda()
                     merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 60, 2).cuda()
@@ -304,10 +321,12 @@ class PytorchToOnnx:
                 else:
                     merged_input_dict = {"task": task.name, "image": input_dict}
                     merged_input_dict["calib"]={}
-                    merged_input_dict["calib"]["images_grid"] = torch.rand(
-                        7, 320, 768, 2).cuda()
-                    merged_input_dict["calib"]["vt_grid"] = torch.rand(
-                        7, 192, 120, 2).cuda()
+                    if task.deploy_cfg is not None:
+                        if task.deploy_cfg['mode'] == "gpal30_in_model_with_small_image":
+                            merged_input_dict["calib"]["images_grid"] = torch.rand(7, 320, 768, 2).cuda()  # 不使用,任意
+                    else:
+                        merged_input_dict["calib"]["images_grid"] = torch.rand(7, 320, 768, 2).cuda()
+                    merged_input_dict["calib"]["vt_grid"] = torch.rand(7, 192, 120, 2).cuda()
                     merged_input_dict["metadata"] = {}
                     merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 120).cuda()
                     merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 120, 2).cuda()

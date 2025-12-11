@@ -258,6 +258,7 @@ class DRIVING_BEV_DYNTask(BaseTask):
         self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
         
         self.subtask_name = global_config.Tasks['DRIVING_BEV_DYN']['SWITCH_SUBTASK']
+        self.deploy_cfg = global_config.Tasks['DRIVING_BEV_DYN'].get('DEPLOY_CFG', None)
 
         pass
 
