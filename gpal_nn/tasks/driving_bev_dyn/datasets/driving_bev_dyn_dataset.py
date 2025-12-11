@@ -130,7 +130,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         self.image_view = camera_name
 
         # self.fusion_infos = []
-        self.data_list = [os.path.join(WORKDIRS_ROOT, ele) for ele in data_list]
+        self.data_list = [{**ele, 'pkl_path': os.path.join(WORKDIRS_ROOT, ele['pkl_path'])}
+                          for ele in data_list]
 
         super().__init__(global_config=global_config,
                          task_config=task_config,
@@ -224,18 +225,21 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
     def include_fusion_data(self, phase):
 
-        print('Loading HeSai dataset ...')
+        print('Loading Mixed dataset ...')
 
         fusion_infos = []
         for info_path in self.data_list:
-            if not os.path.exists(info_path):
-                print(info_path, f' is not exists')
+            if not os.path.exists(info_path['pkl_path']):
+                print(info_path['pkl_path'], f' is not exists')
                 continue
-            with open(info_path, 'rb') as f:
+            with open(info_path['pkl_path'], 'rb') as f:
                 infos = pickle.load(f)
+                print(f'description: {info_path["description"]},', 
+                      f' use_ratio: {info_path["use_ratio"]},', 
+                      f' has {len(infos)} samples')
                 fusion_infos.extend(infos)
 
-        print('Total samples for HeSai dataset [原始数据]: %d' %(len(fusion_infos)))
+        print('Total samples for Mixed dataset [原始数据]: %d' %(len(fusion_infos)))
 
         skip_subday_list = [
             '2025-07-10_13-44-15-069',
@@ -313,7 +317,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
         #         fusion_infos_ext.append(copy.deepcopy(ele))
         #     fusion_infos = fusion_infos_ext
-        print('Total samples for HeSai dataset [指定日期过滤]: %d' %(len(fusion_infos)))
+        print('Total samples for Mixed dataset [指定日期过滤]: %d' %(len(fusion_infos)))
         return fusion_infos
 
     def _build_world_data_list(self):
@@ -343,7 +347,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         clip_keys_rank = pkl.loads(pkl.dumps(
             clip_key_list[rank_curr::world_size][:clip_keys_per_rank]))
         from tqdm import tqdm
-        dataset = [ele for ele in tqdm(datalist, desc=f'初筛数据[补全rank]') if ele["sequence_name"] in clip_keys_rank]
+        dataset = [ele for ele in tqdm(datalist, desc=f'初筛数据[补全rank] {world_size}-{rank_curr}') 
+                   if ele["sequence_name"] in clip_keys_rank]
         return dataset
 
     def _preconstruct_test_stream_indices(self, datalist, batch_size, key="sequence_name"):

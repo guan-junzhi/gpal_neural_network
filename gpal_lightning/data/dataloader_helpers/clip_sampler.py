@@ -76,5 +76,5 @@ class ClipSampler(Sampler):
         return iter(self.indices)  # 直接返回顺序索引的迭代器
 
     def __len__(self):
-        print(f"ClipSampler:__len__: {len(self.indices)}")
+        print(f"ClipSampler rank: {self.rank} __len__: {len(self.indices)}")
         return len(self.indices)  # 返回总样本数

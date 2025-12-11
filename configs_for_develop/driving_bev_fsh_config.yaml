@@ -169,7 +169,20 @@ Tasks:
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_modeloutput/20251114-163925/20251114-163925_0_train_frame_pairs_sampled_excludeNoneFisheyeDir80.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251122-153458/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/combine_pkl/20251122-153458/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/combine_pkl/20251128-160418/_0_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list:[
+            {
+              description: "ID4 training data", 
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl",
+              use_ratio: 50,
+              tags: ["ID4", "filtered-area"]
+            },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251128-160418/_0_train_frame_pairs_sampled.pkl",
+              use_ratio: -1,
+              tags: ["L4", "filtered-area"]
+            }
+          ],
           camera_name: ['img_front_fisheye', 'img_right_fisheye', 'img_rear_fisheye', 'img_left_fisheye'],
           shuffle: False,
           fast_buffer_path: "./fisheye" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
@@ -189,9 +202,44 @@ Tasks:
           root_dir: "bev_park/PointLineData_Test/",
 
           # L4 测试集合
-          data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251127-110911/_0_val_l4_frame_pairs_sampled_clips6_frames3000.pkl"],
+          # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251127-110911/_0_val_l4_frame_pairs_sampled_clips6_frames3000.pkl"],
+          data_list:[
+            {
+              description: "L4 testing data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251127-110911/_0_val_l4_frame_pairs_sampled_clips6_frames3000.pkl",
+              use_ratio: -1,
+              tags: ["L4", "filtered-area"]
+            },
+          ],
 
           # ID4 测试集合
+          # data_list:[
+          #   {
+          #     description: "ID4 testing data",
+          #     pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320_clips48_frames9408_key1872_noeavg196.pkl",
+          #     use_ratio: -1,
+          #     tags: ["ID4", "filtered-area"]
+          #   },
+          #   {
+          #     description: "ID4 testing data",
+          #     pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320.pkl",
+          #     use_ratio: -1,
+          #     tags: ["ID4", "filtered-area"]
+          #   },
+          #   {
+          #     description: "ID4 testing data",
+          #     pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl",
+          #     use_ratio: -1,
+          #     tags: ["ID4", "filtered-area"]
+          #   },
+          #   {
+          #     description: "ID4 testing data",
+          #     pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl",
+          #     use_ratio: -1,
+          #     tags: ["ID4", "filtered-area"]
+          #   },
+          # ],
+          
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320_clips48_frames9408_key1872_noeavg196.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_discover_from_annosoutput/20251117-062416/20251117-062416_0_val_frame_pairs_sampled_excludeNoneFisheyeDir99_from4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
 
