@@ -25,7 +25,7 @@ import multiprocessing
 from shapely.geometry import LineString
 import json
 from gpal_nn.tasks.parking_ipm_sta.datasets.txtlabel_instance_p3 import TXTLabelLoader
-import albumentations as A
+# import albumentations as A
 
 
 class PLAssigner:
