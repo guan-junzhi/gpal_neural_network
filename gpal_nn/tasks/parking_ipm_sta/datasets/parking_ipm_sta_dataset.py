@@ -25,6 +25,7 @@ import multiprocessing
 from shapely.geometry import LineString
 import json
 from gpal_nn.tasks.parking_ipm_sta.datasets.txtlabel_instance_p3 import TXTLabelLoader
+import albumentations as A
 
 
 class PLAssigner:
@@ -221,7 +222,6 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT")
         LOCAL_DATASETS_ROOT = os.getenv(
             "ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT")
-
         root_dir = os.path.join(DATASETS_ROOT, root_dir)
 
         self.root_dir = root_dir
@@ -251,9 +251,16 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             self.h, self.w, self.point_sigma, self.line_sigma, self.line_pad)
 
         self.transforms = None
+        # self.img_transforms = A.Compose([
+        #     A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.2),  # 亮度/对比度
+        #     A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=0, p=0.2),  # 色调/饱和度
+        #     # A.RGBShift(r_shift_limit=10, g_shift_limit=10, b_shift_limit=10, p=0.2),  # 通道偏移
+        # ])
         self.img_transforms = None
+        
         self.task = task_config.name
         self.camera_names = camera_name
+        
 
     def _build_world_data_list(self):
         try:
@@ -310,10 +317,18 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             cv2.imwrite(savePath + '/' + str(idx) + '_line.jpg', line_img)
 
     def pull_img(self, image_f):
-        # print("image_f:", image_f)
-        image = cv2.imread(image_f)
+        self.fast_buf_try_cnt += 1
+        database_key = "_".join(image_f.split('/')[-4:])
+        image, hw_origin = self._image_buffer_access(database_key)
         if image is None:
-            print("!!!!image is None = ", image_f)
+            image = cv2.imread(image_f)
+            if image is None:
+                print("!!!!image is None = ", image_f)
+            self._image_cache(
+                database_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
+        else:
+            self.fast_buf_sec_cnt += 1
+
         origin_shape = image.shape
         image = cv2.resize(image, (self.w, self.h))
         # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -366,6 +381,10 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         sh = float(model_h) / img_h
         return sw, sh
 
+    def ClearFastBufCnt(self):
+        self.fast_buf_try_cnt = 0
+        self.fast_buf_sec_cnt = 0
+
     @TimeProf
     def __getitem__(self, idx):
         """
@@ -375,10 +394,12 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         Returns:
             tuple: (image, target) where target is the image segmentation.
         """
+        self.ClearFastBufCnt()
 
         anno_f, image_f = self.dataset[idx]
 
         image, origin_shape = self.pull_img(image_f)
+        # cv2.imwrite(f"/data/ai_group/datasets/bev_park/parkslot_net/add_aug/test0/{idx}_ori.jpg", image)
         rawh, raww, _ = origin_shape
         model_h = self.h
         model_w = self.w
@@ -389,10 +410,12 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             anno = slot_maps
             # slot_maps = torch.from_numpy(slot_maps.astype(np.float32))
             slot_gt = np.zeros((2, self.h, self.w), dtype=np.float32)  # ch h w
-            if self.transforms is not None:
+            
+            if self.img_transforms is not None:
                 # image = self.img_transforms(image)
-                trans_1 = self.transforms(
-                    image=image, mask1=anno[0], mask2=anno[1])
+                img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                trans_1 = self.img_transforms(
+                    image=img_rgb, mask1=anno[0], mask2=anno[1])
                 image_trans = trans_1['image']
                 point_gt = trans_1['mask1']
                 line_gt = trans_1['mask2']
@@ -400,9 +423,12 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
                 slot_gt[0] = point_gt
                 slot_gt[1] = line_gt
                 image = image_trans
+                img_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                image_gt = img_bgr
             else:
                 slot_gt[0] = anno[0]
                 slot_gt[1] = anno[1]
+                image_gt = image
 
             slot_maps = slot_gt.astype(np.float32)
             gt = slot_maps
@@ -410,10 +436,13 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
             labelInstance = TXTLabelLoader(sw, sh)
             annotations = labelInstance.decodePointLineLabel(anno_f)
             gt = annotations
+            image_gt = image
             # print("annotations\n", annotations)
-
-        image_gt = self.img_transforms(
-            image) if self.img_transforms is not None else image
+        
+        # cv2.imwrite(f"/data/ai_group/datasets/bev_park/parkslot_net/add_aug/test0/{idx}.jpg", img_bgr)
+        # image_gt = self.img_transforms(
+        #     image) if self.img_transforms is not None else image
+        
 
         image_gt = image_gt.astype(np.float32).transpose(2, 0, 1) / 255.0
         data_dict = {'label': gt, "image": image_gt, "meta": {}}
@@ -424,6 +453,8 @@ class PARKING_IPM_STADataset(ImageBaseDataset):
         data_dict['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
         data_dict['meta']['sw_sh'] = [sw, sh]
         data_dict['meta']['wh'] = [self.w, self.h]
+        data_dict['fast_buf_try_cnt'] = self.fast_buf_try_cnt
+        data_dict['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
 
         return data_dict
 
@@ -434,7 +465,7 @@ def Get(dataset_temp, i, j):
 
 def preprocess_img(avm_img):
     img_tensor = avm_img.clone().detach() / 255.0
-    img_tensor = img_tensor.permute(2, 0, 1)
+    img_tensor = img_tensor.permute(0, 3, 1, 2)
     # mean = torch.tensor([0.481093804, 0.457524588, 0.407870549]).view(3, 1, 1)
     # std = torch.tensor([1.0, 1.0, 1.0]).view(3, 1, 1)
     # normalized_tensor = (img_tensor - mean) / std  # 应用归一化公式
@@ -450,10 +481,16 @@ if __name__ == "__main__":
     os.environ['MASTER_PORT'] = '29501'
     os.environ['RANK'] = '0'
     os.environ['WORLD_SIZE'] = '1'
+    os.environ['ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT'] = '/data/ai_group/datasets/'
+
     distributed.init_process_group(backend='nccl')
     train_dataset = PARKING_IPM_STADataset(*inputs)
 
     print(len(train_dataset))
+    for idx, data in enumerate(train_dataset):
+        if idx > 5000:
+            break
+
 
     d = train_dataset[0]
     # print(d.keys())
@@ -466,4 +503,4 @@ if __name__ == "__main__":
     # print(ShowDataStruct("image_gt", d["image"]))
     # print(ShowDataStruct("slot_maps", d["label"]))
 
-    train_dataset.save_all_heatmap('experiments/data_visual')
+    # train_dataset.save_all_heatmap('experiments/data_visual')

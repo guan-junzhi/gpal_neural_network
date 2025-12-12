@@ -2,6 +2,8 @@ import numpy as np
 import sys,os  
 import cv2
 import math
+import logging
+from scipy.ndimage import maximum_filter
 
 class HeatMap(object):
     def __init__(self, width, height):
@@ -53,18 +55,12 @@ class HeatMap(object):
     def doProc(self, heatmap, vecmap):
         self.heatmap = heatmap
         self.vecmap = vecmap
-        keyPoints = self.GetKeyPoint()
+        keyPoints = self.GetKeyPoint2()
         # print("keyPoints ", keyPoints)
         self.keyPoints = self.NMSKeyPoints(keyPoints)
         # print("nmskeyPoints ", self.keyPoints)
         self.vertexElements = self.GetAllLines(self.keyPoints)
         return self.vertexElements
-    
-    def doProcPoint(self, heatmap):
-        self.heatmap = heatmap
-        keyPoints = self.GetKeyPoint()
-        self.keyPoints = self.NMSKeyPoints(keyPoints)
-        return self.keyPoints 
 
     def drawVE(self, mask, savePath):
         h, w, c = mask.shape
@@ -73,7 +69,7 @@ class HeatMap(object):
             orients = self.vertexElements[i][1]
             for j in range(len(orients)):
                 ori = orients[j]
-                stp = (point[0], point[1])
+                stp = (int(point[0]), int(point[1]))
                 edp = (int(stp[0] + ori[0]*ori[3]), int(stp[1] + ori[1]*ori[3]))
                 cv2.line(mask, stp, edp, (0, 250, 0), 2)
                 # mdp = ((edp[0]+stp[0])/2 , (edp[1]+stp[1])/2)
@@ -81,7 +77,7 @@ class HeatMap(object):
                 # cv2.putText(mask, line_label, mdp, 1, 0.8, (0,0,0), 1)
         for i in range(len(self.vertexElements)):
             point = self.vertexElements[i][0]
-            cv2.circle(mask, (point[0], point[1]), 2, (0,0,250), -1)
+            cv2.circle(mask, (int(point[0]), int(point[1])), 2, (0,0,250), -1)
             dx = 5
             if point[0] > w/2:
                 dx = -15
@@ -89,6 +85,7 @@ class HeatMap(object):
             # point_label = 'p' + str(i)
             # cv2.putText(mask, point_label, mdp, 1, 0.8, (0,0,200), 1)
         cv2.imwrite(savePath, mask)
+
 
     def drawVEPoint(self, mask, savePath):
         h, w, c = mask.shape
@@ -117,6 +114,27 @@ class HeatMap(object):
                             peakPointFlag = 0
                 if (peakPointFlag):
                     keypoints.append([i, j, curValue])
+        return keypoints
+    
+    def GetKeyPoint2(self):
+        keypoints = []
+        w = self.width
+        h = self.height
+        thr = self.param['PointThrParam']['point_conf_thr']
+        neighborhood_max = maximum_filter(self.heatmap, size=3, mode='constant', cval=0)
+        
+        # 步骤2：峰值判定（向量化，替代所有循环）
+        # 条件1：值大于阈值；条件2：当前值等于邻域最大值（即局部峰值）
+        peak_mask = (self.heatmap > thr) & (self.heatmap == neighborhood_max)
+        
+        # 步骤3：提取峰值点的坐标和值（i=x=列，j=y=行，和原代码一致）
+        # np.where返回 (行索引, 列索引)，对应原代码的j, i
+        j_coords, i_coords = np.where(peak_mask)
+        values = self.heatmap[j_coords, i_coords]
+        
+        # 组合成 [i, j, value] 格式，和原代码keypoints一致
+        keypoints = np.column_stack([i_coords, j_coords, values]).tolist()
+    
         return keypoints
     
     def NMSKeyPoints(self, keypoints):

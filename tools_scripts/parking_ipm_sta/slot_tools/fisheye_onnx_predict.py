@@ -10,7 +10,10 @@ import argparse
 import time
 import pandas as pd
 import glob
-
+current_path = "/home/jovyan/gpal_neural_network"
+import sys
+sys.path.append(current_path)
+from gpal_nn.tasks.parking_ipm_sta.postprocess.heatmap_instance_p3 import HeatMap
 # 获取当前脚本所在的目录
 current_path = Path(__file__).resolve().parent
 parent_path = current_path.parent
@@ -28,11 +31,11 @@ import onnxruntime as ort
 
 def parse_args():
     parser = argparse.ArgumentParser(description="slot_onnx")
-    parser.add_argument("--onnx_path", default="/home/jovyan/gpal_neural_network/workspace/20251022_08_03_02_onnx_slot/checkpoint/epoch=146-step=150000_checkpoint_sim.onnx", type=str)
-    parser.add_argument("--img_path", default="/data/ai_group/datasets/bev_park/train_test_dataset/300w_camera_fisheye_img_for_onnx/datas/", type=str)
-    parser.add_argument("--calib_data_path", default="/data/ai_group/datasets/bev_park/train_test_dataset/300w_camera_fisheye_img_for_onnx/calib", type=str)
+    parser.add_argument("--onnx_path", default="/home/jovyan/gpal_neural_network/20251022_log/20251022_int16_original_float_model.onnx", type=str)
+    parser.add_argument("--img_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/1114_park_bad/all_2025_11_14_13_57_28/", type=str)
+    parser.add_argument("--calib_data_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/1114_park_bad/calib", type=str)
     # parser.add_argument("--label_path", default="/data/ai_group/datasets/bev_park/train_test_data/PointLineData_Test_fisheye/pointline_txt/", type=str)
-    parser.add_argument("--save_path", default="fisheye_300w_res", type=str)
+    parser.add_argument("--save_path", default="/data/ai_group/datasets/bev_park/park_slot_jira/1114_park_bad/all_2025_11_14_13_57_28_original_float_model", type=str)
     args = parser.parse_args()
     return args
 
@@ -177,13 +180,13 @@ def detect_fisheye(fisheye_img, img_name, onnx_mode_path, args):
 
     cv2.imwrite(savename.replace('.jpg','_avm.jpg'), avm_img)
     # savePath = "/home/gpal/gpal_work/ParkingSlot/parking_slot/master_v3/code_train_segmentation/connvert_onnx/slot/{}.jpg".format(img_name[0:-4])
-    cv2.imwrite(savename.replace('.jpg','_point_map.jpg'), point_img)
-    cv2.imwrite(savename.replace('.jpg','_line_map.jpg'), line_img)
+    # cv2.imwrite(savename.replace('.jpg','_point_map.jpg'), point_img)
+    # cv2.imwrite(savename.replace('.jpg','_line_map.jpg'), line_img)
 
-    # SlotDetInstance = HeatMap(w, h)
-    # vertexElements = SlotDetInstance.doProc(heatmapValue, linemapValue)
-    # show_img = avm_img.copy()
-    # SlotDetInstance.drawVE(show_img, savename.replace('.jpg','_draw.jpg'))
+    SlotDetInstance = HeatMap(w, h)
+    vertexElements = SlotDetInstance.doProc(heatmapValue, linemapValue)
+    show_img = avm_img.copy()
+    SlotDetInstance.drawVE(show_img, savename.replace('.jpg','_draw.jpg'))
     # return vertexElements
 
 
