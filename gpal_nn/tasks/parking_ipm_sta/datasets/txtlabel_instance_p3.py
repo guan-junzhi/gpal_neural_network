@@ -14,7 +14,8 @@ class TXTLabelLoader(object):
     def initParam(self, sw, sh):
         param = {}
         # param['point_dis_thr'] = 4
-        param['point_dis_thr'] = 15
+        # param['point_dis_thr'] = 15
+        param['point_dis_thr'] = 5
         param['line_angle_thr'] = float(0.96619)  # cos(angle_5)
         param['scale_w'] = sw
         param['scale_h'] = sh
@@ -209,14 +210,23 @@ class TXTLabelLoader(object):
         # detections : list [point[x,y,s] orients_list[[sin,cos,hist_score,act_len],...], ...]
         # annotations : list [point[x,y], orients_list[[sin,cos], ...]]
         # set match flag to every object:
+        det_pt = 0
+        det_line = 0
         for det in detections:
+            det_pt = det_pt + 1
             det[0].extend([-1])
             for lin in det[1]:
                 lin.extend([-1])
+                det_line = det_line + 1
+        ann_pt = 0
+        ann_line = 0
         for ann in annotations:
             ann[0].extend([-1])
+            ann_pt = ann_pt + 1
             for lin in ann[1]:
                 lin.extend([-1])
+                ann_line = ann_line + 1
+        
         # detections : list [point[x,y,s,f] orients_list[[sin,cos,hist_score,act_len,f],...], ...]
         # annotations : list [point[x,y,f], orients_list[[sin,cos,f], ...]]
         ann_size = len(annotations)
@@ -248,9 +258,9 @@ class TXTLabelLoader(object):
                     angle_error = self.lineListMatch(
                         det, ann, angle_thr, angle_error)
             # cv2.imwrite("/tmpnfs/yaoming.zhang/landmark_pytorch/ldmk_data/j3_test/test_ann.jpg", img)
-        point_total_num, point_true_num, point_miss_num, point_false_num = self.countPointPerf(
+        point_total_num, point_true_num, point_miss_num, point_false_num, point_det_num = self.countPointPerf(
             detections, annotations)
-        line_total_num, line_true_num, line_miss_num, line_false_num = self.countLinePerf(
+        line_total_num, line_true_num, line_miss_num, line_false_num, line_det_num = self.countLinePerf(
             detections, annotations)
 
         resultPack = {}
@@ -264,6 +274,9 @@ class TXTLabelLoader(object):
         resultPack['line_true_num'] = line_true_num
         resultPack['line_miss_num'] = line_miss_num
         resultPack['line_false_num'] = line_false_num
+        resultPack['point_det_num'] = point_det_num
+        resultPack['line_det_num'] = line_det_num
+
         return resultPack
 
     def errorCaculate_point(self, detections, annotations):
@@ -331,7 +344,10 @@ class TXTLabelLoader(object):
         max_pixel_dis = max(abs(dx), abs(dy))
         if (max_pixel_dis < thr):
             det[0][3] = 1
-            ann[0][2] = 1
+            if ann[0][2] < 0:
+                ann[0][2] = 1
+            else:
+                ann[0][2] += 1
             dd = math.sqrt(dx*dx + dy*dy)
             err = err + dd
             flag = 1
@@ -350,40 +366,59 @@ class TXTLabelLoader(object):
         match_cos = det_line[0] * ann_line[0] + det_line[1] * ann_line[1]
         if (match_cos > thr):
             det_line[4] = 1
-            ann_line[2] = 1
+            if ann_line[2] < 0:
+                ann_line[2] = 1
+            else:
+                ann_line[2] += 1
+
             err = err + abs(np.arccos(match_cos))
             # err proc todo!
         return err
 
     def countPointPerf(self, detections, annotations):
         point_total_num = len(annotations)
+        det_total_num = len(detections)
         point_true_num = 0
         point_miss_num = 0
         point_false_num = 0
+        multi_det_point_num  = 0
         for ann in annotations:
-            if (ann[0][2] > 0):
+            if (ann[0][2] >= 1):
                 point_true_num = point_true_num + 1
+                if (ann[0][2] > 1):
+                    multi_det_point_num = multi_det_point_num + ann[0][2] - 1 
+
             if (ann[0][2] < 0):
                 point_miss_num = point_miss_num + 1
+
         for det in detections:
             if (det[0][3] < 0):
                 point_false_num = point_false_num + 1
-        return point_total_num, point_true_num, point_miss_num, point_false_num
+        point_false_num += multi_det_point_num
+        return point_total_num, point_true_num, point_miss_num, point_false_num, det_total_num
 
     def countLinePerf(self, detections, annotations):
         line_total_num = 0
         line_true_num = 0
         line_miss_num = 0
         line_false_num = 0
+        multi_det_line_num = 0
+        static_det_line_num = 0
         for ann in annotations:
             for ann_line in ann[1]:
                 line_total_num = line_total_num + 1
-                if (ann_line[2] > 0):
+                if (ann_line[2] >= 1):
                     line_true_num = line_true_num + 1
+                    if (ann_line[2] > 1):
+                        multi_det_line_num = multi_det_line_num + ann_line[2] - 1
                 if (ann_line[2] < 0):
                     line_miss_num = line_miss_num + 1
+               
         for det in detections:
             for det_line in det[1]:
-                if (det_line[3] < 0):
+                static_det_line_num = static_det_line_num + 1
+                if (det_line[4] < 0):
                     line_false_num = line_false_num + 1
-        return line_total_num, line_true_num, line_miss_num, line_false_num
+        line_false_num += multi_det_line_num
+        line_det_num = static_det_line_num
+        return line_total_num, line_true_num, line_miss_num, line_false_num, line_det_num

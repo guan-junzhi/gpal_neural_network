@@ -37,7 +37,7 @@ class WrappedGpNet(GpNet):
         if input["task"] == "DRIVING_BEV_DYN":
             return self.forward_dyn(input) 
         elif input["task"] == "PARKING_IPM_STA":
-            return self.forward_park(input)
+            return self.forward_avm_park(input)
         elif input["task"] == "DRIVING_BEV_STA":
             return self.forward_sta(input)
         
@@ -185,6 +185,29 @@ class WrappedGpNet(GpNet):
         # exit(1)
         return [avm, output]
 
+    def forward_avm_park(self, input):
+        # print("input ", input)
+        # pdb.set_trace()
+        img = input["image"]['img_avm']
+        avm_input = preprocess_img(img)
+      
+        # print("model ", self.model)
+
+        # out = self.model(avm_input)
+
+        bb_output = self.model['backbone0'](avm_input)
+        # print('backbone0', bb_output[0].shape)
+        
+        g0_output = self.model['group0'](bb_output)
+        neck0_output = self.model['neck0'](g0_output)
+        bev_feature = neck0_output
+            
+        for task_name in self.tasks_to_run.keys():
+            if task_name == "PARKING_IPM_STA":
+                output = self.model[task_name](bev_feature)
+        # exit(1)
+        return [output]
+
 
 class PytorchToOnnx:
     @staticmethod
@@ -218,11 +241,8 @@ class PytorchToOnnx:
             return used_image_shapes
         elif task_name in ["PARKING_IPM_STA"]:
             used_image_shapes: dict = {
-                "fisheye_img_rear": [1920, 1536, 3],
-                "fisheye_img_front": [1920, 1536, 3],
-                "fisheye_img_left": [1920, 1536, 3],
-                "fisheye_img_right": [1920, 1536, 3],
-            }
+                 "img_avm":[768,768,3]
+             }
             return used_image_shapes
 
     @staticmethod
@@ -262,15 +282,6 @@ class PytorchToOnnx:
                 avm_w = 768
                 avm_h = 768
                 merged_input_dict = {"task": task.name, "image": input_dict}
-                merged_input_dict['grid_rear_and_front'] = torch.rand(2, avm_w, avm_h, 2).cuda()
-                merged_input_dict['grid_left_and_right'] = torch.rand(2, avm_w, avm_h, 2).cuda()
-                # print(grid_rear_and_front.shape)
-
-                merged_input_dict['mask_rear'] = torch.rand(1, avm_w, avm_h, 1).cuda()
-                merged_input_dict['mask_front'] = torch.rand(1, avm_w, avm_h, 1).cuda()
-                merged_input_dict['mask_left'] = torch.rand(1, avm_w, avm_h, 1).cuda()
-                merged_input_dict['mask_right'] = torch.rand(1, avm_w, avm_h, 1).cuda()
-                ######################################################################3
                 
         return merged_input_dict
 
@@ -317,14 +328,15 @@ class PytorchToOnnx:
 
                 output_names = ["head_conv", "hm_center","prev_feats_output"]
             if task.name == "PARKING_IPM_STA":
-                input_names=["img_rear", "img_front","img_left", "img_right",  "grid_rear_and_front", "grid_left_and_right","mask_rear", "mask_front", "mask_left", "mask_right"]
-                output_names=['avm', 'slot_point', 'slot_line']
-
+                input_names=["img_avm"]
+                output_names=['slot_point', 'slot_line']
+	    
             if task.name == "DRIVING_BEV_STA":
                 input_names = ["img_30", "img_120", "reference_points_rebatch", "queries_rebatch_grid", "restore_bev_grid", "bev_pillar_counts", "navi_info"]
                 output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "centerline_directions_preds", 
                                 "keypoint_classes_preds", "keypoint_regs_preds", "polygon_classes_preds", "arrow_classes_preds"]
                 do_constant_folding = False
+
             with torch.no_grad():
                 torch.onnx.export(
                     net,
@@ -337,7 +349,6 @@ class PytorchToOnnx:
                     output_names=output_names,
                     do_constant_folding=do_constant_folding
                 )
-            
     
         onnx_sim_path = onnx_path.replace(".onnx", "_sim.onnx")
         model = onnx.load(onnx_path)
