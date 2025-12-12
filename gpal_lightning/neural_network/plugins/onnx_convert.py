@@ -35,7 +35,10 @@ class WrappedGpNet(GpNet):
 
     def forward(self, input):
         if input["task"] == "DRIVING_BEV_DYN":
-            return self.forward_dyn(input) 
+            if input.get("task_sub") == "DRIVING_BEV_DYN_FISHEYE":
+                return self.forward_dyn_fish(input) 
+            else:
+                return self.forward_dyn(input) 
         elif input["task"] == "PARKING_IPM_STA":
             return self.forward_avm_park(input)
         elif input["task"] == "DRIVING_BEV_STA":
@@ -48,19 +51,27 @@ class WrappedGpNet(GpNet):
         task = input["task"]
         images_grid = calib["images_grid"]
         metadata = input["metadata"]
+        
+        deploy_cfg = self.tasks_to_run[task].deploy_cfg
+        if deploy_cfg is not None:
+            if deploy_cfg['mode'] == "gpal30_in_model_with_small_image":
+                cam_set = ["img_front_120", "img_front_30","img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
+                imgs = torch.cat([x[k] for k in cam_set], dim=0).permute(0, 3, 1, 2) / 255.0
+            else:
+                raise ValueError(f"{deploy_cfg['mode']} must be -> gpal30_in_model_with_small_image")
+        else:
+            cam8m_set = ["img_front_120", "img_front_30"]
+            cam2m_set = ["img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
 
-        cam8m_set = ["img_front_120", "img_front_30"]
-        cam2m_set = ["img_back", "img_front_left", "img_front_right", "img_rear_left", "img_rear_right"]
+            img8ms = torch.cat([x[k] for k in cam8m_set], dim=0).permute(0, 3, 1, 2)
+            img2ms = torch.cat([x[k] for k in cam2m_set], dim=0).permute(0, 3, 1, 2)
 
-        img8ms = torch.cat([x[k] for k in cam8m_set], dim=0).permute(0, 3, 1, 2)
-        img2ms = torch.cat([x[k] for k in cam2m_set], dim=0).permute(0, 3, 1, 2)
+            udist_img8ms = F.grid_sample(
+                img8ms, images_grid[:len(cam8m_set)].float(), align_corners=True, padding_mode='border', mode="nearest")
+            udist_img2ms = F.grid_sample(
+                img2ms, images_grid[len(cam8m_set):].float(), align_corners=True, padding_mode='border', mode="nearest")
 
-        udist_img8ms = F.grid_sample(
-            img8ms, images_grid[:len(cam8m_set)].float(), align_corners=True, padding_mode='border', mode="nearest")
-        udist_img2ms = F.grid_sample(
-            img2ms, images_grid[len(cam8m_set):].float(), align_corners=True, padding_mode='border', mode="nearest")
-
-        imgs = torch.cat([udist_img8ms, udist_img2ms], dim = 0) / 255.0
+            imgs = torch.cat([udist_img8ms, udist_img2ms], dim = 0) / 255.0
         mono3d, mono_od, gate_lever, side_od, neck2_in = [], [], [], [], []
 
         for backbone_name, camera_list in self.backbone_camera_mapping.items():
@@ -74,28 +85,63 @@ class WrappedGpNet(GpNet):
             if task_name == "DRIVING_BEV_DYN":
                 output = self.model[task_name](bev_feature,metadata = metadata )
                 output = output[0]
-                # print("DRIVING_BEV_DYN", output[0].shape)
-                # BEV_TO_POINTS = dict(
-                #             NAME="Bev_To_Points",
-                #             NUM_BEV_FEATURES=64,
-                #             VOXEL_SIZE=[0.64, 0.64],
-                #             SCORE_THRESH=0.28,
-                #             DOWN_RATIO=2,
-                #             NUM_KEYPOINTS=256,
-                #             TRAIN=True,
-                #             NUM_OUTPUT_FEATURES=64
-                #         )
-                # bev_2_points = Bev_To_Points(model_cfg=BEV_TO_POINTS,
-                #                                   grid_size=[480, 192,  12],
-                #                                   voxel_size=[0.32, 0.32, 0.5],
-                #                                   point_cloud_range=[-51.2, -
-                #                                                      30.72, -1., 102.4, 30.72, 5.],
-                #                                   num_bev_features=[64, 64, 128, 64, 128, 128, 128])
-                # output = bev_2_points(output[0])
-                print(ShowDataStruct("DRIVING_BEV_DYN", output))
-
-                # exit(1)
+                output['hm_cen'] = self.simple_nms(output['hm_cen'])
+                
+        return output
+    
+    def simple_nms(self, heatmap, kernel_size=3, threshold=0.1):
+        """
+        简单的NMS抑制处理
+        Args:
+            heatmap: 热力图张量，shape为[B, C, H, W]
+            kernel_size: 最大池化核大小
+            threshold: 阈值，低于该值的点将被抑制
+        Returns:
+            经过NMS抑制后的热力图
+        """
+        # 使用最大池化找到局部最大值
+        heatmap = torch.sigmoid(heatmap)
+        pad = (kernel_size - 1) // 2
+        hmax = F.max_pool2d(heatmap, (kernel_size, kernel_size), stride=1, padding=pad)
         
+        # 保留局部最大值点
+        keep = (hmax == heatmap) 
+        
+        # 抑制非局部最大值点
+        nms_heatmap = heatmap * keep.float()
+        
+        return nms_heatmap
+    
+    def forward_dyn_fish(self, input):
+        outputs = []
+        x = input["image"]
+        calib = input["calib"]
+        task = input["task"]
+        images_grid = calib["images_grid"]
+        metadata = input["metadata"]
+
+        fish_cam2_set = ["img_front_fisheye",
+                    "img_right_fisheye",
+                    "img_rear_fisheye",
+                    "img_left_fisheye"]
+
+        img8ms = torch.cat([x[k] for k in fish_cam2_set], dim=0).permute(0, 3, 1, 2)
+
+        imgs = F.grid_sample(
+            img8ms, images_grid.float(), align_corners=True, padding_mode='border', mode="nearest") / 255.0
+        
+        for backbone_name, camera_list in self.backbone_camera_mapping.items():
+            bb_output = self.model[backbone_name](imgs)
+            g0_output = self.model['group0'](bb_output)
+            neck0_output = self.model['neck0'](g0_output)
+
+        bev_feature = self.model[self._transformers[task]](neck0_output, calib)
+        for task_name in self.tasks_to_run.keys():
+            if task_name == "DRIVING_BEV_DYN":
+                output = self.model[task_name](bev_feature,metadata = metadata )
+                output = output[0]
+                output['hm_cen'] = self.simple_nms(output['hm_cen'])
+                
         return output
 
     def forward_sta(self, input):
@@ -211,26 +257,47 @@ class WrappedGpNet(GpNet):
 
 class PytorchToOnnx:
     @staticmethod
-    def TaskImageShapeDict(task_name):
+    def TaskImageShapeDict(task_name, task):
         if task_name in ["DRIVING_BEV_DYN"]:
-            # used_image_shapes: dict = {
-            #     "img_front_120": [768, 320, 3],
-            #     "img_front_30": [768, 320, 3],
-            #     "img_back": [768, 320, 3],
-            #     "img_front_left": [768, 320, 3],
-            #     "img_front_right": [768, 320, 3],
-            #     "img_rear_left": [768, 320, 3],
-            #     "img_rear_right": [768, 320, 3],
-            # }
-            used_image_shapes: dict = {
-                "img_front_120": [3840, 2160, 3],
-                "img_front_30": [3840, 2160, 3],
-                "img_back": [1920, 1080, 3],
-                "img_front_left": [1920, 1080, 3],
-                "img_front_right": [1920, 1080, 3],
-                "img_rear_left": [1920, 1080, 3],
-                "img_rear_right": [1920, 1080, 3],
-            }
+            if task.subtask_name=="DRIVING_BEV_DYN_FISHEYE":
+                used_image_shapes: dict = {
+                    "img_front_fisheye": [1920, 1536, 3],
+                    "img_right_fisheye": [1920, 1536, 3],
+                    "img_rear_fisheye": [1920, 1536, 3],
+                    "img_left_fisheye": [1920, 1536, 3],
+                }
+            elif task.subtask_name=="DRIVING_BEV_DYN":
+                # used_image_shapes: dict = {
+                #     "img_front_120": [768, 320, 3],
+                #     "img_front_30": [768, 320, 3],
+                #     "img_back": [768, 320, 3],
+                #     "img_front_left": [768, 320, 3],
+                #     "img_front_right": [768, 320, 3],
+                #     "img_rear_left": [768, 320, 3],
+                #     "img_rear_right": [768, 320, 3],
+                # }
+                used_image_shapes: dict = {
+                    "img_front_120": [3840, 2160, 3],
+                    "img_front_30": [3840, 2160, 3],
+                    "img_back": [1920, 1080, 3],
+                    "img_front_left": [1920, 1080, 3],
+                    "img_front_right": [1920, 1080, 3],
+                    "img_rear_left": [1920, 1080, 3],
+                    "img_rear_right": [1920, 1080, 3],
+                }
+                if task.deploy_cfg is not None:
+                    if task.deploy_cfg['mode'] == "gpal30_in_model_with_small_image":
+                        used_image_shapes: dict = {
+                            "img_front_120": [960, 512, 3],
+                            "img_front_30": [960, 512, 3],
+                            "img_back": [960, 512, 3],
+                            "img_front_left": [960, 512, 3],
+                            "img_front_right": [960, 512, 3],
+                            "img_rear_left": [960, 512, 3],
+                            "img_rear_right": [960, 512, 3],
+                        }
+            else:
+                raise ValueError(f"Unknown subtask_name: {task.subtask_name}")
             return used_image_shapes
         elif task_name in ["DRIVING_BEV_STA"]:
             used_image_shapes: dict = {
@@ -250,7 +317,11 @@ class PytorchToOnnx:
         input_dict = {}
            
         for task in tasks:
-            used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name)
+            # if task.name in ["DRIVING_BEV_DYN"]:
+            #     subtask_name = task.subtask_name  # "DRIVING_BEV_DYN_FISHEYE"
+            # else:
+            #     subtask_name = None
+            used_image_shapes = PytorchToOnnx.TaskImageShapeDict(task.name, task)
             for cam in used_image_shapes:
                 if cam not in input_dict.keys():
                     vector_shape = 1, used_image_shapes[cam][1], used_image_shapes[cam][0], 3
@@ -258,15 +329,27 @@ class PytorchToOnnx:
             print(ShowDataStruct("input_dict", input_dict))
 
             if task.name == "DRIVING_BEV_DYN":
-                merged_input_dict = {"task": task.name, "image": input_dict}
-                merged_input_dict["calib"]={}
-                merged_input_dict["calib"]["images_grid"] = torch.rand(
-                    7, 320, 768, 2).cuda()
-                merged_input_dict["calib"]["vt_grid"] = torch.rand(
-                    7, 192, 120, 2).cuda()
-                merged_input_dict["metadata"] = {}
-                merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 120).cuda()
-                merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 120, 2).cuda()
+                if task.subtask_name=="DRIVING_BEV_DYN_FISHEYE":
+                    merged_input_dict = {"task": task.name, "image": input_dict,"task_sub":task.subtask_name}
+                    merged_input_dict["calib"]={}
+                    merged_input_dict["calib"]["images_grid"] = torch.rand(4, 512, 960, 2).cuda()
+                    merged_input_dict["calib"]["vt_grid"] = torch.rand(4, 192, 60, 2).cuda()
+                    merged_input_dict["metadata"] = {}
+                    merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 60).cuda()
+                    merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 60, 2).cuda()
+                    pass
+                else:
+                    merged_input_dict = {"task": task.name, "image": input_dict}
+                    merged_input_dict["calib"]={}
+                    if task.deploy_cfg is not None:
+                        if task.deploy_cfg['mode'] == "gpal30_in_model_with_small_image":
+                            merged_input_dict["calib"]["images_grid"] = torch.rand(7, 320, 768, 2).cuda()  # 不使用,任意
+                    else:
+                        merged_input_dict["calib"]["images_grid"] = torch.rand(7, 320, 768, 2).cuda()
+                    merged_input_dict["calib"]["vt_grid"] = torch.rand(7, 192, 120, 2).cuda()
+                    merged_input_dict["metadata"] = {}
+                    merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 120).cuda()
+                    merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 120, 2).cuda()
 
             elif task.name == "DRIVING_BEV_STA":
                 merged_input_dict = {"task": tasks[0].name, "image": input_dict}
@@ -323,10 +406,14 @@ class PytorchToOnnx:
         for task in tasks:
             do_constant_folding = True
             if task.name == "DRIVING_BEV_DYN":
-                input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
-                       "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid",  "prev_feats","prev_feats_grid"]  # occ_od
+                if task.subtask_name=="DRIVING_BEV_DYN_FISHEYE":
+                    input_names = ['img_front_fisheye', 'img_right_fisheye', 'img_rear_fisheye', 'img_left_fisheye', "fish_images_grid", "fish_vt_grid",  "fish_prev_feats","fish_prev_feats_grid"]  # occ_od
+                    output_names = ["fish_head_conv", "fish_hm_center","fish_prev_feats_output"]
+                else:
+                    input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
+                        "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid",  "prev_feats","prev_feats_grid"]  # occ_od
 
-                output_names = ["head_conv", "hm_center","prev_feats_output"]
+                    output_names = ["head_conv", "hm_center","prev_feats_output"]
             if task.name == "PARKING_IPM_STA":
                 input_names=["img_avm"]
                 output_names=['slot_point', 'slot_line']

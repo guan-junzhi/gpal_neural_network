@@ -41,6 +41,10 @@ class ClipSampler(Sampler):
                 clip_key = clip_key_list[clip_idx]
                 frames_in_clip = datalist_by_clip[clip_key]
                 # frame_start_idx = randint(0, len(frames_in_clip)-length_range[0])
+                
+                if len(frames_in_clip) < length_range[0]:
+                    continue
+                
                 frame_start_idx = [
                     randint(0, len(frames_in_clip)-length_range[0]) for _ in range(self.rank+1)][-1]
                 
@@ -56,6 +60,7 @@ class ClipSampler(Sampler):
                     flatten_idxs[i + j * batch_size, 0] = clip_idx
                     flatten_idxs[i + j * batch_size, 1] = frame_start_idx + j
 
+        print('flatten_idxs have -1:', np.sum(flatten_idxs == -1))
         dataset = [datalist_by_clip[clip_key_list[ele[0]]][ele[1]]
                 for ele in flatten_idxs]
         # print(dataset)
@@ -71,5 +76,5 @@ class ClipSampler(Sampler):
         return iter(self.indices)  # 直接返回顺序索引的迭代器
 
     def __len__(self):
-        print(f"ClipSampler:__len__: {len(self.indices)}")
+        print(f"ClipSampler rank: {self.rank} __len__: {len(self.indices)}")
         return len(self.indices)  # 返回总样本数

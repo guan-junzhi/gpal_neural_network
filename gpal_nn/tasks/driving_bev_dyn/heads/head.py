@@ -48,7 +48,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.grid_size = [
             int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
             int((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1])
-        ]  # [H, W] 48, 120
+        ]  # [H, W] 48, 120 / 96 120 (fisheye)
         
         xyz_camA = gridcloud3d(1, 1, self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
         xyz_camA[:, :, 0] = xyz_camA[:, :, 0] * self.voxel_size[0] + self.voxel_size[0]/2 + self.point_cloud_range[0]
@@ -122,11 +122,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
         bs, _, h, w = prev_feat.shape
         grid = grid.view(bs, h, w, 3, 1)
         
-        if torch.onnx.is_in_onnx_export():
-            grid = cur2prev.matmul(grid)
-        else:
-            for idx in range(bs):
-                grid[idx] = cur2prev[idx].matmul(grid[idx])
+        for idx in range(bs):
+            grid[idx] = cur2prev[idx].matmul(grid[idx])
         
         # bev2feat
         grid_x = (grid[..., 0, 0].clone() - self.point_cloud_range[0]) / bev_w_resolution

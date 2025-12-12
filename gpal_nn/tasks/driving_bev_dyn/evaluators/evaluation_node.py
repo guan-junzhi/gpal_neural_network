@@ -264,15 +264,34 @@ class ObjectDetectionEvaluator:
                     ap = curr_range_ap[curr_j]
                     f1 = curr_range_f1[curr_j]
                     
-                    if p < 0 and r < 0 and ap < 0 and f1 < 0:
-                        p = r = ap = f1 = '-'
+                    # if p < 0 and r < 0 and ap < 0 and f1 < 0:
+                    #     p = r = ap = f1 = '-'
                     
                     # 误差数据
                     curr_range_mask_tp = np.array(distance_errors_list[curr_j]['range']).reshape(-1, len(self.det_range_list)).astype(np.int32)
                     curr_range_mask_check = curr_range_mask_tp[:, range_i] == range_i
                     
+                    try:
+                        R_P07 = recall_at_precision[curr_j+1][f'R@P{self.r_at_p}']
+                    except:
+                        R_P07 = recall_at_precision[curr_j+1][f'R@P0.7']
+                    
                     if not np.any(curr_range_mask_check):
+                        n_p = pr_curves[curr_j+1]['num_Dt']
+                        n_gt = pr_curves[curr_j+1]['num_Gt']
+                        max_tp = int(pr_curves[curr_j+1]['max_tp'])
+
                         range_data[range_i][curr_name] = ['-' for _ in range(24)]  # 打印字段数
+                        range_data[range_i][curr_name][0] = n_p
+                        range_data[range_i][curr_name][1] = n_gt
+                        range_data[range_i][curr_name][2] = max_tp
+                        
+                        range_data[range_i][curr_name][3] = p
+                        range_data[range_i][curr_name][4] = r
+                        range_data[range_i][curr_name][5] = R_P07
+                        range_data[range_i][curr_name][6] = ap
+                        range_data[range_i][curr_name][7] = f1
+                        
                         continue
                     
                     # 原始的含有正负信息的误差
@@ -305,11 +324,6 @@ class ObjectDetectionEvaluator:
                     ASE = np.mean(np.array(distance_errors_list[curr_j]['scale_err'])[curr_range_mask_check])
                     AOE = np.mean(np.array(distance_errors_list[curr_j]['orient_err'])[curr_range_mask_check])
                     AVE = np.mean(np.array(distance_errors_list[curr_j]['vel_err'])[curr_range_mask_check])
-                    
-                    try:
-                        R_P07 = recall_at_precision[curr_j+1][f'R@P{self.r_at_p}']
-                    except:
-                        R_P07 = recall_at_precision[curr_j+1][f'R@P0.7']
                     
                     # 存储数据
                     range_data[range_i][curr_name] = [

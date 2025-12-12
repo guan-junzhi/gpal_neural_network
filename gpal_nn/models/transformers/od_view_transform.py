@@ -63,6 +63,86 @@ def project_ego_pts_to_image(pts, ego2img):
     return reference_points_img_uv, reference_points_img[..., 2].clone()
 
 
+def GetProjectGridByEgo2Imgs_Fisheye(extrin, distor, intrin, div, sample_pts_3d, image_crop_config):
+    V, N, _, _ = sample_pts_3d.shape
+    points_homo = sample_pts_3d  # V N 4 1
+    
+    extrin = extrin.unsqueeze(1).repeat(1, N, 1, 1)  # V N 4 4
+    
+    points_camera_homo = torch.matmul(extrin.to(torch.float32),
+                                      points_homo.to(torch.float32)).permute(0, 1, 3, 2)  # B,N,1,4
+    
+    points_camera = points_camera_homo[..., :3]
+    
+    # valid_mask = points_camera[..., 2] > 0
+    # if not np.any(valid_mask):
+    #     return np.zeros((N, 2)), valid_mask
+    
+    Xs = points_camera[..., [0]]  # V N 1 1
+    Ys = points_camera[..., [1]]
+    Zs = points_camera[..., [2]]
+    
+    Zs = torch.where(Zs > 1e-6, Zs, torch.ones_like(Zs) * 1e-6)
+    
+    x = Xs / Zs
+    y = Ys / Zs
+    r = torch.sqrt(x**2 + y**2)
+    theta = torch.arctan(r)  # V N 1 1
+    
+    # 鱼眼畸变模型 (等距投影 + 畸变)
+    # r_distorted = theta * (1 + k1*theta^2 + k2*theta^4 + k3*theta^6 + k4*theta^8 + k5*theta^10)
+    
+    k1 = distor[..., [0]].unsqueeze(-1).repeat(1, N, 1, 1)  # V N 1 1
+    k2 = distor[..., [1]].unsqueeze(-1).repeat(1, N, 1, 1) 
+    k3 = distor[..., [2]].unsqueeze(-1).repeat(1, N, 1, 1) 
+    k4 = distor[..., [3]].unsqueeze(-1).repeat(1, N, 1, 1) 
+    k5 = distor[..., [4]].unsqueeze(-1).repeat(1, N, 1, 1) 
+    
+    theta2 = theta * theta
+    theta4 = theta2 * theta2
+    theta6 = theta4 * theta2
+    theta8 = theta4 * theta4
+    theta10 = theta8 * theta2  # V N 1 1
+    
+    # 畸变后的径向距离 (5项式)
+    r_distorted = theta * (1 + k1*theta2 + k2*theta4 + k3*theta6 + k4*theta8 + k5*theta10)
+    
+    # 避免除零
+    r = torch.clamp(r, min=1e-6)
+    
+    # 计算畸变后的归一化坐标
+    x_distorted = x * (r_distorted / r)
+    y_distorted = y * (r_distorted / r)
+    
+    # 归一化平面 -> 像素坐标
+    # 提取内参
+    fx = intrin[:, [0], [[0]]].unsqueeze(-1).repeat(1, N, 1, 1)
+    fy = intrin[:, [1], [[1]]].unsqueeze(-1).repeat(1, N, 1, 1)
+    cx = intrin[:, [0], [[2]]].unsqueeze(-1).repeat(1, N, 1, 1)
+    cy = intrin[:, [1], [[2]]].unsqueeze(-1).repeat(1, N, 1, 1)
+    
+    u = fx * x_distorted + cx
+    v = fy * y_distorted + cy
+    
+    # 组合结果
+    points_image = torch.cat([u, v], dim=-1)
+    # 标记无效点
+    # points_image[~valid_mask] = 0
+    
+    Scale = torch.tensor(image_crop_config['CROP_HeSai_ID4']['SCALE'], device=extrin.device, dtype=extrin.dtype)
+    Crop_start = torch.tensor(image_crop_config['CROP_HeSai_ID4']['CROP_START'], device=extrin.device, dtype=extrin.dtype)
+    
+    Scale = Scale.unsqueeze(-1).unsqueeze(-1).repeat(1, N, 1)
+    Crop_start = Crop_start.unsqueeze(-1).unsqueeze(-1).repeat(1, N, 1)
+    
+    points_image[..., 0] = (points_image[..., 0] / Scale) / div
+    points_image[..., 1] = (points_image[..., 1] / Scale - Crop_start ) / div
+    
+    uvs = points_image
+    z = points_camera[..., 2]
+    
+    return uvs, z
+
 def GetProjectGridByEgo2Imgs(ego2imgs, H, W, div, Z, Y, X, sample_pts_3d):
     sample_pts_3d = sample_pts_3d.repeat(ego2imgs.shape[0], 1, 1, 1)
     uvs, z = project_ego_pts_to_image(sample_pts_3d, ego2imgs)
@@ -80,7 +160,25 @@ def GetProjectGridByEgo2Imgs(ego2imgs, H, W, div, Z, Y, X, sample_pts_3d):
 
     return uv_norm, valid_mem
 
-def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, image_down_div=None, xyz_camAX=None, mask=None, batch_dict=None, image_crop_config=None):
+def GetProjectGridByEgo2ImgsFisheye(extrin, distor, intrin, H, W, div, Z, Y, X, sample_pts_3d, image_crop_config):
+    V = extrin.shape[0]
+    sample_pts_3d = sample_pts_3d.repeat(V, 1, 1, 1)
+    uvs, z = GetProjectGridByEgo2Imgs_Fisheye(extrin, distor, intrin, div, sample_pts_3d, image_crop_config)
+    WH = torch.tensor(
+        [[[[(W-1), (H-1)]]]], 
+        device=extrin.device,
+        dtype=extrin.dtype
+    )
+    uv_norm = (2.0 * (uvs / WH) - 1.0)
+    mask = (z <= 0).unsqueeze(-1).expand_as(uv_norm)
+    # 将mask对应位置的uv_norm值设置为-2，无效点设置，取消gridsample后面的乘法
+    uv_norm[mask] = -2.0
+    valid_mem = (z[:, :, 0] > 0).reshape(V, Z, Y, X).float()
+    uv_norm = uv_norm.reshape(V, -1, X, 2)  # Z*Y
+
+    return uv_norm, valid_mem
+
+def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, image_down_div=None, xyz_camAX=None, subtask_name=None, mask=None, batch_dict=None, image_crop_config=None):
     div = image_down_div
 
     bev_feature_batch = []
@@ -91,11 +189,27 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, image_down_div=None, xyz_camA
         if torch.onnx.is_in_onnx_export():
             vt_grid= batch_dict["vt_grid"]
         else:
-            vt_grid, vt_grid_valid = GetProjectGridByEgo2Imgs(
-                batch_dict["ego2imgs"][i],
-                H, W, div, Z, Y, X,
-                xyz_camAX.to(rgb_camBX.device).clone()
-            )
+            
+            if subtask_name in ["DRIVING_BEV_DYN_FISHEYE"]:
+                extrinsic_matrix = batch_dict['extrinsic'][i]
+                distortion_coeffs= batch_dict['cam_dist'][i]
+                intrinsic_matrix = batch_dict['intrinsic'][i]
+                vt_grid, vt_grid_valid = GetProjectGridByEgo2ImgsFisheye(
+                    extrinsic_matrix,
+                    distortion_coeffs,
+                    intrinsic_matrix,
+                    H, W, div, Z, Y, X,
+                    xyz_camAX.to(rgb_camBX.device).clone(),
+                    image_crop_config=image_crop_config,
+                )
+            elif subtask_name in ["DRIVING_BEV_DYN"]:
+                vt_grid, vt_grid_valid = GetProjectGridByEgo2Imgs(
+                    batch_dict["ego2imgs"][i],
+                    H, W, div, Z, Y, X,
+                    xyz_camAX.to(rgb_camBX.device).clone()
+                )
+            else:
+                raise NotImplementedError(f"subtask_name {subtask_name} is not supported")
         
         values = F.grid_sample(rgb_camB, vt_grid.float(), align_corners=False, padding_mode='zeros')
         bev_feature_batch.append((values).sum(0).view(C*Z, Y, X))
@@ -103,6 +217,38 @@ def unproject_image_to_mem(rgb_camBX, Z, Y, X, BB, image_down_div=None, xyz_camA
     a = torch.stack(bev_feature_batch, dim = 0)
     
     return a
+
+class SimpleViewMarker(nn.Module):
+    """简单的视角顺序标记"""
+    
+    def __init__(self, num_views=4, feature_dim=256):
+        super().__init__()
+        # 可学习的视角嵌入
+        self.view_embedding = nn.Embedding(num_views, feature_dim)
+        self.num_views = num_views
+        
+    def forward(self, features):
+        """
+        Args:
+            features: [B, V, C, H, W] 多视角图像特征
+        Returns:
+            marked_features: [B, V, C, H, W] 加了视角标记的特征
+        """
+        B, V, C, H, W = features.shape
+        
+        # 生成视角ID [0, 1, 2, 3]
+        view_ids = torch.arange(V, device=features.device)  # [V]
+        
+        # 获取视角嵌入
+        view_emb = self.view_embedding(view_ids)  # [V, C]
+        
+        # 扩展到 [B, V, C, H, W]
+        view_emb = view_emb.view(1, V, C, 1, 1).expand(B, -1, -1, H, W)
+        
+        # 加到特征上
+        marked_features = features + view_emb
+        
+        return marked_features
 
 
 @TRANSFORMERS.register_module()
@@ -131,14 +277,21 @@ class ODViewTransformer(BaseModule):
         self.xyz_camA = xyz_camA
         
         self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
-
+        
+        self.subtask_name = global_config.Tasks['DRIVING_BEV_DYN']['SWITCH_SUBTASK']
+        
         self.conv_out = nn.Sequential(
             nn.Conv2d(transformer_config["in_channels"] * z_layer_num,
                       transformer_config["out_channels"], kernel_size=1, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(transformer_config["out_channels"]),
             nn.ReLU(True)
         )
-
+        if self.subtask_name in ["DRIVING_BEV_DYN_FISHEYE"]:
+            self.view_marker = SimpleViewMarker(num_views=len(self.input_source), feature_dim=transformer_config["out_channels"])
+        else:
+            self.view_marker = nn.Identity()
+        
+        self.conv_out_placeholder = nn.BatchNorm2d(transformer_config["out_channels"])
 
     def forward(
         self,
@@ -159,6 +312,9 @@ class ODViewTransformer(BaseModule):
             feats = torch.stack(image_feats_stack, dim=1)
             feats = feats.reshape(B, -1, C, H, W)
         xyz_camA = self.xyz_camA.clone()
+
+        # 加视角标记
+        feats = self.view_marker(feats)
         
         feat_bev = unproject_image_to_mem(
             feats,
@@ -168,7 +324,7 @@ class ODViewTransformer(BaseModule):
             B,
             image_down_div=self.image_down_div,
             xyz_camAX=xyz_camA,
-            mask=None,
+            subtask_name=self.subtask_name,
             batch_dict=data,
             image_crop_config=self.image_crop_config
         )

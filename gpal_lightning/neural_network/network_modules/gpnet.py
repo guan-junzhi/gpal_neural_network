@@ -691,6 +691,11 @@ class GpNet(LightningModule):
         json_list, _ = self.tasks[curr_task].vectors_to_json(
             metadata, data, dataloader_idx, preds[0], False)
         
+        if curr_task in ["DRIVING_BEV_DYN"]:
+            if self.global_config.Test.get('visulization', False):
+                output_dir = osp.join(self.global_config.dump_path, "od_eval_result/vis")
+                self.tasks[curr_task].eval_visualize(output_dir, metadata, data, dataloader_idx, preds[0], trues, batch, json_list, calib)
+        
         if curr_task in ["DRIVING_BEV_STA"]:
             if self.global_config.Test['visulization']:
                 save_root = osp.join(self.global_config.save, 'vis')
