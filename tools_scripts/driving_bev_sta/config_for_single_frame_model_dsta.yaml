@@ -5,12 +5,12 @@ model_parameters:
   # onnx_model: '/data/ai_group/workdirs/gpal_neural_network_group/jintao/data/onnx/epoch=0-step=35000_checkpoint_sim.onnx'
   #  onnx_model: '/data/ai_group/workdirs/gpal_neural_network_group/jintao/data/onnx/epoch=0-step=35000_checkpoint_sim.onnx'
   # onnx_model: '/open_explorer/onnx/epoch=0-step=35000_checkpoint_sim.onnx'
-  onnx_model: '/data/ai_group/workdirs/multitask_lanenet_group/tongwang/crosswalk_arrow_6iter_40k/checkpoint/epoch=0-step=20000_checkpoint_sim.onnx'
+  onnx_model: '/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week50_60k_udist/checkpoint/epoch=0-step=60000_checkpoint_sim.onnx'
   # BPU architecture, with range: nash-e/nash-m
   march: "nash-m"
   # Specify the directory to store the model conversion output
   #  working_dir: '/data/ai_group/workdirs/gpal_neural_network_group/jintao/data/ptq_tools/output_int16'
-  working_dir: '/data/ai_group/workdirs/multitask_lanenet_group/tongwang/crosswalk_arrow_6iter_40k/'
+  working_dir: '/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week50_60k_udist/'
   # Specify the name prefix for output model
   output_model_file_prefix: 'model_int16'
   enable_vpu: True
@@ -22,34 +22,34 @@ model_parameters:
 input_parameters:
   # Specify the input node name of the original floating-point model,
   # consistent with its name in the model, not specified will be obtained from the model
-  input_name: "img_30;img_120;images_grid;reference_points_rebatch;queries_rebatch_grid;restore_bev_grid;bev_pillar_counts;navi_info"
+  input_name: "img_30;img_120;reference_points_rebatch;queries_rebatch_grid;restore_bev_grid;bev_pillar_counts;navi_info"
   # Specify the input data of the on-board model, with range: nv12/rgb/bgr/yuv444/gray/featuremap
-  input_type_rt: 'nv12;nv12;featuremap;featuremap;featuremap;featuremap;featuremap;featuremap;'
+  input_type_rt: 'nv12;nv12;featuremap;featuremap;featuremap;featuremap;featuremap;'
   # Specify the input data type of the original floating-point model, with range: rgb/bgr/gray/yuv444/featuremap
   # The number/order specified need to be the same as in input_name
-  input_type_train: 'rgb;rgb;featuremap;featuremap;featuremap;featuremap;featuremap;featuremap;'
+  input_type_train: 'rgb;rgb;featuremap;featuremap;featuremap;featuremap;featuremap;'
   # Specify the input data layout of the original floating-point model, with range: NHWC/NCHW
   # The number/order specified need to be the same as in input_name
-  input_layout_train: 'NHWC;NHWC;NCHW;NCHW;NCHW;NCHW;NCHW;NCHW;'
+  input_layout_train: 'NHWC;NHWC;NCHW;NCHW;NCHW;NCHW;NCHW;'
   # Specify the input shape of the original floating-point model, e.g. 1x3x224x224;1x2x224x224
-  input_shape: '1x2160x3840x3;1x2160x3840x3;2x512x960x2;2x5000x4x2;2x50x100x2;1x100x100x2;1x5000x1;1x20x2'
+  input_shape: '1x512x960x3;1x512x960x3;2x5000x4x2;2x50x100x2;1x100x100x2;1x5000x1;1x20x2'
   # Specify the batch of the on-board model
   # Only supported for single-input model and the input's first dimension is 1.
   #input_batch: 1
   # Specify the model input preprocessing method, with range: no_preprocess/data_mean_and_scale/data_mean/data_scale
-  norm_type: 'no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;'
+  norm_type: 'no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;'
   # Specify the mean value to be subtracted by the preprocessing input image
   # For channel mean values, use space or ';' for separation
   # mean_value: "123.675 116.28 103.53"
   # Specify the scale factor of the preprocessing input image
   # For channel scale, use space or ';' for separation
-  scale_value: ";;;;;;;;"
+  scale_value: ";;;;;;;"
   
 # Calibration related parameters
 calibration_parameters:
   # Specify the directory to store the calibration data, support Jpeg, Bmp etc, which should cover the typical scenarios
   # For multiple inputs, need to set multiple directories, and use ';' for separation
-  cal_data_dir: './calib_data/img_30;./calib_data/img_120;./calib_data/images_grid;./calib_data/reference_points_rebatch;./calib_data/queries_rebatch_grid;./calib_data/restore_bev_grid;./calib_data/bev_pillar_counts;./calib_data/navi_info;'
+  cal_data_dir: './calib_data/img_30;./calib_data/img_120;./calib_data/reference_points_rebatch;./calib_data/queries_rebatch_grid;./calib_data/restore_bev_grid;./calib_data/bev_pillar_counts;./calib_data/navi_info;'
   # Specify the type of algorithm used for calibration, with range: default/mix/kl/max/load
   # Select skip for only performance verification, select load when using the QAT exported model
   # Usually default is enough to meet the requirements, if not, try in the order of mix, kl/max

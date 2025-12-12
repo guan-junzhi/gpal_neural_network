@@ -149,12 +149,12 @@ class WrappedGpNet(GpNet):
         x = input["image"]
         calib = input["calib"]
         task = input["task"]
-        images_grid = calib["images_grid"]
+        # images_grid = calib["images_grid"]
         cam8m_set = ["img_front_30", "img_front_120"]
         image_30 = x["img_front_30"].permute(0, 3, 1, 2).contiguous()
         image_120 = x["img_front_120"].permute(0, 3, 1, 2).contiguous()
-        images = torch.cat([image_30, image_120], dim=0)  # 2,3,2160,3840
-        udist_img8ms = F.grid_sample(images, images_grid.float(), align_corners=True, padding_mode='border', mode="nearest")
+        udist_img8ms = torch.cat([image_30, image_120], dim=0)  # 2,3,2160,3840
+        # udist_img8ms = F.grid_sample(images, images_grid.float(), align_corners=True, padding_mode='border', mode="nearest")
         imgs = udist_img8ms / 255.0
 
         for backbone_name, camera_list in self.backbone_camera_mapping.items():
@@ -278,8 +278,8 @@ class PytorchToOnnx:
             return used_image_shapes
         elif task_name in ["DRIVING_BEV_STA"]:
             used_image_shapes: dict = {
-                "img_front_30": [3840, 2160, 3],
-                "img_front_120": [3840, 2160, 3],
+                "img_front_30": [960, 512, 3],
+                "img_front_120": [960, 512, 3],
             }
 
             return used_image_shapes
@@ -334,7 +334,7 @@ class PytorchToOnnx:
             elif task.name == "DRIVING_BEV_STA":
                 merged_input_dict = {"task": tasks[0].name, "image": input_dict}
                 merged_input_dict["calib"]={}
-                merged_input_dict["calib"]["images_grid"] = torch.rand(2, 512, 960, 2).cuda()
+                # merged_input_dict["calib"]["images_grid"] = torch.rand(2, 512, 960, 2).cuda()
                 merged_input_dict["calib"]["reference_points_rebatch"] = torch.rand(2, 5000, 4, 2).cuda()
                 merged_input_dict["calib"]["queries_rebatch_grid"] = torch.rand(2, 50, 100,2).cuda()
                 merged_input_dict["calib"]["restore_bev_grid"] = torch.rand(1, 100, 100, 2).cuda()
@@ -408,7 +408,7 @@ class PytorchToOnnx:
                 output_names=['avm', 'slot_point', 'slot_line']
 
             if task.name == "DRIVING_BEV_STA":
-                input_names = ["img_30", "img_120", "images_grid", "reference_points_rebatch", "queries_rebatch_grid", "restore_bev_grid", "bev_pillar_counts", "navi_info"]
+                input_names = ["img_30", "img_120", "reference_points_rebatch", "queries_rebatch_grid", "restore_bev_grid", "bev_pillar_counts", "navi_info"]
                 output_names = ["cls_scores", "pts_preds", 'lane_marking_types_preds', 'lane_marking_colors_preds', "shape_types_preds", "centerline_types_preds", "centerline_directions_preds", 
                                 "keypoint_classes_preds", "keypoint_regs_preds", "polygon_classes_preds", "arrow_classes_preds"]
                 do_constant_folding = False
