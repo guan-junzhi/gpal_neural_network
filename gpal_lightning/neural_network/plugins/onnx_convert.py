@@ -425,9 +425,6 @@ class PytorchToOnnx:
                 do_constant_folding = False
 
             with torch.no_grad():
-                print(f"net.training = {net.training}")
-                net.eval()
-                print(f"net.training = {net.training}")
                 torch.onnx.export(
                     net,
                     (input_dummy, {}),
