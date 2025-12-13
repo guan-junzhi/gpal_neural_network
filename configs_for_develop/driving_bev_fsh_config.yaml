@@ -178,7 +178,8 @@ Tasks:
             },
             {
               description: "L4 training data",
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251128-160418/_0_train_frame_pairs_sampled.pkl",
+              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251128-160418/_0_train_frame_pairs_sampled.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251210-053104/_0_train_frame_pairs_sampled.pkl",
               use_ratio: -1,
               tags: ["L4", "filtered-area"]
             }
