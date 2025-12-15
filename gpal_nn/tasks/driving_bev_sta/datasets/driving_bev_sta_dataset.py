@@ -425,7 +425,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             print(e)
             print('Got None from : ', img_path)
             time_dp.Duration("Exception", "begin")
-            return None, None, None, None, None, None, None, None, '', time_dp
+            return None, None, None, None, None, None, None, None, None, None, '', time_dp
 
         resize_img_h, resize_img_w, _ = resize_image.shape
         norm_K = np.array([
