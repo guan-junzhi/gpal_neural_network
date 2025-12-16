@@ -106,9 +106,9 @@ class Bev_To_Points(nn.Module):
         template_xyz = torch.cat([batch_dict['pred_curr_track_point_coords'][:, :, :2],
                                   batch_dict['pred_curr_track_score']], dim=-1)  # -> [B, 256, 3]
         
-        _, label = batch_dict['score'].max(dim=1)  # 原始的score含通道
+        # _, label = batch_dict['score'].max(dim=1)  # 原始的score含通道
         
-        batch_dict['batch_pred_labels'] = label.view(batch_dict['score'].shape[0], -1) + 1
+        # batch_dict['batch_pred_labels'] = label.view(batch_dict['score'].shape[0], -1) + 1
         
         batch_dict['Points_Loss'] = {
             'estimation_cen': estimation_cen + template_xyz.permute(0, 2, 1)[:,0:2,:].flip(1),  # 函数内是ys,xs
