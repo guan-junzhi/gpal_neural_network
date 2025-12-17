@@ -70,10 +70,10 @@ then
     calib_data_save_path="None" 
 else
     tasks=driving_bev_sta
-    load_from=/data/ai_group/workdirs/gpal_neural_network_group/airflow_workspace/gpal_neural_network_one_node_traning_job_on_airflow_20251206_16_30_39/checkpoint/epoch=0-step=60000_checkpoint.pth
+    load_from=/data/ai_group/workdirs/gpal_neural_network_group/airflow_workspace/gpal_neural_network_one_node_traning_job_on_airflow_20251215_12_44_00/checkpoint/epoch=0-step=60000_checkpoint.pth
     config=./configs_for_develop/driving_bev_sta_config.yaml
-    # onnx_path=/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week50_60k_udist/checkpoint/epoch=0-step=60000_checkpoint_sim.onnx
-    onnx_path=/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week50_60k_udist/model_int16_quantized_model.bc
+    onnx_path=/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week51_ego_waiting_60k/checkpoint/epoch=0-step=60000_checkpoint_sim.onnx
+    # onnx_path=/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week51_ego_waiting_60k/model_int16_quantized_model.bc
     # calib_data_save_path=./tools_scripts/driving_bev_sta/calib_data
     calib_data_save_path="None" 
 fi
