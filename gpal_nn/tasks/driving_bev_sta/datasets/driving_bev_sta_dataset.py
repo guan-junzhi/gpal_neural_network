@@ -425,7 +425,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             print(e)
             print('Got None from : ', img_path)
             time_dp.Duration("Exception", "begin")
-            return None, None, None, None, None, None, None, None, '', time_dp
+            return None, None, None, None, None, None, None, None, None, None, '', time_dp
 
         resize_img_h, resize_img_w, _ = resize_image.shape
         norm_K = np.array([
@@ -555,7 +555,7 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         line_mask = np.zeros(len(polylines['points']), dtype=bool)
         for idx, lane in enumerate(polylines['points']):
             # print(idx)
-            if polylines['classes'][idx] in ["ignore", "others"]:
+            if polylines['classes'][idx] in ["ignore", "others", "cross_guide_line", "cross_guide_ line"]:
                 continue
             # TODO: move range filter to pipeline
             lane_homo = np.concatenate([lane, np.ones((lane.shape[0],1))], axis=-1)
@@ -678,6 +678,26 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         data_dict['edges']['classes'] = classes
         data_dict['edges']['id'] = ids
 
+    def should_skip_turn_waiting_lane(self, pts):
+        in_front_of_ego = pts[0][0] > 0.5
+        if in_front_of_ego and abs(pts[0][1]) > 11.5:
+            return True
+        dense_pts = _fix_pts_interpolate(pts, max(int(LineString(pts).length / 0.5), 2))
+        start_indice = np.clip(np.arange(len(dense_pts)) - 3, 0, len(dense_pts) - 1)
+        end_indice = np.clip(start_indice + 3, 0, len(dense_pts) - 1)
+        vec = dense_pts[end_indice] - dense_pts[start_indice]
+        angle = np.degrees(np.arctan2(vec[:,1], vec[:,0]))
+        if in_front_of_ego and abs(angle[0]) > 45:
+            return True
+
+        if in_front_of_ego:  # 若起始点在车前方，此时已经检查过位置和角度，无需再检查
+            return False
+
+        min_angle_idx = np.argmin(np.linalg.norm(dense_pts, axis=-1))
+        if abs(dense_pts[min_angle_idx][1]) > 11.5 or abs(angle[min_angle_idx]) > 45:
+            return True
+        return False
+
     def process_centerline(self, centerlines, data_dict, bev_real2aug=np.eye(4, dtype=np.float32)):
 
         for centerline_idx in range(len(centerlines['classes'])):
@@ -693,6 +713,8 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
         for idx, centerline in enumerate(centerlines['points']):
             # TODO: move range filter to pipeline
             if len(centerline) <= 1:
+                continue
+            if centerlines['classes'][idx] in ["intersection_lane"]:
                 continue
             centerline_homo = np.concatenate([centerline, np.ones((centerline.shape[0],1))], axis=-1)
             centerline = (bev_real2aug @ centerline_homo.T).T[:,:3]
@@ -729,6 +751,9 @@ class DRIVING_BEV_STADataset(SliceBaseDataset):
             merged_centerlines_visible = []
             edges_points = data_dict['edges']['points']
             for centerline in merged_centerlines:
+                if centerline['class'] == "turn_waiting_lane" and \
+                    self.should_skip_turn_waiting_lane(np.array(centerline['points'])):
+                    continue
                 centerline['points'] = _fix_pts_interpolate(centerline['points'], self.pts_per_vector)
                 num_cross_edge = 0
                 for centerline_pt in centerline['points']:
