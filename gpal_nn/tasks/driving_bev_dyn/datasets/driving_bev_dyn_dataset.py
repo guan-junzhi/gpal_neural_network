@@ -37,20 +37,180 @@ from torchvision import transforms as T
 from gpal_lightning.utils.deploy_utils import DistGridMap
 from gpal_lightning.data.dataloader_helpers.clip_sampler import DatalistByclip
 
+
+# 文件格式常量
+FILE_FORMAT_PCD = '.pcd'
+FILE_FORMAT_JPG = '.jpg'
+FILE_FORMAT_TXT = '.txt'
+FILE_FORMAT_JSON = '.json'
+
+
 def read_img(files_img, image_resize=[360, 640, 3]):
     # try:
     if True:
-        if 'jac4' in files_img and 'img_back' in files_img:  # 4号车无后视
-            bin_data = np.zeros(image_resize).astype(np.uint8)
-            return bin_data
         bin_data = cv2.imread(files_img)
         if bin_data is None:
             print(files_img, bin_data)
             bin_data = np.zeros(image_resize).astype(np.uint8)
-    # except:
-    #     bin_data = np.zeros(image_resize).astype(np.uint8)
-    #     print(f"{files_img} img_data error")
-    return bin_data
+            return bin_data, False
+        else:
+            return bin_data, True
+
+def read_radar_point_cloud_from_pcd(radar_path):
+    """支持ASCII格式的PCD文件读取函数"""
+    if not os.path.exists(radar_path):
+        raise FileNotFoundError(f"文件不存在: {radar_path}")
+    try:
+        with open(radar_path, 'r') as f:
+            # 读取并解析头部
+            header = {}
+            while True:
+                line = f.readline().strip()
+                
+                if line.startswith('DATA'):
+                    header['data_type'] = line.split()[1]
+                    # 记录数据开始位置
+                    data_start = f.tell()
+                    break
+                
+                if line and not line.startswith('#'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        key = parts[0]
+                        value = parts[1:] if len(parts) > 2 else parts[1]
+                        header[key] = value
+            
+            # 解析字段信息
+            fields = header['FIELDS'].split() if isinstance(header['FIELDS'], str) else header['FIELDS']
+            sizes = [int(s) for s in header['SIZE'].split()] if isinstance(header['SIZE'], str) else [int(s) for s in header['SIZE']]
+            types = header['TYPE'].split() if isinstance(header['TYPE'], str) else header['TYPE']
+            points_count = int(header['POINTS'][0] if isinstance(header['POINTS'], list) else header['POINTS'])
+            
+            # 检查数据格式
+            if header['data_type'] != 'ascii':
+                raise ValueError(f"不支持的数据格式: {header['data_type']}，仅支持ascii格式")
+            
+            # 读取ASCII数据
+            f.seek(data_start)
+            lines = f.readlines()
+            
+            # 解析ASCII数据
+            points_data = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    # 分割数据行
+                    values = line.split()
+                    if len(values) == len(fields):
+                        # 转换为对应的数据类型
+                        point = []
+                        for i, (field, size, type_char) in enumerate(zip(fields, sizes, types)):
+                            try:
+                                if type_char == 'F':  # Float类型
+                                    point.append(float(values[i]))
+                                elif type_char == 'U':  # Unsigned整数类型
+                                    point.append(int(values[i]))
+                                elif type_char == 'I':  # Signed整数类型
+                                    point.append(int(values[i]))
+                                else:
+                                    # 默认按浮点数处理
+                                    point.append(float(values[i]))
+                            except (ValueError, IndexError):
+                                point.append(0.0)  # 转换失败时使用默认值
+                        points_data.append(point)
+            
+            # 转换为numpy数组
+            if points_data:
+                points_array = np.array(points_data, dtype=np.float32)
+                
+                # 过滤包含NaN的点
+                valid_mask = ~np.isnan(points_array).any(axis=1)
+                points_array = points_array[valid_mask]
+                
+                return points_array
+            else:
+                print("警告: 未读取到有效数据")
+                return np.array([])
+            
+    except Exception as e:
+        print(f"读取点云文件 {radar_path} 时出错: {e}")
+        import traceback
+        traceback.print_exc()
+        return np.array([])
+
+def parse_sensor_timestamps(file_path: str, max_lines: int = 10964) -> Dict[str, Dict[str, float]]:
+    """解析传感器时间戳日志文件为字典结构
+
+    Args:
+        file_path: 日志文件路径
+        max_lines: 最大读取行数
+
+    Returns:
+        Dict[str, Dict[str, float]]: 传感器名称为键，时间戳映射为值的嵌套字典
+    """
+    sensor_data: Dict[str, Dict[str, float]] = {}
+    current_sensor: Optional[str] = None
+    line_count = 0
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line_count += 1
+                # if line_count > max_lines:
+                #     break
+
+                line = line.strip()
+                if not line:
+                    continue
+
+                # 检测传感器名称行（以冒号结尾）
+                if line.endswith(':'):
+                    current_sensor = line[:-1].strip()
+                    sensor_data[current_sensor] = {}  # 初始化传感器数据字典
+                    continue
+
+                # 处理时间戳行
+                if current_sensor:
+                    timestamp_data = _parse_timestamp_line(line)
+                    if timestamp_data:
+                        timestamp_ori, timestamp_now, time_diff = timestamp_data
+                        sensor_data[current_sensor][f'{timestamp_now:.6f}'] = timestamp_ori
+
+        return sensor_data
+
+    except Exception as e:
+        raise RuntimeError(f"解析传感器时间戳失败: {str(e)}") from e
+
+def _parse_timestamp_line(line: str) -> Optional[Tuple[float, float, float]]:
+    """解析单行时间戳数据
+
+    Args:
+        line: 包含时间戳的日志行
+
+    Returns:
+        Tuple[float, float, float] or None: 原始时间戳、当前时间戳和时间差，如果解析成功
+    """
+    # 检查文件格式
+    if FILE_FORMAT_PCD in line:
+        ext = FILE_FORMAT_PCD
+    elif FILE_FORMAT_JPG in line:
+        ext = FILE_FORMAT_JPG
+    elif FILE_FORMAT_TXT in line:
+        ext = FILE_FORMAT_TXT
+    else:
+        return None
+
+    # 分割行并提取时间戳
+    parts = line.split()
+    if len(parts) < 3:
+        return None
+
+    try:
+        timestamp_ori = float(parts[0].replace(ext, ''))
+        timestamp_now = float(parts[2].replace(ext, ''))
+        return timestamp_ori, timestamp_now, timestamp_ori - timestamp_now
+    except (ValueError, IndexError):
+        return None
 
 
 @DATASETS.register_module()
@@ -307,7 +467,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             fusion_infos = fusion_infos_new
             # self.fusion_infos = []
         # fusion_infos = [fusion_infos[100]] * 6
-        # fusion_infos = fusion_infos[:50]
+        fusion_infos = fusion_infos[:10000]
         # if phase == const.PHASE_TRAINING:
         #     fusion_infos_ext = []
         #     for ele in fusion_infos:
@@ -603,14 +763,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             database_slice_key, view_key
         )
         if image is None:
-            image = read_img(str(img_file), self.image_resize + [3])
+            image, is_valid = read_img(str(img_file), self.image_resize + [3])
             if self.phase == const.PHASE_TRAINING:
-                if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
-                    pass
-                else:
-                    image = cv2.undistort(image, calib_intrin, calib_dist, calib_intrin)  # 原图去畸变
+                if is_valid:
+                    if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
+                        pass
+                    else:
+                        image = cv2.undistort(image, calib_intrin, calib_dist, calib_intrin)  # 原图去畸变
 
-                image = cv2.resize(image, self.image_resize[::-1])
+                    image = cv2.resize(image, self.image_resize[::-1])
                 image = image[crop_start:crop_start + self.img_h_len]
             self._slice_image_cache(
                 database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
@@ -618,6 +779,67 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             self.fast_buf_sec_cnt += 1
 
         return image
+    
+    # def get_radar_by_slice(self, filepath, slice_timestamp, view_key):
+    #     """统一处理不同视角的图像"""
+    #     img_file = filepath
+    #     self.fast_buf_try_cnt += 1
+    #     database_slice_key = "_".join(img_file.split('/')[-4:-2]+[slice_timestamp])
+    #     image, hw_origin = self._slice_image_buffer_access(
+    #         database_slice_key, view_key
+    #     )
+    #     if image is None:
+    #         image, is_valid = read_img(str(img_file), self.image_resize + [3])
+    #         if self.phase == const.PHASE_TRAINING:
+    #             if is_valid:
+    #                 if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
+    #                     pass
+    #                 else:
+    #                     image = cv2.undistort(image, calib_intrin, calib_dist, calib_intrin)  # 原图去畸变
+
+    #                 image = cv2.resize(image, self.image_resize[::-1])
+    #             image = image[crop_start:crop_start + self.img_h_len]
+    #         self._slice_image_cache(
+    #             database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
+    #     else:
+    #         self.fast_buf_sec_cnt += 1
+
+    #     return image
+    
+    # def _slice_radar_cache(self, slice_key, view_key, img, pre_resize, quality):
+    #     if (self.buffer is None):
+    #         return False
+
+    #     if slice_key not in self.buffer_slice_write_cache:
+    #         for k, v in self.buffer_slice_write_cache.items():
+    #             ret = self.buffer.Cache(k, pickle.dumps(v))
+    #             if not ret:
+    #                 print(f"self.buffer.Cache {k} faild")
+
+    #         self.buffer_slice_write_cache = {slice_key: {}}
+    #     encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+    #     h = int(img.shape[0]).to_bytes(4, byteorder='little', signed=False)
+    #     w = int(img.shape[1]).to_bytes(4, byteorder='little', signed=False)
+    #     img = cv2.resize(img, pre_resize)
+    #     result, encimg = cv2.imencode('.jpg', img, encode_param)
+    #     self.buffer_slice_write_cache[slice_key][view_key] = h + w + encimg.tobytes()
+    #     return True
+
+    # def _slice_radar_buffer_access(self, slice_key, view_key):
+    #     if (self.buffer is None):
+    #         return None, None
+    #     try:
+    #     # if True:
+    #         if slice_key not in self.buffer_slice_read_cache:
+    #             self.buffer_slice_read_cache = {slice_key: pickle.loads(self.buffer[slice_key])}
+           
+    #         x = self.buffer_slice_read_cache[slice_key][view_key]
+    #         h = int().from_bytes(x[:4], byteorder='little', signed=False)
+    #         w = int().from_bytes(x[4:8], byteorder='little', signed=False)
+    #         return cv2.imdecode(np.frombuffer(x[8:], dtype=np.uint8), cv2.IMREAD_COLOR), [h, w]
+    #     except Exception as e:
+    #         # print(f"_slice_image_buffer_access failed {e}")
+    #         return None, None
 
     def prepare_data(self, data_dict):
         if self.phase == const.PHASE_TRAINING:
@@ -767,7 +989,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             with open(vcu_file, 'r') as vcu_reader:
                 vcu = vcu_reader.readline().split('\t')
-            
             # curr_json_file = "/data/ai_group/workdirs/od_occ_group/huiquyang/data/Obstacle_3DModelResult_/EKART_ID4001_2025-08-15-18-20-39/2025-08-15_18-34-44-232/3d_detection_json/1755254118.200182.json"
             curr_json_data = self.json_data.load(curr_json_file)
             re_curr_infos = self.json_data.parse_json(curr_json_data)
@@ -778,6 +999,16 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             input_dict['gt_names'] = gt_names
             input_dict['gt_boxes'] = gt_boxes
+
+            radar_point_path = f'{self.image_dir}/{sequence_name}/pcd/{curr_time_stamp}.pcd'
+            log_path = f'{self.image_dir}/{sequence_name}/logs/synced_files_log.txt'
+            sensor_timestamps = parse_sensor_timestamps(log_path)
+            radar_point_real_timestamp = sensor_timestamps['pcd'][curr_time_stamp]
+            img_real_timestamp = sensor_timestamps['img_front_120'][curr_time_stamp]
+            radar_point = read_radar_point_cloud_from_pcd(radar_point_path)
+            radar_point = radar_point[:,[0,1,2,4,5,10]]
+            radar_point[:,5] = radar_point[:,5]+float(radar_point_real_timestamp)-float(img_real_timestamp)
+            #TODO 点云数据数据增强  随机屏蔽传感器数据  buffer
 
             time_dp.Duration("cur_json", "begin")
 
@@ -813,7 +1044,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 if 'SKYWELL' in sequence_name:
                     img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx] = img_crop_dict['CROP_HeSai_ID4']['CROP_START_SKYWELL'][view_idx]
                 crop_start = img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx]
-                # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
                 
                 current_img = self.get_image_by_slice(image_file, curr_time_stamp, camera_view, view_idx, crop_start,
                                                       calib_intrin, calib_dist)
@@ -929,6 +1159,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
 
+            data_dict_ret.update({"points": radar_point.astype(np.float32)})
+
         except Exception as e:
 
             if self.phase == const.PHASE_TRAINING:
@@ -938,7 +1170,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             else:
                 print(f"PHASE_TRAINING {idx} load faild {e}, faild exit(1)")
                 exit(1)
-
+        
         time_dp.Duration("move_data", "prepare_data")
 
         time_dp.Duration("dataset.getitem", "begin")

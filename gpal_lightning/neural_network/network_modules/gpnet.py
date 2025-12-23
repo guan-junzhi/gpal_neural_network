@@ -423,6 +423,7 @@ class GpNet(LightningModule):
 
         optimizer.zero_grad()
         data = batch['image']
+        data.update({"points": batch["points"]})
         masks = batch["mask"] if 'mask' in batch else None
         trues = batch["label"]
         calib = batch.get('calib', None)
@@ -720,7 +721,10 @@ class GpNet(LightningModule):
         outputs = []
         cam_feats = {}
         for key in x.keys():
-            cam_feats[key] = x[key].clone().detach()
+            if key == 'points':
+                cam_feats[key] = copy.deepcopy(x[key])
+            else:
+                cam_feats[key] = x[key].clone().detach()
 
         cam_feats_bkp = copy.deepcopy(cam_feats)
 
@@ -736,9 +740,15 @@ class GpNet(LightningModule):
                         key for key in camera_list if key in cam_feats.keys()]
                     # 将bev的backbone运行拿出来运算，避免因为多个group计算多次
                     self.model[backbone_name].feature_id = self._backbone_feature_id[curr_task]
+                    if "points" not in map_key_list:
+                        backbone_input = torch.cat(backbone_input)
+                    else:
+                        index = map_key_list.index("points")
+                        backbone_input_points = backbone_input[index]
+                        backbone_input = [backbone_input_points[j].cuda() for j in range(len(backbone_input_points))]
                     backbone_output = self.forward_fp16(self._fp_module_dict[backbone_name],
                                                         self._fp_module_dict[self.backbone_group_mapping[backbone_name][0]],
-                                                        backbone_name, torch.cat(backbone_input))
+                                                        backbone_name, backbone_input)
 
                     # print(ShowDataStruct("backbone_output", backbone_output))
 
@@ -759,36 +769,33 @@ class GpNet(LightningModule):
                         else:
                             camera_source = map_key_list
                             output = backbone_output
-
                         output = self.forward_fp16(self._fp_module_dict[group_name],
                                                    self._fp_module_dict[neck_name], group_name, output)
-
                         # print(self._neck_feature_id[curr_task])
-                        self.model[neck_name].feature_id = self._neck_feature_id[curr_task]
                         output = self.forward_fp16(self._fp_module_dict[neck_name],
                                                    False, neck_name, output)
-                        # print(ShowDataStruct("neck", output))
+                        
                         # exit(1)
                         for i, key in enumerate(camera_source):
                             if key not in cam_feats:
                                 continue
-                            for j in range(len(output)):
-                                cur_output = output[j][i *
-                                                       bs:(i + 1) * bs, ...]
-                                if j == 0:
-                                    cam_feats[key] = [cur_output]
-                                else:
-                                    cam_feats[key].append(cur_output)
+                            else:
+                                for j in range(len(output)):
+                                    cur_output = output[j][i *
+                                                        bs:(i + 1) * bs, ...]
+                                    if j == 0:
+                                        cam_feats[key] = [cur_output]
+                                    else:
+                                        cam_feats[key].append(cur_output)
 
             # print(f"**************backbone outputs**************")
             # for k in cam_feats:
             #     for fea in cam_feats[k]:
             #         print(k, fea.shape)
-
             if curr_task in self._transformers:
                 curr_transformer = self._transformers[curr_task]
-                output = {"img_bev_feat": self.model[curr_transformer](
-                    cam_feats, calib)}
+                filtered_cam_feats = {k: v for k, v in cam_feats.items() if k != "points"}# 过滤掉points特征
+                output = {"img_bev_feat": self.model[curr_transformer](filtered_cam_feats, calib)}
             else:
                 output = {"cam_feats": cam_feats}
             # print(f"img_bev_feat = {output["img_bev_feat"].shape}")
@@ -800,7 +807,8 @@ class GpNet(LightningModule):
             # print(self.model[curr_task])
             # exit(1)
             if curr_task in ["DRIVING_BEV_DYN"]:
-                output = self.model[curr_task](output["img_bev_feat"], calib, metadata)
+                output = self.model[curr_task](output["img_bev_feat"], calib, metadata, cam_feats.get("points", None))
+                
             else:
                 output = self.model[curr_task](output["img_bev_feat"], calib)
             

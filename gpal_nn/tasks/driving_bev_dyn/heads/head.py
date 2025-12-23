@@ -8,10 +8,9 @@ from gpal_nn.tasks.driving_bev_dyn.losses.loss import DRIVING_BEV_DYNLoss
 import torch.nn.functional as F
 from tools_scripts.data_format_cvt import ShowDataStruct
 from gpal_nn.tasks.driving_bev_dyn.heads.fast_decoder_head import FastDecoderHead
-from gpal_lightning.utils.profiling import GetMemInfo, TrainSpeedRec, PrintTopProcesses, DetailProf
-import cv2
 from gpal_nn.models.transformers.od_view_transform import gridcloud3d
-from torch import distributed
+from gpal_nn.models.base_modules.basic_henet_module import BasicHENetStageBlock
+from gpal_nn.models.base_modules.conv_module import ConvModule2d
 
 class SeqFeatureFuser(nn.Module):
     def __init__(self, layers_config):
@@ -36,13 +35,14 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.dyn_od_head_cfg = self.task_config.Head["dyn_od_head"]
         self.fuser_config = self.dyn_od_head_cfg["fuser_config"] # {"in_channels": 256, "out_channels": 128}
         self.head_config = self.dyn_od_head_cfg["head_config"] # {"in_channels": 128, "num_stages": 6, "out_channels": 21, "upsample": 8}
-
+        self.feature_fuser_config = self.dyn_od_head_cfg.get("feature_fuser_config", None) # {"in_channels": 128, "block_num": 2, "attention_block_num": 2, "mlp_ratio": 4.0, "mlp_ratio_attn": 4.0, "act_layer": "GELU", "use_layer_scale": True, "layer_scale_init_value": 1e-5, "extra_act": False, "block_cls": "BasicHENetStageBlock"}
+        
         self.feature_bank = None
         self.prev_metas = None
         self.cnt = 0
         
         transformer_config = global_config.Transformer["transformer_config"]
-        self.point_cloud_range = transformer_config["bev_map_range"]
+        self.point_cloud_range = transformer_config["pc_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
         
         self.grid_size = [
@@ -66,6 +66,29 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.head = nn.ModuleDict()
         self.head["fuser"] = SeqFeatureFuser(self.fuser_config)
         self.head["center_head"] = FastDecoderHead(self.head_config)
+        if self.feature_fuser_config is not None:
+            self.head["feature_fuser"] = nn.Sequential(
+                BasicHENetStageBlock(
+                    in_dim = self.feature_fuser_config["in_channels"],
+                    block_num = self.feature_fuser_config["block_num"],
+                    attention_block_num = self.feature_fuser_config["attention_block_num"],
+                    mlp_ratio = self.feature_fuser_config["mlp_ratio"],
+                    mlp_ratio_attn = self.feature_fuser_config["mlp_ratio_attn"],
+                    act_layer = self.feature_fuser_config["act_layer"],
+                    use_layer_scale = self.feature_fuser_config["use_layer_scale"],
+                    layer_scale_init_value = self.feature_fuser_config["layer_scale_init_value"],
+                    extra_act = self.feature_fuser_config["extra_act"],
+                    block_cls = self.feature_fuser_config["block_cls"],
+                    ),
+               ConvModule2d(
+                    self.feature_fuser_config["in_channels"],
+                    self.feature_fuser_config["out_channels"],
+                    kernel_size=1,
+                    stride=1,
+                    norm_layer=nn.BatchNorm2d(self.feature_fuser_config["out_channels"] ),
+                    act_layer=nn.ReLU(),
+                )
+            )
     
     def load_state_dict(self, state_dict, strict=True):
         if len(self.head) == 1:
@@ -140,10 +163,19 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
         return grid
 
-    def forward(self, x: torch.Tensor, calib=None, metadata=None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, calib=None, metadata=None,point_feature=None) -> torch.Tensor:
         # print(ShowDataStruct("X",x))
+        if self.feature_fuser_config is not None and point_feature is not None:
+            B, _, C = x.shape
+            x = x.view(B, self.grid_size[1], self.grid_size[0], C).permute(0, 3, 1, 2)
+            fuser_feature = torch.cat([x, point_feature[0]], dim = 1)
+            fuser_feature = self.head["feature_fuser"](fuser_feature)
+        else:
+            fuser_feature = x
+
+
         if (self.feature_bank == None):
-            self.feature_bank = torch.zeros_like(x).detach()
+            self.feature_bank = torch.zeros_like(fuser_feature).detach()
         
         B = len(metadata)
         
@@ -154,18 +186,18 @@ class DRIVING_BEV_DYNHead(BaseHead):
         else:
             seq_flag, dts = self.SeqCheck(self.prev_metas, metadata)
             rts = self.GetCur2Prev(metadata, dts)
-            feats_shifted_grid = self.gen_shift_feature_grid(self.xyz_camA.repeat(B, 1, 1, 1).to(x.device).clone(), rts.to(x.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
-            seq_flag = seq_flag.to(x.device).float().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)#.unsqueeze(-1)
+            feats_shifted_grid = self.gen_shift_feature_grid(self.xyz_camA.repeat(B, 1, 1, 1).to(fuser_feature.device).clone(), rts.to(fuser_feature.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
+            seq_flag = seq_flag.to(fuser_feature.device).float().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)#.unsqueeze(-1)
             feats_shifted = F.grid_sample(self.feature_bank.clone(),
                                           feats_shifted_grid.to(self.feature_bank.dtype),
                                           align_corners=False)
             prev_feats = feats_shifted.clone() * seq_flag
             
-        # self.feature_bank = x.detach().clone()
+        # self.feature_bank = fuser_feature.detach().clone()
         self.prev_metas = copy.deepcopy(metadata)
 
-        cur2prev = torch.from_numpy(np.eye(3)).to(x.device).unsqueeze(0).repeat(x.shape[0], 1, 1)
-        x_fuser = self.head["fuser"](prev_feats, x, cur2prev)
+        cur2prev = torch.from_numpy(np.eye(3)).to(fuser_feature.device).unsqueeze(0).repeat(fuser_feature.shape[0], 1, 1)
+        x_fuser = self.head["fuser"](prev_feats, fuser_feature, cur2prev)
         self.feature_bank = x_fuser.detach().clone()
         x_decode = self.head["center_head"](x_fuser)
         
