@@ -50,39 +50,39 @@ Backbones:
     out_channels: 64
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
 
-  backbone1:
-    type: Point_Feature_Net
-    input_source: ['points']
-    load: all
-    # freeze: all
-    point_process_config:
-      pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-      voxel_size: [0.32, 0.32, 6]
-      max_voxels_num: [30000, 40000]
-      max_points_in_voxel: 20
-      norm_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-      norm_dims: [0, 1, 2]
-    reader_config:
-      num_input_features: 6
-      num_filters: [64,]
-      with_distance: False
-      pool_size: [20,1]
-      voxel_size: [0.32, 0.32, 6]
-      pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-      quantize: True
-      use_4dim: True
-      use_conv: True
-      hw_reverse: True
-      normalize_xyz: False
-    scatter_config:
-      num_input_features: 64
-      use_horizon_pillar_scatter: True
+  # backbone1:
+  #   type: Point_Feature_Net
+  #   input_source: ['points']
+  #   load: all
+  #   # freeze: all
+  #   point_process_config:
+  #     pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+  #     voxel_size: [0.32, 0.32, 6]
+  #     max_voxels_num: [30000, 40000]
+  #     max_points_in_voxel: 20
+  #     norm_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+  #     norm_dims: [0, 1, 2]
+  #   reader_config:
+  #     num_input_features: 6
+  #     num_filters: [64,]
+  #     with_distance: False
+  #     pool_size: [20,1]
+  #     voxel_size: [0.32, 0.32, 6]
+  #     pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+  #     quantize: True
+  #     use_4dim: True
+  #     use_conv: True
+  #     hw_reverse: True
+  #     normalize_xyz: False
+  #   scatter_config:
+  #     num_input_features: 64
+  #     use_horizon_pillar_scatter: True
 
 
   
 Groups:
   group0: {load: all, freeze: all, type: DummyBackbone, input_source: backbone0}
-  group1: {load: all, freeze: all, type: DummyBackbone, input_source: backbone1}
+  # group1: {load: all, freeze: all, type: DummyBackbone, input_source: backbone1}
 
 
 Necks:
@@ -114,19 +114,19 @@ Necks:
   #   in_channels: [384]
   #   out_strides: [32]
   #   out_channels: [128]
-  neck1: 
-    type: SECONDNeck
-    input_source: group1
-    load: all
-    # freeze: all
-    in_feature_channel: 64
-    down_layer_nums: [3, 5, 5]
-    down_layer_strides: [2, 2, 2]
-    down_layer_channels: [64, 128, 256]
-    up_layer_strides: [0.5, 1, 2]
-    up_layer_channels: [128, 128, 128]
-    quantize: False
-    use_relu6: False
+  # neck1: 
+  #   type: SECONDNeck
+  #   input_source: group1
+  #   load: all
+  #   # freeze: all
+  #   in_feature_channel: 64
+  #   down_layer_nums: [3, 5, 5]
+  #   down_layer_strides: [2, 2, 2]
+  #   down_layer_channels: [64, 128, 256]
+  #   up_layer_strides: [0.5, 1, 2]
+  #   up_layer_channels: [128, 128, 128]
+  #   quantize: False
+  #   use_relu6: False
 
 
 # Transformer:
