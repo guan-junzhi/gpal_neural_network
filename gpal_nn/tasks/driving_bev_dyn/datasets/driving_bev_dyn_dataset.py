@@ -466,8 +466,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             fusion_infos = fusion_infos_new
             # self.fusion_infos = []
-        # fusion_infos = [fusion_infos[100]] * 6
-        fusion_infos = fusion_infos[:10000]
+        # fusion_infos = [fusion_infos[100]] * 6 
+        # fusion_infos = fusion_infos[:100000]
         # if phase == const.PHASE_TRAINING:
         #     fusion_infos_ext = []
         #     for ele in fusion_infos:
@@ -1003,11 +1003,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             radar_point_path = f'{self.image_dir}/{sequence_name}/pcd/{curr_time_stamp}.pcd'
             log_path = f'{self.image_dir}/{sequence_name}/logs/synced_files_log.txt'
             sensor_timestamps = parse_sensor_timestamps(log_path)
-            radar_point_real_timestamp = sensor_timestamps['pcd'][curr_time_stamp]
             img_real_timestamp = sensor_timestamps['img_front_120'][curr_time_stamp]
             radar_point = read_radar_point_cloud_from_pcd(radar_point_path)
             radar_point = radar_point[:,[0,1,2,4,5,10]]
-            radar_point[:,5] = radar_point[:,5]+float(radar_point_real_timestamp)-float(img_real_timestamp)
+            radar_point[:,5] = radar_point[:,5]-float(img_real_timestamp)
             #TODO 点云数据数据增强  随机屏蔽传感器数据  buffer
 
             time_dp.Duration("cur_json", "begin")
@@ -1159,7 +1158,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
 
-            data_dict_ret.update({"points": radar_point.astype(np.float32)})
+            # data_dict_ret.update({"points": radar_point.astype(np.float32)})
 
         except Exception as e:
 

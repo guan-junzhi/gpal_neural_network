@@ -1,48 +1,55 @@
-image_per_gpu: 8
-workers_per_gpu: 8
+image_per_gpu: 12
+workers_per_gpu: 12
 skip_sanity_check: true
-max_iterations: 50000
+max_iterations: 20000
 save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  EPOCH_LEN: 100000
+  EPOCH_LEN: 150000
   CLIP_LENGTH: [5, 25]
   log_every: 10
   visualize_every: 200
   max_visu_img_num: 6
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
-    after_scheduler: CosineAnnealingLR, T_max: 60000}
+    after_scheduler: CosineAnnealingLR, T_max: 30000}
 
 Test:
   visulization: True
 
 Backbones:
   backbone0:
-    type: HENet
+    # type: HENet
+    # ampfp16: true
+    # load: all
+    # # freeze: all
+    # in_channels: 3
+    # input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
+    # block_nums: [4, 3, 8, 6]
+    # block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
+    # embed_dims: [64, 128, 192, 384]
+    # attention_block_num: [0, 0, 0, 0]
+    # mlp_ratios: [2, 2, 2, 3]
+    # mlp_ratio_attn: 2
+    # act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
+    # use_layer_scale: [True, True, True, True]
+    # extra_act: [False, False, False, False]
+    # down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
+    # patch_embed: "origin"
+    # stage_out_norm: True
+    # need_neck: True 
+    # pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/henet_initialized.pth'
+    # strict_load: False
+    type: EncoderRes34
     ampfp16: true
     load: all
     # freeze: all
-    in_channels: 3
+    out_channels: 64
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
-    block_nums: [4, 3, 8, 6]
-    block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
-    embed_dims: [64, 128, 192, 384]
-    attention_block_num: [0, 0, 0, 0]
-    mlp_ratios: [2, 2, 2, 3]
-    mlp_ratio_attn: 2
-    act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
-    use_layer_scale: [True, True, True, True]
-    extra_act: [False, False, False, False]
-    down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
-    patch_embed: "origin"
-    stage_out_norm: True
-    need_neck: True 
-    pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/henet_initialized.pth'
-    strict_load: False
+
   backbone1:
     type: Point_Feature_Net
     input_source: ['points']
@@ -80,12 +87,21 @@ Groups:
 
 Necks:
   neck0: 
+    # type: Simple_FPN
+    # input_source: group0
+    # load: all
+    # # freeze: all
+    # layers_config:
+    #   conv_channels: [128, 192, 384]
+    #   out_channel: 128
+    #   use_relu: true
+    #   drop_smooth_conv: true
     type: Simple_FPN
     input_source: group0
     load: all
     # freeze: all
     layers_config:
-      conv_channels: [128, 192, 384]
+      conv_channels: [128, 256, 512]
       out_channel: 128
       use_relu: true
       drop_smooth_conv: true

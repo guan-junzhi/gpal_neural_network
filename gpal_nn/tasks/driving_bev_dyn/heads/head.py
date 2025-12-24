@@ -42,7 +42,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.cnt = 0
         
         transformer_config = global_config.Transformer["transformer_config"]
-        self.point_cloud_range = transformer_config["pc_range"]
+        self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
         
         self.grid_size = [
@@ -166,8 +166,9 @@ class DRIVING_BEV_DYNHead(BaseHead):
     def forward(self, x: torch.Tensor, calib=None, metadata=None,point_feature=None) -> torch.Tensor:
         # print(ShowDataStruct("X",x))
         if self.feature_fuser_config is not None and point_feature is not None:
-            B, _, C = x.shape
-            x = x.view(B, self.grid_size[1], self.grid_size[0], C).permute(0, 3, 1, 2)
+            # B, _, C = x.shape
+            # x = x.view(B, self.grid_size[1], self.grid_size[0], C).permute(0, 3, 1, 2)
+
             fuser_feature = torch.cat([x, point_feature[0]], dim = 1)
             fuser_feature = self.head["feature_fuser"](fuser_feature)
         else:

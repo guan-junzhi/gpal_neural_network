@@ -423,7 +423,8 @@ class GpNet(LightningModule):
 
         optimizer.zero_grad()
         data = batch['image']
-        data.update({"points": batch["points"]})
+        if 'points' in batch.keys():
+            data.update({"points": batch["points"]}) 
         masks = batch["mask"] if 'mask' in batch else None
         trues = batch["label"]
         calib = batch.get('calib', None)

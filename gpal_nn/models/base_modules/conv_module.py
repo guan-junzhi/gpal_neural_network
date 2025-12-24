@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 from typing import Optional, Tuple, Union
-from hat.models.base_modules.conv_module import ConvModule2d
 
 
 
