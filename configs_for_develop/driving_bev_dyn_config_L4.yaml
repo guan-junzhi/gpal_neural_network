@@ -173,9 +173,15 @@ Tasks:
           data_list: [
             {
               description: "ID4 training data", 
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/combine_pkl/20251128-160418/_0_train_frame_pairs_sampled.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl",
               use_ratio: -1,
-              tags: ["ID4", "L4", "filtered-area"]
+              tags: ["ID4", ]
+            },
+            {
+              description: "L4 training data", 
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v2/L4_FSH/cache_slice/251223_2012/_0_train_frame_pairs_sampled_skip.pkl",
+              use_ratio: -1,
+              tags: ["L4", "skip gt-offset clip"]
             },
           ],
           
