@@ -10,18 +10,20 @@ echo "$current_time"
 echo "[INIT CONDA]:"
 source /opt/conda/etc/profile.d/conda.sh
 conda activate torch23_deploy
+export PYTHONNOUSERSITE=1
+unset PYTHONPATH || true
 
 echo "[INSTALL ENVS]:"
 apt-get update
 apt-get -y install procps
-pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install pandas
-pip install matplotlib
-pip install pyquaternion
-pip install onnxruntime
-pip install tensorboard
-pip install psutil
-pip install lmdb
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+python -m pip install pandas
+python -m pip install matplotlib
+python -m pip install pyquaternion
+python -m pip install onnxruntime
+python -m pip install tensorboard
+python -m pip install psutil
+python -m pip install lmdb
 
 
 
