@@ -29,13 +29,16 @@ export PATH=$HORIZON_OE/package/host/gcc-12.2.0-compiled/bin:$PATH
 export ESTIMATION_ENABLE=1
 export LINARO_GCC_ROOT=$HORIZON_OE/package/host/gcc-12.2.0-compiled
 
-# 关键：让 python 找到 OE 自带的 site-packages（按实际目录存在与否自动注入）
+export PYTHONPATH="${PYTHONPATH:-}"
+
 if [ -d "$HORIZON_OE/package/host/python3.10/lib/python3.10/site-packages" ]; then
-  export PYTHONPATH="$HORIZON_OE/package/host/python3.10/lib/python3.10/site-packages:${PYTHONPATH:-}"
+  export PYTHONPATH="$HORIZON_OE/package/host/python3.10/lib/python3.10/site-packages:$PYTHONPATH"
 fi
 if [ -d "$HORIZON_OE/package/host/python/lib/python3.10/site-packages" ]; then
-  export PYTHONPATH="$HORIZON_OE/package/host/python/lib/python3.10/site-packages:${PYTHONPATH:-}"
+  export PYTHONPATH="$HORIZON_OE/package/host/python/lib/python3.10/site-packages:$PYTHONPATH"
 fi
+
+echo "[INFO] PYTHONPATH=${PYTHONPATH}"
 
 # 关键：补齐动态库搜索路径（具体 lib 路径可按实际再加）
 export LD_LIBRARY_PATH="$LINARO_GCC_ROOT/lib64:$LINARO_GCC_ROOT/lib:${LD_LIBRARY_PATH:-}"
