@@ -276,6 +276,10 @@ class DRIVING_BEV_DYNTask(BaseTask):
             for box, score in zip(pred_objs[idx]['boxes_lidar'], pred_objs[idx]['score']):
                 vis1.DrawBbox(GetBoxTf(box[0], box[1], box[2], box[6]), [box[3], box[4]], [box[7], box[8]], [0, 0, 255],
                             [255, 255, 255], line_width=1)
+            if imgs.get('points', None) is not None:
+                point = imgs['points'][idx].cpu().numpy()
+                color = [255, 255, 255]
+                vis1.DrawPointcloud(point, color)
 
             if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
                 vis_imgs = []

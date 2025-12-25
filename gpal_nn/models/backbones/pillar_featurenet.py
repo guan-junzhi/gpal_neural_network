@@ -6,7 +6,7 @@ from typing import Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-# from horizon_plugin_pytorch.nn.functional import point_pillars_scatter
+from horizon_plugin_pytorch.nn.functional import point_pillars_scatter
 from torch.nn import functional as F
 
 from gpal_nn.models.base_modules.utils import _get_paddings_indicator

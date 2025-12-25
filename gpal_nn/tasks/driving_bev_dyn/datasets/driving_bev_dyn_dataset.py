@@ -1158,7 +1158,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
 
-            # data_dict_ret.update({"points": radar_point.astype(np.float32)})
+            data_dict_ret.update({"points": radar_point.astype(np.float32)})
 
         except Exception as e:
 
