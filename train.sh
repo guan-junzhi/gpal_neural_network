@@ -2,13 +2,16 @@ current_time=$(date +%Y%m%d_%H_%M_%S)
 echo $current_time
 
 echo "[INSTALL ENVS]:"
-sudo apt-get update
-sudo apt-get -y install procps
+apt-get update
+apt-get -y install procps
 pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install pandas
 pip install matplotlib
 pip install pyquaternion
 pip install onnxruntime
+pip install tensorboard
+pip install psutil
+
 
 echo "[NODE INFO]:"
 nvidia-smi 
