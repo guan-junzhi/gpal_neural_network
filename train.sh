@@ -11,6 +11,21 @@ echo "[INIT CONDA]:"
 source /opt/conda/etc/profile.d/conda.sh
 conda activate torch23_deploy
 
+echo "[INSTALL ENVS]:"
+apt-get update
+apt-get -y install procps
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install pandas
+pip install matplotlib
+pip install pyquaternion
+pip install onnxruntime
+pip install tensorboard
+pip install psutil
+pip install lmdb
+
+
+
+
 PY_BIN="$(python -c 'import sys; print(sys.executable)')"
 echo "[INFO] python=$PY_BIN"
 python -V
