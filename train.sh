@@ -28,7 +28,7 @@ rm -rf /var/lib/apt/lists/*
 
 echo "[INSTALL PY PKGS]:"
 python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/ || true
-python -m pip install --no-cache-dir -U psutil lmdb tensorboard pandas matplotlib pyquaternion onnxruntime
+python -m pip install --no-cache-dir -U psutil lmdb tensorboard pandas matplotlib pyquaternion onnxruntime opencv-python-headless
 
 # ------------------------------------------------------------
 # 2) Horizon OpenExplorer + horizon_plugin_pytorch（关键：用 wheel 安装）
