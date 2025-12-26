@@ -196,6 +196,7 @@ class PillarFeatureNet(nn.Module):
                 )
             )
         self.pfn_layers = nn.ModuleList(pfn_layers)
+        self.bn_no_use = nn.BatchNorm1d(out_filters)
 
         # Need pillar (voxel) size and x/y offset in order to calculate
         # pillar offset
@@ -457,6 +458,7 @@ class Point_Feature_Net(BaseModule):
             point_process_config['pc_range'],
             point_process_config['voxel_size'],
         )
+        self.bn_no_use_1 = nn.BatchNorm2d(num_filters[-1])
 
     def get_feature_map_size(self, point_cloud_range, voxel_size):
         point_cloud_range = np.array(point_cloud_range, dtype=np.float32)

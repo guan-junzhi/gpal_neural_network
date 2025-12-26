@@ -1007,7 +1007,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             radar_point = read_radar_point_cloud_from_pcd(radar_point_path)
             radar_point = radar_point[:,[0,1,2,4,5,10]]
             radar_point[:,5] = radar_point[:,5]-float(img_real_timestamp)
-            #TODO 点云数据数据增强  随机屏蔽传感器数据  buffer
+            #TODO 点云数据数据增强  随机屏蔽传感器数据  点云buffer  图像随机丢弃图像（目前有）
 
             time_dp.Duration("cur_json", "begin")
 
@@ -1157,8 +1157,14 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
-
-            data_dict_ret.update({"points": radar_point.astype(np.float32)})
+            if self.phase == const.PHASE_TRAINING:
+                if np.random.rand() > 0.5:
+                    data_dict_ret.update({"points": radar_point.astype(np.float32)})
+                else:
+                    data_dict_ret.update({"points": np.zeros_like(radar_point)})
+            else:
+                data_dict_ret.update({"points": radar_point.astype(np.float32)})
+        
 
         except Exception as e:
 

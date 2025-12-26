@@ -8,6 +8,8 @@ echo "$current_time"
 # 0) Conda + 禁止 user site 污染
 # ------------------------------------------------------------
 echo "[INIT CONDA]:"
+if [[ "${TASK_IN_AIRFLOW:-0}" == "1" ]];
+then
 source /opt/conda/etc/profile.d/conda.sh
 conda activate torch23_deploy
 
@@ -84,6 +86,8 @@ echo "[NODE INFO]:"
 nvidia-smi || true
 free -m || true
 
+fi
+
 echo "[READ GLOBAL ENV VAR]:"
 airflow_key="${airflow_key:-lane_detection_one_node_traning_job_on_airflow}"
 
@@ -122,7 +126,7 @@ else
   export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_SSD_ROOT="$ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT"
   export ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT='/data1/'
   export ENV_GPAL_NEURAL_NETWORK_WORLD_SIZE=1
-  export ENV_GPAL_NEURAL_NETWORK_WORKSPACE="${ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT}/$current_time"
+  export ENV_GPAL_NEURAL_NETWORK_WORKSPACE="${ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT}/$current_time"
   export ENV_GPAL_NEURAL_NETWORK_GPUS=1
 
   # 本地模式参数保持你原逻辑

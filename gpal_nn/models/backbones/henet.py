@@ -201,10 +201,11 @@ class HENet(BaseModule):
                 state_dict = checkpoint
             
             # Remove 'module.' prefix if present (for DataParallel models)
-            state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+            state_dict = {k.replace('backbone.', ''): v for k, v in state_dict.items()}
             
             # Filter out incompatible keys
             model_state_dict = self.state_dict()
+
             filtered_state_dict = {}
             for k, v in state_dict.items():
                 if k in model_state_dict:

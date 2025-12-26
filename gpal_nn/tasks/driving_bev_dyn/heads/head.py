@@ -42,7 +42,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.cnt = 0
         
         transformer_config = global_config.Transformer["transformer_config"]
-        self.point_cloud_range = transformer_config["bev_map_range"]
+        self.point_cloud_range = transformer_config["pc_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
         
         self.grid_size = [
@@ -64,7 +64,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
 
     def _setup(self):
         self.head = nn.ModuleDict()
-        self.head["fuser"] = SeqFeatureFuser(self.fuser_config)
+        self.head["seq_fuser"] = SeqFeatureFuser(self.fuser_config)
         self.head["center_head"] = FastDecoderHead(self.head_config)
         if self.feature_fuser_config is not None:
             self.head["feature_fuser"] = nn.Sequential(
@@ -166,8 +166,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
     def forward(self, x: torch.Tensor, calib=None, metadata=None,point_feature=None) -> torch.Tensor:
         # print(ShowDataStruct("X",x))
         if self.feature_fuser_config is not None and point_feature is not None:
-            # B, _, C = x.shape
-            # x = x.view(B, self.grid_size[1], self.grid_size[0], C).permute(0, 3, 1, 2)
+            B, _, C = x.shape
+            x = x.view(B, self.grid_size[1], self.grid_size[0], C).permute(0, 3, 1, 2)
 
             fuser_feature = torch.cat([x, point_feature[0]], dim = 1)
             fuser_feature = self.head["feature_fuser"](fuser_feature)
@@ -198,7 +198,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.prev_metas = copy.deepcopy(metadata)
 
         cur2prev = torch.from_numpy(np.eye(3)).to(fuser_feature.device).unsqueeze(0).repeat(fuser_feature.shape[0], 1, 1)
-        x_fuser = self.head["fuser"](prev_feats, fuser_feature, cur2prev)
+        x_fuser = self.head["seq_fuser"](prev_feats, fuser_feature, cur2prev)
         self.feature_bank = x_fuser.detach().clone()
         x_decode = self.head["center_head"](x_fuser)
         

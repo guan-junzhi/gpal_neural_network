@@ -680,6 +680,8 @@ class GpNet(LightningModule):
         metadata = batch["meta"]
 
         data = batch['image']
+        if 'points' in batch.keys():
+            data.update({"points": batch["points"]})
         # masks = batch["mask"] if 'mask' in batch else None
         trues = batch["label"]
         calib = batch.get('calib', None)

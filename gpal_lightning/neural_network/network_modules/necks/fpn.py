@@ -166,6 +166,7 @@ class FPN(BaseModule):
                         else nn.BatchNorm2d(fix_out_channel, **bn_kwargs),
                     )
                 )
+        self.bn_no_use_1 = nn.BatchNorm2d(2)
 
     def _init_weights(self):
         """Initialize the weights of FPN module."""

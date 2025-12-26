@@ -1,7 +1,7 @@
 image_per_gpu: 12
 workers_per_gpu: 12
 skip_sanity_check: true
-max_iterations: 20000
+max_iterations: 60000
 save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
@@ -15,40 +15,35 @@ Train:
   max_visu_img_num: 6
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
-    after_scheduler: CosineAnnealingLR, T_max: 30000}
+    after_scheduler: CosineAnnealingLR, T_max: 70000}
 
 Test:
   visulization: True
 
 Backbones:
   backbone0:
-    # type: HENet
-    # ampfp16: true
-    # load: all
-    # # freeze: all
-    # in_channels: 3
-    # input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
-    # block_nums: [4, 3, 8, 6]
-    # block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
-    # embed_dims: [64, 128, 192, 384]
-    # attention_block_num: [0, 0, 0, 0]
-    # mlp_ratios: [2, 2, 2, 3]
-    # mlp_ratio_attn: 2
-    # act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
-    # use_layer_scale: [True, True, True, True]
-    # extra_act: [False, False, False, False]
-    # down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
-    # patch_embed: "origin"
-    # stage_out_norm: True
-    # need_neck: True 
-    # pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/henet_initialized.pth'
-    # strict_load: False
-    type: EncoderRes34
+    type: HENet
     ampfp16: true
-    load: all
+    # load: all  #屏蔽此参数是为了加载其他模块预训练权重的时候，加载地平线预训练权重，需要打开pretrained参数
     # freeze: all
-    out_channels: 64
+    in_channels: 3
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
+    block_nums: [4, 3, 8, 6]
+    block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
+    embed_dims: [64, 128, 192, 384]
+    attention_block_num: [0, 0, 0, 0]
+    mlp_ratios: [2, 2, 2, 3]
+    mlp_ratio_attn: 2
+    act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
+    use_layer_scale: [True, True, True, True]
+    extra_act: [False, False, False, False]
+    down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
+    patch_embed: "origin"
+    stage_out_norm: True
+    need_neck: False 
+    pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/henet/float-checkpoint-best.pth.tar'
+    strict_load: False
+    
 
   backbone1:
     type: Point_Feature_Net
@@ -87,33 +82,14 @@ Groups:
 
 Necks:
   neck0: 
-    # type: Simple_FPN
-    # input_source: group0
-    # load: all
-    # # freeze: all
-    # layers_config:
-    #   conv_channels: [128, 192, 384]
-    #   out_channel: 128
-    #   use_relu: true
-    #   drop_smooth_conv: true
-    type: Simple_FPN
+    type: FPN
     input_source: group0
     load: all
     # freeze: all
-    layers_config:
-      conv_channels: [128, 256, 512]
-      out_channel: 128
-      use_relu: true
-      drop_smooth_conv: true
-  # neck0: 
-  #   type: FPN
-  #   input_source: group0
-  #   load: all
-  #   # freeze: all
-  #   in_strides: [32]
-  #   in_channels: [384]
-  #   out_strides: [32]
-  #   out_channels: [128]
+    in_strides: [32]
+    in_channels: [384]
+    out_strides: [32]
+    out_channels: [128]
   neck1: 
     type: SECONDNeck
     input_source: group1
@@ -129,36 +105,23 @@ Necks:
     use_relu6: False
 
 
-# Transformer:
-#   type: SingleBevFormerViewTransformer
-#   load: all
-#   # freeze: all
-#   transformer_config:
-#     task_name: DRIVING_BEV_DYN
-#     pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-#     num_points_in_pillar: 4
-#     bev_y: 48
-#     bev_x: 120
-#     embed_dims: 128
-#     queue_length: 1
-#     max_camoverlap_num: 4
-#     numcam: 7
-#     single_bev: true
-#     use_lidar2img: false
-#     bev_map_voxel_size: [1.28, 1.28, 1.5]
-
 Transformer:
-  type: ODViewTransformer
+  type: SingleBevFormerViewTransformer
   load: all
   # freeze: all
   transformer_config:
     task_name: DRIVING_BEV_DYN
-    bev_map_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+    pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+    num_points_in_pillar: 4
+    bev_y: 48
+    bev_x: 120
+    embed_dims: 128
+    queue_length: 1
+    max_camoverlap_num: 4
+    numcam: 7
+    single_bev: true
+    use_lidar2img: false
     bev_map_voxel_size: [1.28, 1.28, 1.5]
-    image_down_div: 8
-    input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
-    in_channels: 128
-    out_channels: 128
 
 
 Tasks:
@@ -281,7 +244,7 @@ Tasks:
           have_prev_label: true,
           image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_option_new", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_1224", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLine_train/",
