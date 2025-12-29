@@ -1066,8 +1066,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         time_dp = DetailProf()
         time_dp.Tic("begin")
-        sequence_name_dict = self.get_shared_sequence_name_dict()
-        
         try:
             info = copy.deepcopy(self.dataset[idx])
 
@@ -1258,7 +1256,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
             if self.phase == const.PHASE_TRAINING:
-                if not sequence_name_dict[sequence_name]:
+                if not self._shared_sequence_name_dict.get(sequence_name, True):
                     data_dict_ret.update({"points": np.zeros_like(radar_point)})
                 elif np.random.rand() < 0.2:
                     data_dict_ret.update({"points": np.zeros_like(radar_point)})
