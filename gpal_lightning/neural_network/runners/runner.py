@@ -5,6 +5,7 @@ from functools import partial
 from pytorch_lightning import Trainer
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.profilers import AdvancedProfiler, SimpleProfiler
+from pytorch_lightning.callbacks import Callback
 
 from gpal_lightning import const
 from gpal_lightning.neural_network.global_config import GlobalConfig
@@ -17,6 +18,27 @@ from gpal_lightning.neural_network.plugins.nn_env import NNTCPEnvironment
 from gpal_lightning.utils.copytree_with_progressbar import copytree_with_progressbar
 from gpal_lightning.utils.evaluation_helpers.evaluation_pipeline import EvaluationPipeline
 from torch.utils.tensorboard import SummaryWriter
+
+
+class DatasetEpochCallback(Callback):
+    """在每个epoch开始前调用DRIVING_BEV_DYNDataset的函数"""
+    
+    def __init__(self):
+        super().__init__()
+        print("=== DatasetEpochCallback initialized ===")
+    
+    def on_train_epoch_start(self, trainer, pl_module):
+        """在每个训练epoch开始时调用"""
+        try:
+            dataloaders = trainer.train_dataloader.dataloaders
+            for task_name, dataloader in dataloaders.items():
+                if task_name == "DRIVING_BEV_DYN":
+                    datasets = dataloader[0]
+                    datasets.dataset.datasets[0].set_current_epoch(trainer.current_epoch)
+                    return
+        except Exception as e:
+            print(f"Error accessing trainer.train_dataloader: {e}")
+        
 
 
 class Runner:
@@ -46,7 +68,7 @@ class Runner:
 
     def _setup_callbacks(self):
         # seperate training/evalution/prediction callbacks
-        training_callbacks = [Finetune()]
+        training_callbacks = [Finetune(), DatasetEpochCallback()]
         evaluation_callbacks = []
         prediction_callbacks = []
 

@@ -24,7 +24,7 @@ Backbones:
   backbone0:
     type: HENet
     ampfp16: true
-    # load: all  #屏蔽此参数是为了加载其他模块预训练权重的时候，加载地平线预训练权重，需要打开pretrained参数
+    load: all  #屏蔽此参数是为了加载其他模块预训练权重的时候，加载地平线预训练权重，需要打开pretrained参数
     # freeze: all
     in_channels: 3
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
@@ -117,7 +117,7 @@ Transformer:
     bev_x: 120
     embed_dims: 128
     queue_length: 1
-    max_camoverlap_num: 4
+    max_camoverlap_num: 5
     numcam: 7
     single_bev: true
     use_lidar2img: false

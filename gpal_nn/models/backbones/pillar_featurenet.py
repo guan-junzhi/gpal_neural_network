@@ -470,16 +470,26 @@ class Point_Feature_Net(BaseModule):
         self,
         input,
     ):
-        features, coords = self.pre_process(
-            input, not self.training
-        )
-        data = dict(  # noqa C408
-            features=features,
-            coors=coords,
-            num_points_in_voxel=None,
-            batch_size=len(input),
-            input_shape=self.feature_map_shape,
-        )
+        
+        if torch.onnx.is_in_onnx_export():
+            data = dict(  # noqa C408
+                features=input["features"],
+                coors=input["coors"],
+                num_points_in_voxel=None,
+                batch_size=1,
+                input_shape=self.feature_map_shape,
+            )
+        else:
+            features, coords = self.pre_process(
+                input, not self.training
+            )
+            data = dict(  # noqa C408
+                features=features,
+                coors=coords,
+                num_points_in_voxel=None,
+                batch_size=len(input),
+                input_shape=self.feature_map_shape,
+            )
 
         # only support horizon_preprocess=True in reader for centerpoint
         input_features = self.reader(
@@ -504,6 +514,8 @@ if __name__ == "__main__":
     point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
     norm_cfg = None
     max_num_points = 20
+
+
     point_process_config = dict(
         pc_range=point_cloud_range,
         voxel_size=voxel_size,

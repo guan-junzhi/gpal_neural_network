@@ -27,6 +27,64 @@ class SeqFeatureFuser(nn.Module):
         return self.conv_fuser(x)
 
 
+
+class TinySEBlock(nn.Module):
+    """Block similar to SEBlock but only with one layer of conv2d.
+
+    Args:
+        in_channels:  The number of input channels.
+    """
+
+    def __init__(self, in_channels: int):
+        super().__init__()
+        self.att = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.Tensor):
+        return x * self.att(x)
+
+
+class BevFuseModule(nn.Module):
+    """BevFuseModule fuses features using convolutions and SE block.
+
+    Args:
+        input_c: The number of input channels.
+        fuse_c: The number of channels after fusion.
+    """
+
+    def __init__(self, input_c: int, fuse_c: int):
+        super().__init__()
+        self.reduce_conv = ConvModule2d(
+            input_c,
+            fuse_c,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            norm_layer=nn.BatchNorm2d(fuse_c, eps=1e-3, momentum=0.01),
+            act_layer=nn.ReLU(inplace=True),
+        )
+        self.conv2 = ConvModule2d(
+            fuse_c,
+            fuse_c,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            norm_layer=nn.BatchNorm2d(fuse_c, eps=1e-3, momentum=0.01),
+            act_layer=nn.ReLU(inplace=True),
+        )
+        self.seblock = TinySEBlock(fuse_c)
+
+    def forward(self, x: torch.Tensor):
+        x = self.reduce_conv(x)
+        x = self.conv2(x)
+        pts_feats = self.seblock(x)
+        return pts_feats
+
+
+
 @HEADS.register_module()
 class DRIVING_BEV_DYNHead(BaseHead):
     def __init__(self, global_config, task_config, loss_func=DRIVING_BEV_DYNLoss):
@@ -67,27 +125,9 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.head["seq_fuser"] = SeqFeatureFuser(self.fuser_config)
         self.head["center_head"] = FastDecoderHead(self.head_config)
         if self.feature_fuser_config is not None:
-            self.head["feature_fuser"] = nn.Sequential(
-                BasicHENetStageBlock(
-                    in_dim = self.feature_fuser_config["in_channels"],
-                    block_num = self.feature_fuser_config["block_num"],
-                    attention_block_num = self.feature_fuser_config["attention_block_num"],
-                    mlp_ratio = self.feature_fuser_config["mlp_ratio"],
-                    mlp_ratio_attn = self.feature_fuser_config["mlp_ratio_attn"],
-                    act_layer = self.feature_fuser_config["act_layer"],
-                    use_layer_scale = self.feature_fuser_config["use_layer_scale"],
-                    layer_scale_init_value = self.feature_fuser_config["layer_scale_init_value"],
-                    extra_act = self.feature_fuser_config["extra_act"],
-                    block_cls = self.feature_fuser_config["block_cls"],
-                    ),
-               ConvModule2d(
-                    self.feature_fuser_config["in_channels"],
-                    self.feature_fuser_config["out_channels"],
-                    kernel_size=1,
-                    stride=1,
-                    norm_layer=nn.BatchNorm2d(self.feature_fuser_config["out_channels"] ),
-                    act_layer=nn.ReLU(),
-                )
+            self.head["feature_fuser"] = BevFuseModule(
+                self.feature_fuser_config["in_channels"],
+                self.feature_fuser_config["out_channels"],
             )
     
     def load_state_dict(self, state_dict, strict=True):
@@ -167,8 +207,9 @@ class DRIVING_BEV_DYNHead(BaseHead):
         # print(ShowDataStruct("X",x))
         if self.feature_fuser_config is not None and point_feature is not None:
             B, _, C = x.shape
-            x = x.view(B, self.grid_size[1], self.grid_size[0], C).permute(0, 3, 1, 2)
-
+            x = x.permute(0, 2, 1).reshape(
+                B, C, self.grid_size[1], self.grid_size[0]
+            )
             fuser_feature = torch.cat([x, point_feature[0]], dim = 1)
             fuser_feature = self.head["feature_fuser"](fuser_feature)
         else:

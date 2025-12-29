@@ -1,4 +1,3 @@
-
 import copy
 from multiprocessing import Pool
 import pickle as pkl
@@ -119,7 +118,7 @@ def read_radar_point_cloud_from_pcd(radar_path):
                                 point.append(0.0)  # 转换失败时使用默认值
                         points_data.append(point)
             
-            # 转换为numpy数组
+# 转换为numpy数组
             if points_data:
                 points_array = np.array(points_data, dtype=np.float32)
                 
@@ -346,6 +345,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             training= phase == const.PHASE_TRAINING, 
             num_point_features=None
         )
+        
+        # 初始化共享内存管理器用于epoch同步
+        self._shared_current_epoch = None
+        self._shared_memory_manager = None
+        self._setup_shared_epoch()
+        
+        self.current_epoch = self.get_current_epoch()
+        # self.sequence_name_dict = self.get_current_epoch()
+        
 
         # if self.dataset_cfg.USE_CAMERA_YAML:
         cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
@@ -383,8 +391,97 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         
         self.subtask_name = self.global_config.Tasks['DRIVING_BEV_DYN']['SWITCH_SUBTASK']
 
+    def _setup_shared_epoch(self):
+        """设置共享内存用于epoch同步"""
+        try:
+            # 使用multiprocessing.Manager创建共享变量
+            from multiprocessing import Manager
+            self._shared_memory_manager = Manager()
+            self._shared_current_epoch = self._shared_memory_manager.Value('i', 0)
+            # 添加共享的sequence_name_dict
+            self._shared_sequence_name_dict = self._shared_memory_manager.dict()
+        except Exception as e:
+            print(f"Warning: Failed to setup shared memory manager: {e}")
+            # 如果共享内存失败，使用普通变量作为fallback
+            self._shared_current_epoch = 0
+            self._shared_sequence_name_dict = {}
+
+    def set_current_epoch(self, epoch):
+        """设置当前epoch，并同步到共享内存"""
+        if hasattr(self._shared_current_epoch, 'value'):
+            # 共享内存版本
+            self._shared_current_epoch.value = epoch
+        else:
+            # 普通变量版本
+            self._shared_current_epoch = epoch
+        self.current_epoch = epoch
+        
+        # 随机设置sequence_name_dict中10%的关键字为False，其他为True
+        # 使用共享内存确保所有工作进程状态一致
+        if self.sequence_name_dict:
+            import random
+            
+            # 设置确定性随机种子，基于epoch确保所有工作进程结果一致
+            seed = 42 + self.current_epoch * 1000  # 固定种子，不依赖worker_id
+            random.seed(seed)
+            
+            keys = list(self.sequence_name_dict.keys())
+            # 对关键字进行确定性排序，确保所有工作进程顺序一致
+            keys.sort()
+            
+            num_keys = len(keys)
+            num_false = max(1, int(num_keys * 0.15))  # 至少设置1个为False
+            
+            # 使用确定性随机选择，确保所有工作进程选择相同的10%
+            false_keys = random.sample(keys, num_false)
+            
+            # 更新共享内存中的sequence_name_dict
+            if hasattr(self._shared_sequence_name_dict, 'update'):
+                # 共享内存版本
+                shared_dict = {}
+                for key in keys:
+                    shared_dict[key] = True
+                for key in false_keys:
+                    shared_dict[key] = False
+                self._shared_sequence_name_dict.update(shared_dict)
+            else:
+                # 普通变量版本
+                for key in keys:
+                    self._shared_sequence_name_dict[key] = True
+                for key in false_keys:
+                    self._shared_sequence_name_dict[key] = False
+            
+            # 同步本地副本
+            self.sequence_name_dict.update(self._shared_sequence_name_dict)
+            
+            print(f'current_epoch: {self.current_epoch}, sequence_name_dict updated: {num_false}/{num_keys} keys set to False')
+        else:
+            print(f'current_epoch: {self.current_epoch}, sequence_name_dict is empty')
+
+    def get_current_epoch(self):
+        """获取当前epoch，优先从共享内存读取"""
+        if hasattr(self._shared_current_epoch, 'value'):
+            # 共享内存版本
+            return self._shared_current_epoch.value
+        else:
+            # 普通变量版本
+            return self._shared_current_epoch
+    def get_shared_sequence_name_dict(self):
+        """获取共享的sequence_name_dict"""
+        if hasattr(self, '_shared_sequence_name_dict'):
+            if hasattr(self._shared_sequence_name_dict, 'copy'):
+                # 共享内存版本
+                return dict(self._shared_sequence_name_dict)
+            else:
+                # 普通变量版本
+                return self._shared_sequence_name_dict.copy()
+        else:
+            return self.sequence_name_dict.copy()
+
+
     def include_fusion_data(self, phase):
 
+        self.sequence_name_dict = {}
         print('Loading Mixed dataset ...')
 
         fusion_infos = []
@@ -466,8 +563,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             fusion_infos = fusion_infos_new
             # self.fusion_infos = []
+        else:
+            for info in fusion_infos:
+                self.sequence_name_dict.setdefault(info['sequence_name'], True)
         # fusion_infos = [fusion_infos[100]] * 6 
-        # fusion_infos = fusion_infos[:100000]
+        # fusion_infos = fusion_infos[:1000]
         # if phase == const.PHASE_TRAINING:
         #     fusion_infos_ext = []
         #     for ele in fusion_infos:
@@ -536,7 +636,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                             new_ele['frame_idx'] = ele_idx
                         new_datalist.append(new_ele)
                 return new_datalist
-            
             return datalist_by_clip
 
         NEW_datalist = GroupByclip(datalist, key, ret_idx=False, add_clip_idx=True)  # 添加clip索引和frame索引用于debug
@@ -967,7 +1066,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         time_dp = DetailProf()
         time_dp.Tic("begin")
-
+        sequence_name_dict = self.get_shared_sequence_name_dict()
+        
         try:
             info = copy.deepcopy(self.dataset[idx])
 
@@ -1158,10 +1258,12 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
             if self.phase == const.PHASE_TRAINING:
-                if np.random.rand() > 0.5:
-                    data_dict_ret.update({"points": radar_point.astype(np.float32)})
-                else:
+                if not sequence_name_dict[sequence_name]:
                     data_dict_ret.update({"points": np.zeros_like(radar_point)})
+                elif np.random.rand() < 0.2:
+                    data_dict_ret.update({"points": np.zeros_like(radar_point)})
+                else:
+                    data_dict_ret.update({"points": radar_point.astype(np.float32)})
             else:
                 data_dict_ret.update({"points": radar_point.astype(np.float32)})
         
