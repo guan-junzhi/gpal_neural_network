@@ -105,24 +105,35 @@ Necks:
     use_relu6: False
 
 
+# Transformer:
+#   type: SingleBevFormerViewTransformer
+#   load: all
+#   # freeze: all
+#   transformer_config:
+#     task_name: DRIVING_BEV_DYN
+#     pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+#     num_points_in_pillar: 4
+#     bev_y: 48
+#     bev_x: 120
+#     embed_dims: 128
+#     queue_length: 1
+#     max_camoverlap_num: 5
+#     numcam: 7
+#     single_bev: true
+#     use_lidar2img: false
+#     bev_map_voxel_size: [1.28, 1.28, 1.5]
 Transformer:
-  type: SingleBevFormerViewTransformer
+  type: ODViewTransformer
   load: all
   # freeze: all
   transformer_config:
     task_name: DRIVING_BEV_DYN
-    pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-    num_points_in_pillar: 4
-    bev_y: 48
-    bev_x: 120
-    embed_dims: 128
-    queue_length: 1
-    max_camoverlap_num: 5
-    numcam: 7
-    single_bev: true
-    use_lidar2img: false
+    bev_map_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
     bev_map_voxel_size: [1.28, 1.28, 1.5]
-
+    image_down_div: 8
+    input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
+    in_channels: 128
+    out_channels: 128
 
 Tasks:
   DRIVING_BEV_DYN:
