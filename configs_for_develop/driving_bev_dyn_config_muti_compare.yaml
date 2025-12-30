@@ -41,7 +41,7 @@ Backbones:
     patch_embed: "origin"
     stage_out_norm: True
     need_neck: True 
-    pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/henet/float-checkpoint-best.pth.tar'
+    pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/henet/float-checkpoint-best.pth.tar'
     strict_load: False
 
   backbone1:

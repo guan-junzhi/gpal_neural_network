@@ -120,11 +120,11 @@ if [[ "${TASK_IN_AIRFLOW:-0}" == "1" ]]; then
 else
   export ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT='/data/ai_group/workdirs/'
   export ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT="${ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT}gpal_neural_network_group/airflow_workspace"
-  export ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT='.vscode/workspace_huiquyang/'
+  export ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT='workspace/'
   export ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT='/data/ai_group/datasets/'
   export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT='/data/dp_group/process-prod-bucket/data_collect/'
   export ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_SSD_ROOT="$ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT"
-  export ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT='/data2/'
+  export ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT='/data1/'
   export ENV_GPAL_NEURAL_NETWORK_WORLD_SIZE=1
   export ENV_GPAL_NEURAL_NETWORK_WORKSPACE="${ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT}/$current_time"
   export ENV_GPAL_NEURAL_NETWORK_GPUS=1
@@ -136,8 +136,8 @@ else
     config=configs_for_develop/parking_ipm_sta_config.yaml
   elif [[ "${1:-}" == "driving_bev_dyn" ]]; then
     tasks=driving_bev_dyn
-    load_from=/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/workspace_huiquyang/20251226_05_42_14/checkpoint/epoch=0-step=500_checkpoint.pth
-    config=configs_for_develop/driving_bev_dyn_config_muti_compare.yaml
+    load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/lane_detection_one_node_traning_job_on_airflow_20250924_15_00_27/checkpoint/epoch=2-step=18000_checkpoint.pth
+    config=configs_for_develop/driving_bev_dyn_config.yaml
   elif [[ "${1:-}" == "radar4d_nn_sdk" ]]; then
     tasks=radar4d_nn_sdk
     load_from=$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT/gpal_neural_network_one_node_traning_job_on_airflow_20250818_08_19_56_weiwei_ckpt/checkpoint/epoch=4-step=1000_checkpoint_weiwei.pth
@@ -172,9 +172,9 @@ echo "seed=$seed"
 # ------------------------------------------------------------
 echo "[START TRAINING]:"
 if [[ "$load_from" == "None" ]]; then
-  CUDA_VISIBLE_DEVICES=1 python train.py --save "$ENV_GPAL_NEURAL_NETWORK_WORKSPACE" --seed "$seed" --config "$config" --gpus "$ENV_GPAL_NEURAL_NETWORK_GPUS" --tasks "$tasks"
+  python train.py --save "$ENV_GPAL_NEURAL_NETWORK_WORKSPACE" --seed "$seed" --config "$config" --gpus "$ENV_GPAL_NEURAL_NETWORK_GPUS" --tasks "$tasks"
 else
-  CUDA_VISIBLE_DEVICES=1 python train.py --load_from "$load_from" --save "$ENV_GPAL_NEURAL_NETWORK_WORKSPACE" --seed "$seed" --config "$config" --gpus "$ENV_GPAL_NEURAL_NETWORK_GPUS" --tasks "$tasks"
+  python train.py --load_from "$load_from" --save "$ENV_GPAL_NEURAL_NETWORK_WORKSPACE" --seed "$seed" --config "$config" --gpus "$ENV_GPAL_NEURAL_NETWORK_GPUS" --tasks "$tasks"
 fi
 
 
