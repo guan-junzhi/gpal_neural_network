@@ -40,7 +40,7 @@ Backbones:
     down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
     patch_embed: "origin"
     stage_out_norm: True
-    need_neck: False 
+    need_neck: True 
     pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/henet/float-checkpoint-best.pth.tar'
     strict_load: False
 
