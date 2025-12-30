@@ -100,7 +100,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.cnt = 0
         
         transformer_config = global_config.Transformer["transformer_config"]
-        self.point_cloud_range = transformer_config["pc_range"]
+        self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
         
         self.grid_size = [
