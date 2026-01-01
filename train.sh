@@ -102,7 +102,7 @@ echo "AIRFLOW_CTX_DAG_ID=$AIRFLOW_CTX_DAG_ID"
 echo "airflow_key=$airflow_key"
 
 if [[ "${TASK_IN_AIRFLOW:-0}" == "1" ]]; then
-  export ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT='/opt/airflow/workdirs/'
+  export ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT='/opt/airflow/local_datasets/'
   export ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT="${ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT}gpal_neural_network_group/airflow_workspace"
   export ENV_GPAL_NEURAL_NETWORK_WORKSPACE_ROOT="$ENV_GPAL_NEURAL_NETWORK_AIRFLOW_WORKSPACE_ROOT"
   export ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT='/opt/airflow/datasets/'
