@@ -264,7 +264,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT")
         LOCAL_DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT")
 
-        WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
+        WORKDIRS_ROOT = f"/opt/airflow/workdirs/"
         DATA_COLLECT_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT")
 
         self.root_dir = os.path.join(DATASETS_ROOT, root_dir)
