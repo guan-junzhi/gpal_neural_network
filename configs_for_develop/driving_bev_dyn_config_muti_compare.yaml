@@ -7,6 +7,10 @@ iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
 dump_calibset: false
 
+has_label: True
+
+
+
 Train:
   EPOCH_LEN: 150000
   CLIP_LENGTH: [5, 25]
@@ -21,28 +25,36 @@ Test:
   visulization: True
 
 Backbones:
+  # backbone0:
+  #   type: HENet
+  #   ampfp16: true
+  #   # load: all  #屏蔽此参数是为了加载其他模块预训练权重的时候，加载地平线预训练权重，需要打开pretrained参数
+  #   # freeze: all
+  #   in_channels: 3
+  #   input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
+  #   block_nums: [4, 3, 8, 6]
+  #   block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
+  #   embed_dims: [64, 128, 192, 384]
+  #   attention_block_num: [0, 0, 0, 0]
+  #   mlp_ratios: [2, 2, 2, 3]
+  #   mlp_ratio_attn: 2
+  #   act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
+  #   use_layer_scale: [True, True, True, True]
+  #   extra_act: [False, False, False, False]
+  #   down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
+  #   patch_embed: "origin"
+  #   stage_out_norm: True
+  #   need_neck: True 
+  #   pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/henet/float-checkpoint-best.pth.tar'
+  #   strict_load: False
   backbone0:
-    type: HENet
+    type: EncoderRes34
     ampfp16: true
-    # load: all  #屏蔽此参数是为了加载其他模块预训练权重的时候，加载地平线预训练权重，需要打开pretrained参数
+    # load: all
     # freeze: all
-    in_channels: 3
+    out_channels: 64
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
-    block_nums: [4, 3, 8, 6]
-    block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
-    embed_dims: [64, 128, 192, 384]
-    attention_block_num: [0, 0, 0, 0]
-    mlp_ratios: [2, 2, 2, 3]
-    mlp_ratio_attn: 2
-    act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
-    use_layer_scale: [True, True, True, True]
-    extra_act: [False, False, False, False]
-    down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
-    patch_embed: "origin"
-    stage_out_norm: True
-    need_neck: True 
-    pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/henet/float-checkpoint-best.pth.tar'
-    strict_load: False
+  
 
   backbone1:
     type: Point_Feature_Net
@@ -86,7 +98,7 @@ Necks:
     load: all
     # freeze: all
     layers_config:
-      conv_channels: [128, 192, 384]
+      conv_channels: [128, 256, 512]
       out_channel: 128
       use_relu: true
       drop_smooth_conv: true
@@ -283,6 +295,14 @@ Tasks:
               tags: ["ID4", "filtered-area"]
             },
           ],
+          # data_list: [
+          #   {
+          #     description: "ID4 testing data", 
+          #     pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251231-065117/20251231-065117_train_frame_pairs_sampled.pkl",
+          #     use_ratio: -1,
+          #     tags: ["ID4", "filtered-area"]
+          #   },
+          # ],
           
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames2808_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames14256_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
