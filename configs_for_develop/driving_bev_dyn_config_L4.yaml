@@ -179,7 +179,25 @@ Tasks:
             },
             {
               description: "L4 training data", 
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v2/L4_FSH/cache_slice/251223_2012/_0_train_frame_pairs_sampled_skip.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v2/task_7v_l4_data/cache_slice/260101_1635_Obstacle_3DModelResult_L4/_0_train_frame_pairs_sampled_HEAVY.pkl",
+              use_ratio: -1,
+              tags: ["L4", "skip gt-offset clip"]
+            },
+            {
+              description: "L4 training data", 
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v2/task_7v_l4_data/cache_slice/260101_1635_Obstacle_3DModelResult_L4/_0_train_frame_pairs_sampled_CUT_IN.pkl",
+              use_ratio: -1,
+              tags: ["L4", "skip gt-offset clip"]
+            },
+            {
+              description: "L4 training data", 
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v2/task_7v_l4_data/cache_slice/260101_1635_Obstacle_3DModelResult_L4/_0_train_frame_pairs_sampled_TURN.pkl",
+              use_ratio: -1,
+              tags: ["L4", "skip gt-offset clip"]
+            },
+            {
+              description: "L4 training data", 
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v2/task_7v_l4_data/cache_slice/260101_1635_Obstacle_3DModelResult_L4/_0_train_frame_pairs_sampled_VRU.pkl",
               use_ratio: -1,
               tags: ["L4", "skip gt-offset clip"]
             },
