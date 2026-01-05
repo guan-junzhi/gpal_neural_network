@@ -36,6 +36,7 @@ from torchvision import transforms as T
 from gpal_lightning.utils.deploy_utils import DistGridMap
 from gpal_lightning.data.dataloader_helpers.clip_sampler import DatalistByclip
 
+from gpal_nn.tasks.driving_bev_dyn.datasets.utils import read_pbtxt_file, create_extrinsic_matrix,create_intrinsic_matrix,parse_file
 
 # 文件格式常量
 FILE_FORMAT_PCD = '.pcd'
@@ -264,12 +265,16 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT")
         LOCAL_DATASETS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT")
 
-        WORKDIRS_ROOT = f"/opt/airflow/workdirs/"
+        WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
         DATA_COLLECT_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT")
+        self.has_label = global_config.has_label
 
         self.root_dir = os.path.join(DATASETS_ROOT, root_dir)
         self.json_dir = os.path.join(WORKDIRS_ROOT, json_dir)
-        self.image_dir = os.path.join(DATA_COLLECT_ROOT, image_dir)
+        if self.has_label:
+            self.image_dir = os.path.join(DATA_COLLECT_ROOT, image_dir)
+        else:
+            self.image_dir = "/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/data"
         # self.image_dir = "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/2025-09-23_16-40-52-312.4"
         self.middle_json_str = middle_json_str
 
@@ -356,32 +361,49 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         
 
         # if self.dataset_cfg.USE_CAMERA_YAML:
-        cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
-        # if True:
-        #     intrinsic = []
-        #     distort_coeff = []
-        #     r_mat = []
-        #     t_vec = []
-        #     # breakpoint()
-        #     for curr_view in self.image_view:
-        #         curr_view_yaml_file = f"{WORKDIRS_ROOT}/gpal_neural_network_group/sikong/temp_dir_for_od/{cam_calib_dir}/{curr_view.replace('img_', '')}.yaml"
-        #         # curr_view_yaml_file = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/tools_own/read_update_cam_yaml_and_save_grid_valid/calibration-dev@1ac5e4038a8/JX_C5_1/vehicle_config/calibration/camera/{curr_view.replace('img_', '')}.yaml"
-        #         yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
-        #         intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
-        #         distort_coeff.append(
-        #             yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
-        #         r_mat.append(yaml_dict['r_mat'].reshape(-1, 3, 3))
-        #         t_vec.append(yaml_dict['t_vec'].reshape(-1, 3, 1))
+        cam_calib_dir = ".vscode/calib/camera"
+        cam_real = {
+            "img_front_30": "camera_front_long",
+            "img_front_120": "camera_front_wide",
+            "img_front_left": "camera_front_left",
+            "img_front_right": "camera_front_right",
+            "img_rear_left": "camera_back_left",
+            "img_rear_right": "camera_back_right",
+            "img_back": "camera_back",
+        }
 
-        #     intrinsic_np = np.concatenate(intrinsic, axis=0)
-        #     distort_coeff_np = np.concatenate(distort_coeff, axis=0)
-        #     r_mat_np = np.concatenate(r_mat, axis=0)
-        #     t_vec_np = np.concatenate(t_vec, axis=0)
+        if True:
+            intrinsic = []
+            distort_coeff = []
+            r_mat = []
+            t_vec = []
+            # breakpoint()
+            for curr_view in self.image_view:
+                extrinsics_path = f"{cam_calib_dir}/{cam_real[curr_view]}_extrinsics.pb.txt"
+                # curr_view_yaml_file = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/tools_own/read_update_cam_yaml_and_save_grid_valid/calibration-dev@1ac5e4038a8/JX_C5_1/vehicle_config/calibration/camera/{curr_view.replace('img_', '')}.yaml"
+                # yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
+                extrinsics_data = read_pbtxt_file(extrinsics_path)
+                _, extrinsic_matrix_inv = create_extrinsic_matrix(extrinsics_data)
+                intrinsics_path = f"{cam_calib_dir}/{cam_real[curr_view]}_intrinsics.pb.txt"
+                intrinsics_data = read_pbtxt_file(intrinsics_path)
+                intrinsic_matrix, distortion_coeffs = create_intrinsic_matrix(intrinsics_data)
 
-            # self.intrinsic = intrinsic_np
-            # self.cam_dist = distort_coeff_np
-            # self.r_mat_np = r_mat_np
-            # self.t_vec_np = t_vec_np
+
+                intrinsic.append(intrinsic_matrix.reshape(-1, 3, 3))
+                distort_coeff.append(
+                    distortion_coeffs.reshape(-1, 1, 5))
+                r_mat.append(extrinsic_matrix_inv[ :3, :3].reshape(-1, 3, 3))
+                t_vec.append(extrinsic_matrix_inv[ :3, 3].reshape(-1, 3, 1))
+
+            intrinsic_np = np.concatenate(intrinsic, axis=0)
+            distort_coeff_np = np.concatenate(distort_coeff, axis=0)
+            r_mat_np = np.concatenate(r_mat, axis=0)
+            t_vec_np = np.concatenate(t_vec, axis=0)
+
+            self.intrinsic = intrinsic_np
+            self.cam_dist = distort_coeff_np
+            self.r_mat_np = r_mat_np
+            self.t_vec_np = t_vec_np
 
         self.jitter = T.ColorJitter([0.2, 1.2], 0.3, 0.3, 0.2)
 
@@ -1073,6 +1095,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             sequence_name = info['sequence_name']
             curr_time_stamp, prev_time_stamp = info['time_stamp'].split('/')
+            # curr_time_stamp = f"{curr_time_stamp}0"
 
             # 无论预刷还是指标测试的数据格式/相对路径必须一致, f'{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
             curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
@@ -1085,26 +1108,44 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             # seq,time_meas,time_pub,motion_info.vehicle_speed,motion_info.yaw_rate,motion_info.longitudinal_acceleration,motion_info.lateral_acceleration,motion_info.drive_mode,actuator_info.is_left_direction_light_on,actuator_info.is_right_direction_light_on,actuator_info.is_main_beam_on,actuator_info.is_dipped_beam_on,actuator_info.is_wiper_on,actuator_info.is_horn_on,actuator_info.is_left_direction_light_switch_on,actuator_info.is_right_direction_light_switch_on,actuator_info.front_left_door_status,actuator_info.front_right_door_status,actuator_info.rear_left_door_status,actuator_info.rear_right_door_status,actuator_info.rear_hatch_status,actuator_info.driver_safety_belt_status,actuator_info.is_brake_light_on,actuator_info.is_dangerous_warning_light_on,actuator_info.is_front_frog_light_on,actuator_info.is_rear_frog_light_on,actuator_info.is_reverse_direction_light_on,actuator_info.is_width_lamp_on,actuator_info.wiper_speed,actuator_info.is_washer_on,actuator_info.is_autodrive_active,axle_info[0].axis_id,axle_info[0].left_wheel_tire_pressure,axle_info[0].right_wheel_tire_pressure,axle_info[0].left_wheel_speed,axle_info[0].right_wheel_speed,axle_info[0].left_wheel_angle,axle_info[0].right_wheel_angle,axle_info[0].left_wheel_pulse,axle_info[0].right_wheel_pulse,axle_info[0].left_wheel_pulse_direction,axle_info[0].right_wheel_pulse_direction,axle_info[1].left_wheel_tire_pressure,axle_info[1].right_wheel_tire_pressure,axle_info[1].left_wheel_speed,axle_info[1].right_wheel_speed,axle_info[1].left_wheel_angle,axle_info[1].right_wheel_angle,axle_info[1].left_wheel_pulse,axle_info[1].right_wheel_pulse,axle_info[1].left_wheel_pulse_direction,axle_info[1].right_wheel_pulse_direction,powertrain_info.motor_speed,powertrain_info.motor_reference_torque,powertrain_info.motor_torque_change_rate,powertrain_info.battery_charge,powertrain_info.transmission_current_gear_level,powertrain_info.transmission_current_gear_position,powertrain_info.motor_torque_response,powertrain_info.throttle_percentage,powertrain_info.is_accelerator_pedal_override,powertrain_info.controlled_state_of_longitudinal_dynamic_system,powertrain_info.torque_request,powertrain_info.torque_feedback,powertrain_info.mcu_longitudinal_control_state_feedback,powertrain_info.mcu_driving_mode_feedback,steering_system_info.steering_wheel_angle,steering_system_info.steering_wheel_angle_speed,steering_system_info.steering_motor_torque,steering_system_info.steer_hands_on_status,steering_system_info.steer_angle_calibration_status,steering_system_info.received_steering_angle_request,steering_system_info.received_steering_torque_request,steering_system_info.eps_control_status,steering_system_info.eps_failure_reason,steering_system_info.steering_wheel_angle_control_failure_reason,steering_system_info.torque_control_failure_reason,steering_system_info.steering_wheel_angle_control_state,steering_system_info.torque_control_state,steering_system_info.mcu_lateral_control_state_feedback,steering_system_info.mcu_gear_control_state_feedback,brake_system_info.is_break_pedal_pressed,steering_system_info.is_abs_active,steering_system_info.is_epb_on,steering_system_info.brake_system_acceleration_response,steering_system_info.break_pedal_position,steering_system_info.is_brake_pedal_override,steering_system_info.is_vehicle_stand_still,steering_system_info.is_vehicle_park_stand_still,steering_system_info.braking_system_control_state,steering_system_info.mcu_brake_system_control_state_feedback,steering_system_info.epb_state
             
-            with open(vcu_file, 'r') as vcu_reader:
-                vcu = vcu_reader.readline().split('\t')
+            
             # curr_json_file = "/data/ai_group/workdirs/od_occ_group/huiquyang/data/Obstacle_3DModelResult_/EKART_ID4001_2025-08-15-18-20-39/2025-08-15_18-34-44-232/3d_detection_json/1755254118.200182.json"
-            curr_json_data = self.json_data.load(curr_json_file)
-            re_curr_infos = self.json_data.parse_json(curr_json_data)
-            meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
+            if self.has_label:
+                with open(vcu_file, 'r') as vcu_reader:
+                    vcu = vcu_reader.readline().split('\t')
+                ego_speed = float(vcu[3])
+                ego_yaw_rate = float(vcu[4])
+                curr_json_data = self.json_data.load(curr_json_file)
+                re_curr_infos = self.json_data.parse_json(curr_json_data)
+                meta_info, cameras, bounding_boxes, special_labels = re_curr_infos
 
-            gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
-            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+                gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
+                intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+            else:
+                vcu_file = f'{self.image_dir}/{sequence_name}/vcu_slice/{curr_time_stamp}.pb.txt'
+                gt_boxes = np.zeros((1, 10))
+                gt_names = np.array(["vehicle_car"])
+                vcu = parse_file(vcu_file)
+                ego_speed = float( vcu['motion_info']['vehicle_speed']       )
+                ego_yaw_rate = float(vcu['motion_info']['yaw_rate'])
+                intrinsic = self.intrinsic
+                cam_dist = self.cam_dist
+                temp = np.stack([np.eye(4) for i in range(7)], axis=0)
+                temp[:, :3:, :3] = self.r_mat_np
+                temp[:, :3:, [3]] = self.t_vec_np
+                extrinsic = temp
 
             input_dict['gt_names'] = gt_names
             input_dict['gt_boxes'] = gt_boxes
 
             radar_point_path = f'{self.image_dir}/{sequence_name}/pcd/{curr_time_stamp}.pcd'
             log_path = f'{self.image_dir}/{sequence_name}/logs/synced_files_log.txt'
-            sensor_timestamps = parse_sensor_timestamps(log_path)
-            img_real_timestamp = sensor_timestamps['img_front_120'][curr_time_stamp]
+            # sensor_timestamps = parse_sensor_timestamps(log_path)
+            # img_real_timestamp = sensor_timestamps['img_front_120'][curr_time_stamp]
             radar_point = read_radar_point_cloud_from_pcd(radar_point_path)
             radar_point = radar_point[:,[0,1,2,4,5,10]]
-            radar_point[:,5] = radar_point[:,5]-float(img_real_timestamp)
+            # radar_point[:,5] = radar_point[:,5]-float(img_real_timestamp)
+            radar_point[:,5] = radar_point[:,5]-radar_point[:,5]
             #TODO 点云数据数据增强  随机屏蔽传感器数据  点云buffer  图像随机丢弃图像（目前有）
 
             time_dp.Duration("cur_json", "begin")
@@ -1114,20 +1155,12 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # === 共同信息
             input_dict['frame_id'] = info['time_stamp']
 
-            # if self.dataset_cfg.USE_CAMERA_YAML:
-            # if self.phase == const.PHASE_VALIDATION:
-            #     intrinsic = self.intrinsic
-            #     cam_dist = self.cam_dist
-            #     temp = np.stack([np.eye(4) for i in range(7)], axis=0)
-            #     temp[:, :3:, :3] = self.r_mat_np
-            #     temp[:, :3:, [3]] = self.t_vec_np
-            #     extrinsic = temp
 
             input_dict['intrinsic'] = copy.deepcopy(intrinsic)  # np.stack([intrinsic, intrinsic])
             input_dict['cam_dist'] = copy.deepcopy(cam_dist)  # np.stack([cam_dist, cam_dist])
             input_dict['extrinsic'] = copy.deepcopy(extrinsic)  # np.stack([extrinsic, extrinsic])
             input_dict['camera_names'] = copy.deepcopy(self.image_view)
-            input_dict['camera_sizes'] = copy.deepcopy(camera_sizes)
+            # input_dict['camera_sizes'] = copy.deepcopy(camera_sizes)
 
             img_path = {}
             img_crop_dict = copy.deepcopy(self.img_crop_dict)
@@ -1247,24 +1280,24 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
             data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
-            data_dict_ret['meta']['ego_speed'] = float(vcu[3])
-            data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
+            data_dict_ret['meta']['ego_speed'] = ego_speed
+            data_dict_ret['meta']['ego_yaw_rate'] = ego_yaw_rate
             data_dict_ret['meta']['frame_num'] = str(self.rank_local) + '_' + str(idx)
             data_dict_ret['fast_buf_try_cnt'] = self.fast_buf_try_cnt
             data_dict_ret['fast_buf_sec_cnt'] = self.fast_buf_sec_cnt
             
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
-            # if self.phase == const.PHASE_TRAINING:
-            #     if not self._shared_sequence_name_dict.get(sequence_name, True):
-            #         data_dict_ret.update({"points": np.zeros_like(radar_point)})
-            #     elif np.random.rand() < 0.2:
-            #         data_dict_ret.update({"points": np.zeros_like(radar_point)})
-            #     else:
-            #         data_dict_ret.update({"points": radar_point.astype(np.float32)})
-            # else:
-            #     data_dict_ret.update({"points": radar_point.astype(np.float32)})          
-            data_dict_ret.update({"points": radar_point.astype(np.float32)})       
+            if self.phase == const.PHASE_TRAINING:
+                if not self._shared_sequence_name_dict.get(sequence_name, True):
+                    data_dict_ret.update({"points": np.zeros_like(radar_point)})
+                elif np.random.rand() < 0.2:
+                    data_dict_ret.update({"points": np.zeros_like(radar_point)})
+                else:
+                    data_dict_ret.update({"points": radar_point.astype(np.float32)})
+            else:
+                data_dict_ret.update({"points": radar_point.astype(np.float32)})          
+            # data_dict_ret.update({"points": radar_point.astype(np.float32)})       
 
         except Exception as e:
 
@@ -1353,7 +1386,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['cam_dist'] = copy.deepcopy(cam_dist)  # np.stack([cam_dist, cam_dist])
             input_dict['extrinsic'] = copy.deepcopy(extrinsic)  # np.stack([extrinsic, extrinsic])
             input_dict['camera_names'] = copy.deepcopy(self.image_view)
-            input_dict['camera_sizes'] = copy.deepcopy(camera_sizes)
+            # input_dict['camera_sizes'] = copy.deepcopy(camera_sizes)
 
             # === image info ===
             # img_path = {}
