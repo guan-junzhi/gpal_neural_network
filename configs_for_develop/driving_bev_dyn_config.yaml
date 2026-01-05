@@ -177,7 +177,7 @@ Tasks:
           data_list: [
             {
               description: "ID4 training data", 
-              pkl_path: "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20260105-083912/20260105-083912_train_frame_pairs_sampled_add_scen_all.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20260105-083912/20260105-083912_train_frame_pairs_sampled_add_scen_all.pkl",
               use_ratio: -1,
               tags: ["Only-ID4", "filtered-area", "gpal3.0"]
             },
