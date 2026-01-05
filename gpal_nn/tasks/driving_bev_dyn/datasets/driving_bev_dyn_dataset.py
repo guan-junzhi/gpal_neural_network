@@ -372,7 +372,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             "img_back": "camera_back",
         }
 
-        if True:
+        if not self.has_label:
             intrinsic = []
             distort_coeff = []
             r_mat = []
