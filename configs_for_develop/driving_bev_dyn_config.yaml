@@ -1,7 +1,7 @@
 image_per_gpu: 24
 workers_per_gpu: 12
 skip_sanity_check: true
-max_iterations: 50000
+max_iterations: 40000
 save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
@@ -15,7 +15,7 @@ Train:
   max_visu_img_num: 10
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
-    after_scheduler: CosineAnnealingLR, T_max: 60000}
+    after_scheduler: CosineAnnealingLR, T_max: 40000}
 
 Test:
   visulization: True
@@ -97,8 +97,8 @@ Tasks:
       "IMAGE_CROP_SIZE": [512, 960]
       "CROP_HeSai_ID4":
         "SCALE": [4, 4, 2, 2, 2, 2, 2]
-        "CROP_START": [0, 0, 28, 28, 28, 28, 28]
-        "CROP_START_SKYWELL": [0, 0, 28, 28, 28, 28, 28]
+        "CROP_START": [28, 28, 28, 28, 28, 28, 28]
+        "CROP_START_SKYWELL": [28, 28, 28, 28, 28, 28, 28]
       "CAMERA_RAW_SIZE":
         [[3840, 2160], 
          [3840, 2160], 
@@ -170,14 +170,14 @@ Tasks:
           image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_option_new", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLine_train/",
           data_list: [
             {
               description: "ID4 training data", 
-              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251204-061237/remove_data_train_frame_pairs_sampled.pkl",
+              pkl_path: "/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20260105-083912/20260105-083912_train_frame_pairs_sampled_add_scen_all.pkl",
               use_ratio: -1,
               tags: ["Only-ID4", "filtered-area", "gpal3.0"]
             },
@@ -189,7 +189,7 @@ Tasks:
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
-          fast_buffer_path: "./7v_gpal30" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./7v_gpal30_with_aeb" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
       

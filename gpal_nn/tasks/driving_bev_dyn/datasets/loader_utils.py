@@ -160,6 +160,14 @@ class BoundingBox3D:
         self.main_id = bbox_data.get('main_id', '-1')
         self.object_type = bbox_data.get('type', '')
         self.type_name = bbox_data.get('typeName', '')
+
+        #临时使用
+        if self.object_type == 'human_pedestrian_dummy':
+            self.object_type = 'human_pedestrian'
+        elif self.object_type == 'vehicle_vru_dummy' or self.object_type == 'vehicle__vru_dummy':
+            self.object_type = 'vehicle_cyclist'
+        elif self.object_type == 'vehicle_target_vehicle' or self.object_type == 'vehicle\u200b\u200b_target_vehicle':
+            self.object_type = 'vehicle_car'
         
         # 位置信息
         self.position = np.array([

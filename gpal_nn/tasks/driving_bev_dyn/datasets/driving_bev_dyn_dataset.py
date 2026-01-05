@@ -333,7 +333,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
     def DistributeByClip(self, datalist, world_size, length_lim=15, rank_curr=0):
         epoch_len = len(datalist) // world_size
-        datalist_by_clip = DatalistByclip(datalist, "sequence_name")
+        datalist_by_clip = DatalistByclip(datalist, "scene")
         clip_key_list = [k for k in datalist_by_clip if len(datalist_by_clip[k]) > length_lim]
         res_clip_n_1 = []
         while len(res_clip_n_1) < (world_size - 1):
@@ -348,7 +348,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             clip_key_list[rank_curr::world_size][:clip_keys_per_rank]))
         from tqdm import tqdm
         dataset = [ele for ele in tqdm(datalist, desc=f'初筛数据[补全rank] {world_size}-{rank_curr}') 
-                   if ele["sequence_name"] in clip_keys_rank]
+                   if ele["scene"] in clip_keys_rank]
         return dataset
 
     def _preconstruct_test_stream_indices(self, datalist, batch_size, key="sequence_name"):
@@ -752,10 +752,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict = {}
 
             sequence_name = info['sequence_name']
+            json_dir = info["json_dir"]
             curr_time_stamp, prev_time_stamp = info['time_stamp'].split('/')
 
             # 无论预刷还是指标测试的数据格式/相对路径必须一致, f'{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
-            curr_json_file = f'{self.json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
+            curr_json_file = f'{self.json_dir}/{json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
             vcu_file =  f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
             
             if 'SKYWELL' in sequence_name:
