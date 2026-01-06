@@ -97,8 +97,8 @@ Tasks:
       "IMAGE_CROP_SIZE": [512, 960]
       "CROP_HeSai_ID4":
         "SCALE": [4, 4, 2, 2, 2, 2, 2]
-        "CROP_START": [28, 28, 28, 28, 28, 28, 28]
-        "CROP_START_SKYWELL": [28, 28, 28, 28, 28, 28, 28]
+        "CROP_START": [0, 0, 24, 24, 24, 24, 24]
+        "CROP_START_SKYWELL": [0, 0, 24, 24, 24, 24, 24]
       "CAMERA_RAW_SIZE":
         [[3840, 2160], 
          [3840, 2160], 
