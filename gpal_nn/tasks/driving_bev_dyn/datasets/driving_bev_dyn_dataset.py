@@ -612,6 +612,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
                 image = cv2.resize(image, self.image_resize[::-1])
                 image = image[crop_start:crop_start + self.img_h_len]
+            
             self._slice_image_cache(
                 database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
         else:
@@ -781,8 +782,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             time_dp.Duration("cur_json", "begin")
 
-            # time_dp.Duration("prev_json", "cur_json")
-
             # === 共同信息
             input_dict['frame_id'] = info['time_stamp']
 
@@ -810,8 +809,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 calib_intrin = copy.deepcopy(input_dict['intrinsic'][view_idx])
                 calib_extrin = copy.deepcopy(input_dict["extrinsic"][view_idx])
                 calib_dist = copy.deepcopy(input_dict["cam_dist"][view_idx])
+                
                 if 'SKYWELL' in sequence_name:
                     img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx] = img_crop_dict['CROP_HeSai_ID4']['CROP_START_SKYWELL'][view_idx]
+                
                 crop_start = img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx]
                 # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
                 
@@ -824,30 +825,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     current_img2 = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
                     current_img2 = cv2.resize(current_img2, self.image_resize[::-1])
                     current_img = current_img2[crop_start:crop_start + self.img_h_len]
-                    # img_grid = DistGridMap(
-                    #     current_img.shape[1],
-                    #     current_img.shape[0],
-                    #     calib_dist,
-                    #     calib_intrin,
-                    #     int(img_crop_dict["IMAGE_RESIZE"][1]),
-                    #     int(img_crop_dict["IMAGE_RESIZE"][0]),
-                    #     int(img_crop_dict["IMAGE_CROP_H_LEN"]),
-                    #     int(img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][view_idx]),
-                    #     norm=False
-                    # ).astype(np.float32)
-                    
-                    # current_img = cv2.remap(
-                    #     current_img,
-                    #     img_grid[...,0], 
-                    #     img_grid[...,1],
-                    #     interpolation=cv2.INTER_NEAREST
-                    # )
-                    calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
-                    calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
-                else:
-                    calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
-                    calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
-                    # current_img = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
+
+                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
+                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
 
                 # image augmentation
                 if self.phase == const.PHASE_TRAINING:
