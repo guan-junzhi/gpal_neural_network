@@ -266,7 +266,7 @@ class DRIVING_BEV_DYNTask(BaseTask):
         # print(ShowDataStruct("imgs", imgs))
         # print(ShowDataStruct("calib", calib))
         from tools_scripts.vis_2d import Vis2D
-        vis1 = Vis2D([-30, 100], [-30, 30], 0.1)
+        vis1 = Vis2D([-51.2, 140.8], [-38.4, 38.4], 0.1)
         try:
             pred_objs = self.vector_to_json(preds, metadata, False)
             for box in gts[idx]['gt_boxes']:
