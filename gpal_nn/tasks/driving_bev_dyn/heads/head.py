@@ -44,7 +44,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
         transformer_config = global_config.Transformer["transformer_config"]
         self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
-        
+        self.voxel_size[0] = self.voxel_size[0]*2
+        self.voxel_size[1] = self.voxel_size[1]*2
         self.grid_size = [
             int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
             int((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1])
