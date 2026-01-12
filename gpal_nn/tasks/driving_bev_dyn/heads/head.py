@@ -41,7 +41,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.prev_metas = None
         self.cnt = 0
         
-        transformer_config = global_config.Transformer["transformer_config"]
+        transformer_config = copy.deepcopy(global_config.Transformer["transformer_config"])
         self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
         self.voxel_size[0] = self.voxel_size[0]*2
