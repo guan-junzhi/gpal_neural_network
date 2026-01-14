@@ -333,7 +333,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
     def DistributeByClip(self, datalist, world_size, length_lim=15, rank_curr=0):
         epoch_len = len(datalist) // world_size
-        datalist_by_clip = DatalistByclip(datalist, "sequence_name")
+        datalist_by_clip = DatalistByclip(datalist, "scene")
         clip_key_list = [k for k in datalist_by_clip if len(datalist_by_clip[k]) > length_lim]
         res_clip_n_1 = []
         while len(res_clip_n_1) < (world_size - 1):
@@ -348,7 +348,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             clip_key_list[rank_curr::world_size][:clip_keys_per_rank]))
         from tqdm import tqdm
         dataset = [ele for ele in tqdm(datalist, desc=f'初筛数据[补全rank] {world_size}-{rank_curr}') 
-                   if ele["sequence_name"] in clip_keys_rank]
+                   if ele["scene"] in clip_keys_rank]
         return dataset
 
     def _preconstruct_test_stream_indices(self, datalist, batch_size, key="sequence_name"):
@@ -897,8 +897,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
             # data_dict_ret['meta']['img_path'] = img_path
-            frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
-            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
+            # frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
+            # data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
+            frame_path = info['scene']
+            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('^')[:2])
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['ego_speed'] = float(vcu[3])
             data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
@@ -1073,8 +1075,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
             # data_dict_ret['meta']['img_path'] = img_path
-            frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
-            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
+            # frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
+            # data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
+            frame_path = info['scene']
+            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('^')[:2])
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['ego_speed'] = float(vcu[3])
             data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])

@@ -172,19 +172,57 @@ Tasks:
           data_list:[
             {
               description: "ID4 training data", 
-              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl",
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter1216_exclude_ID4FrontError.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260114_2021/_0_train_frame_pairs_sampled_cut_in.pkl",
               use_ratio: 50,
-              tags: ["ID4", "filtered-area"]
+              
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260114_2021/_0_train_frame_pairs_sampled_roadside.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260114_2021/_0_train_frame_pairs_sampled_turn.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260114_2021/_0_train_frame_pairs_sampled_vru_near.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260114_2021/_0_train_frame_pairs_sampled_vru_only_nearest.pkl",
+              use_ratio: -1,
+            },
+
+            # L4
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260114_1340/_0_train_frame_pairs_sampled_cut_in.pkl",
+              use_ratio: -1,
             },
             {
               description: "L4 training data",
-              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251128-160418/_0_train_frame_pairs_sampled.pkl",
-              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251210-053104/_0_train_frame_pairs_sampled.pkl",
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251220-142834/_0_train_frame_pairs_sampled.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260114_1340/_0_train_frame_pairs_sampled_roadside.pkl",
               use_ratio: -1,
-              tags: ["L4", "filtered-area", "326850"]
-            }
+            },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260114_1340/_0_train_frame_pairs_sampled_turn.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260114_1340/_0_train_frame_pairs_sampled_vru_near.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260114_1340/_0_train_frame_pairs_sampled_vru_only_nearest.pkl",
+              use_ratio: -1,
+            },
           ],
           camera_name: ['img_front_fisheye', 'img_right_fisheye', 'img_rear_fisheye', 'img_left_fisheye'],
           shuffle: False,

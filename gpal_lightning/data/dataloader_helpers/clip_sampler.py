@@ -2,7 +2,7 @@ from torch.utils.data import Sampler
 import numpy as np
 from numpy.random import randint
 
-def DatalistByclip(datalist, key = "sequence_name", ret_idx = False):
+def DatalistByclip(datalist, key = "scene", ret_idx = False):
     datalist_by_clip = {}
     for ele_i, ele in enumerate(datalist):
         clip_key = ele[key]
@@ -28,7 +28,7 @@ class ClipSampler(Sampler):
     def RandomByClip(self, datalist, length_range=[5, 15], batch_size=8):
         epoch_len = self.default_resample_len
         
-        datalist_by_clip = DatalistByclip(datalist, "sequence_name", True)  # 按clip分组
+        datalist_by_clip = DatalistByclip(datalist, "scene", True)  # 按clip分组
         clip_key_list = list(datalist_by_clip.keys())
         
         flatten_idxs = np.zeros([epoch_len, 2], dtype = np.int32) -1
