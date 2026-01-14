@@ -335,6 +335,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         epoch_len = len(datalist) // world_size
         datalist_by_clip = DatalistByclip(datalist, "scene")
         clip_key_list = [k for k in datalist_by_clip if len(datalist_by_clip[k]) > length_lim]
+        print(f'[初筛数据] clip_key_list len: {len(clip_key_list)}')
+        
         res_clip_n_1 = []
         while len(res_clip_n_1) < (world_size - 1):
             res_clip_n_1 += clip_key_list[:world_size - 1 - len(res_clip_n_1)]
