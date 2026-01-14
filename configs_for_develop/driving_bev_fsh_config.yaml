@@ -8,7 +8,7 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  EPOCH_LEN: 30000
+  EPOCH_LEN: 100000
   CLIP_LENGTH: [15, 25]
   log_every: 10
   visualize_every: 200
