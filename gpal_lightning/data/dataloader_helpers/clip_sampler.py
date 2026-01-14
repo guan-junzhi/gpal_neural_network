@@ -30,6 +30,7 @@ class ClipSampler(Sampler):
         
         datalist_by_clip = DatalistByclip(datalist, "scene", True)  # 按clip分组
         clip_key_list = list(datalist_by_clip.keys())
+        print(f'clip_key_list len: {len(clip_key_list)}')
         
         flatten_idxs = np.zeros([epoch_len, 2], dtype = np.int32) -1
         
