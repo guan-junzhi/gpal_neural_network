@@ -1,7 +1,7 @@
 image_per_gpu: 16
 workers_per_gpu: 12
 skip_sanity_check: true
-max_iterations: 30000
+max_iterations: 50000
 save_every_n_iterations: 500
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
@@ -15,7 +15,7 @@ Train:
   max_visu_img_num: 10
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
-    after_scheduler: CosineAnnealingLR, T_max: 40000}
+    after_scheduler: CosineAnnealingLR, T_max: 60000}
 
 
 has_label: True
@@ -180,7 +180,7 @@ Tasks:
           data_list: [
             {
               description: "ID4 training data", 
-              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20260105-083912/20260105-083912_train_frame_pairs_sampled_add_scen_all.pkl",
+              pkl_path: "od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/all_data.pkl",
               use_ratio: -1,
               tags: ["Only-ID4", "filtered-area", "gpal3.0"]
             },
@@ -192,7 +192,7 @@ Tasks:
           # data_list: ["od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
-          fast_buffer_path: "./7v_gpal30_with_aeb" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./7v_gpal30_with_aeb_0116" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
       
