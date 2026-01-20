@@ -234,12 +234,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 continue
             with open(info_path['pkl_path'], 'rb') as f:
                 infos = pickle.load(f)
-                print(f'description: {info_path["description"]},', 
-                      f' use_ratio: {info_path["use_ratio"]},', 
-                      f' has {len(infos)} samples')
+                print(f'info_path["pkl_path"]: {info_path["pkl_path"]}, ', 
+                      f'has {len(infos)} samples, ',
+                      f'use_ratio: {info_path["use_ratio"]},') 
+
                 fusion_infos.extend(infos)
 
-        print('Total samples for Mixed dataset [原始数据]: %d' %(len(fusion_infos)))
+        print('Total samples for Mixed dataset [Step.0] [加载原始数据]: %d' %(len(fusion_infos)))
+        if phase == const.PHASE_TRAINING:
+            print('Total samples for Mixed dataset [Step.0] [加载原始数据]: %d clips' %(len(DatalistByclip(fusion_infos, "scene"))))
 
         skip_subday_list = [
             '2025-07-10_13-44-15-069',
@@ -317,7 +320,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
         #         fusion_infos_ext.append(copy.deepcopy(ele))
         #     fusion_infos = fusion_infos_ext
-        print('Total samples for Mixed dataset [指定日期过滤]: %d' %(len(fusion_infos)))
+        print('Total samples for Mixed dataset [Step.1] [过滤指定日期]: %d' %(len(fusion_infos)))
         return fusion_infos
 
     def _build_world_data_list(self):
@@ -335,7 +338,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         epoch_len = len(datalist) // world_size
         datalist_by_clip = DatalistByclip(datalist, "scene")
         clip_key_list = [k for k in datalist_by_clip if len(datalist_by_clip[k]) > length_lim]
-        print(f'[初筛数据] clip_key_list len: {len(clip_key_list)}')
+        print(f'[Step.2] [补全rank] [长度剔除 {length_lim}] 后 clip len: {len(clip_key_list)}')
         
         res_clip_n_1 = []
         while len(res_clip_n_1) < (world_size - 1):
@@ -349,8 +352,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         clip_keys_rank = pkl.loads(pkl.dumps(
             clip_key_list[rank_curr::world_size][:clip_keys_per_rank]))
         from tqdm import tqdm
-        dataset = [ele for ele in tqdm(datalist, desc=f'初筛数据[补全rank] {world_size}-{rank_curr}') 
+        dataset = [ele for ele in tqdm(datalist, desc=f'[Step.2] [补全rank] {world_size}-{rank_curr}') 
                    if ele["scene"] in clip_keys_rank]
+        
+        print(f'[Step.2] [补全rank] {world_size}-{rank_curr} len: {len(dataset)}')
         return dataset
 
     def _preconstruct_test_stream_indices(self, datalist, batch_size, key="sequence_name"):
@@ -469,7 +474,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             world_size = 1
         
         if self.phase == const.PHASE_TRAINING:
-            cut_data_list = self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=15, rank_curr=rank_curr)
+            cut_data_list = self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=self.global_config.Train.get("CLIP_LENGTH", [5, 25])[0], rank_curr=rank_curr)
         elif self.phase == const.PHASE_VALIDATION:
             """
             模拟训练时ClipSampler的行为, 但不考虑rank行为, 单卡测试
@@ -901,8 +906,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # data_dict_ret['meta']['img_path'] = img_path
             # frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
             # data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
-            frame_path = info['scene']
-            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('^')[:2])
+            frame_path = [info['scene'].split('^')[0]] + info['sequence_name'].split('/')
+            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path)
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['ego_speed'] = float(vcu[3])
             data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
@@ -1079,8 +1084,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # data_dict_ret['meta']['img_path'] = img_path
             # frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
             # data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
-            frame_path = info['scene']
-            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('^')[:2])
+            frame_path = [info['scene'].split('^')[0]] + info['sequence_name'].split('/')
+            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path)
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['ego_speed'] = float(vcu[3])
             data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])

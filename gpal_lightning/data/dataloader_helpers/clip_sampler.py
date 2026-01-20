@@ -30,7 +30,7 @@ class ClipSampler(Sampler):
         
         datalist_by_clip = DatalistByclip(datalist, "scene", True)  # 按clip分组
         clip_key_list = list(datalist_by_clip.keys())
-        print(f'clip_key_list len: {len(clip_key_list)}')
+        print(f'[Step.3] 传入数据长度[{len(datalist)}]，长度范围[{length_range[0]}-{length_range[1]}]  Clip-Len: {len(clip_key_list)}')
         
         flatten_idxs = np.zeros([epoch_len, 2], dtype = np.int32) -1
         
@@ -69,7 +69,7 @@ class ClipSampler(Sampler):
         return dataset
 
     def __iter__(self):
-        print(len(self.data_source), self.data_source[0])
+        print(f'[Step.3] 传入数据长度[{len(self.data_source)}]，长度范围[{self.length_range[0]}-{self.length_range[1]}]  Batch-Size: {self.batch_size}')
         self.indices = self.RandomByClip(
             self.data_source, self.length_range, self.batch_size)
         print(self.indices[:100])
