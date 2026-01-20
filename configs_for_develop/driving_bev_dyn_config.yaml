@@ -52,8 +52,8 @@ Transformer:
   # freeze: all
   transformer_config:
     task_name: DRIVING_BEV_DYN
-    bev_map_range: [-51, -38.88, -4.0, 143.4, 38.88, 5.0]
-    bev_map_voxel_size: [0.81, 0.81, 1.5]
+    bev_map_range: [-50, -38.4, -4.0, 142, 38.4, 5.0]
+    bev_map_voxel_size: [0.8, 0.8, 1.5]
     image_down_div: 8
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
     in_channels: 128
@@ -113,10 +113,10 @@ Tasks:
   
     build_gt:
       "max_objects": 256
-      "od_heatmap_voxel_size": [0.81, 0.81]
+      "od_heatmap_voxel_size": [0.8, 0.8]
 
     od_range:
-      [-51, -38.88, -4.0, 143.4, 38.88, 5.0]
+      [-50, -38.4, -4.0, 142, 38.4, 5.0]
 
     Head:
       head1:
@@ -136,11 +136,11 @@ Tasks:
           upsample: 8
       
     Loss:
-      od_range: [-51, -38.88, -4.0, 143.4, 38.88, 5.0]
-      out_feat_voxel_size: [0.81, 0.81, 0.5]
+      od_range: [-50, -38.4, -4.0, 142, 38.4, 5.0]
+      out_feat_voxel_size: [0.8, 0.8, 0.5]
     
     POST_PROCESSING:
-      od_range: [-51, -38.88, -4.0, 143.4, 38.88, 5.0]
+      od_range: [-50, -38.4, -4.0, 142, 38.4, 5.0]
       RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
       SCORE_THRESH: 0.28
       OUTPUT_RAW_SCORE: False
@@ -152,10 +152,10 @@ Tasks:
         NMS_PRE_MAXSIZE: 4096
         NMS_POST_MAXSIZE: 500
       DET_RANGE_LIST: [
-        [-51, -38.88, -4.0, 143.4, 38.88, 5.0],
+        [-50, -38.4, -4.0, 142, 38.4, 5.0],
       ]
       IOU_THRESH_LIST: [0.5, 0.5, 0.25, 0.25]
-      out_feat_voxel_size: [0.81, 0.81, 0.5]
+      out_feat_voxel_size: [0.8, 0.8, 0.5]
 
 
 
@@ -202,7 +202,7 @@ Tasks:
           have_prev_label: false,
           # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLineData_Test/",
@@ -229,7 +229,7 @@ Tasks:
           #   },
             {
               description: "ID4 testing data", 
-              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196_add_scen.pkl",
               use_ratio: -1,
               tags: ["ID4", "filtered-area"]
             },

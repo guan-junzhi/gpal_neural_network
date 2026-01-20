@@ -47,8 +47,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.voxel_size[0] = self.voxel_size[0]*2
         self.voxel_size[1] = self.voxel_size[1]*2
         self.grid_size = [
-            int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
-            int((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1])
+            int(round((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0],2)),
+            int(round((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1],2))
         ]  # [H, W] 48, 120 / 96 120 (fisheye)
         
         xyz_camA = gridcloud3d(1, 1, self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
