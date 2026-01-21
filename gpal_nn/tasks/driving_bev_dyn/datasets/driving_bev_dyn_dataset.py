@@ -161,8 +161,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         
         OD_HEATMAP_VOXEL_SIZE = self.task_config.build_gt["od_heatmap_voxel_size"]
         OD_HEATMAP_OUT_HW = [
-            int((self.task_config.od_range[4] - self.task_config.od_range[1]) / OD_HEATMAP_VOXEL_SIZE[1]),
-            int((self.task_config.od_range[3] - self.task_config.od_range[0]) / OD_HEATMAP_VOXEL_SIZE[0]),
+            int(round((self.task_config.od_range[4] - self.task_config.od_range[1]) / OD_HEATMAP_VOXEL_SIZE[1],2)),
+            int(round((self.task_config.od_range[3] - self.task_config.od_range[0]) / OD_HEATMAP_VOXEL_SIZE[0],2)),
         ]  # [96, 240]  # YX
 
         DATA_PROCESSOR = [
