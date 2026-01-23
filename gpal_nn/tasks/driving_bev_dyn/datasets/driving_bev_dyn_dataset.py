@@ -184,7 +184,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             point_cloud_range=np.array(self.task_config.od_range), 
             # placeholder
             training= phase == const.PHASE_TRAINING, 
-            num_point_features=None
+            num_point_features=None,
+            global_config=self.global_config
         )
 
         # if self.dataset_cfg.USE_CAMERA_YAML:
@@ -1049,6 +1050,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 input_dict[f'images_input{view_idx}'] = current_img.astype(np.float32) / 255.0
                 
             time_dp.Duration("image", "cur_json")
+            input_dict['scene'] = info['scene']
             data_dict = self.prepare_data(data_dict=input_dict)
             time_dp.Duration("prepare_data", "image")
 
