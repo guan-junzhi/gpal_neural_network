@@ -59,7 +59,7 @@ class DataProcessor(object):
             return partial(self.build_targets_track, config=config)
         
         n_objs = config['max_objects']
-        max_v  = 80
+        max_v  = 40
         if True:
             minX, minY, minZ, maxX, maxY, maxZ = self.point_cloud_range
             bound_size_x, bound_size_y = maxX - minX, maxY - minY
