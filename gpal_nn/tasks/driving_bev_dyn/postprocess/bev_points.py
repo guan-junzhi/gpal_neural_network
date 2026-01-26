@@ -67,7 +67,7 @@ class Bev_To_Points(nn.Module):
         # 置信度得分
         if "curr" in mode_pred:
             batch_dict['pred_curr_track_score'] = score_topk.reshape(batch_size, self.num_key_points, 1)
-            batch_dict['pred_curr_track_point_features'] = features_topk.permute(0, 2, 1).reshape(batch_size, -1, 15)  # -> N, 256, D
+            batch_dict['pred_curr_track_point_features'] = features_topk.permute(0, 2, 1).reshape(batch_size, self.num_key_points, -1)  # -> N, 256, D
             batch_dict['pred_curr_track_point_coords'] = xys_topk.permute(0, 2, 1).reshape(batch_size, self.num_key_points, -1)  # (BxN, 2)
             batch_dict['pred_curr_track_point_idx'] = indice_topk
 
