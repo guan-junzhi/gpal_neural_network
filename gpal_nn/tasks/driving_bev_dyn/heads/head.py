@@ -169,10 +169,11 @@ class DRIVING_BEV_DYNHead(BaseHead):
         x_fuser = self.head["fuser"](prev_feats, x, cur2prev)
         self.feature_bank = x_fuser.detach().clone()
         x_decode = self.head["center_head"](x_fuser)
-        
+        _set = ["reg", "height","dim", "rot", "vel"]
+        head_conv = torch.cat([x_decode[k] for k in _set], dim=1)
         batch_dict = {
-            'head_conv': x_decode[:, 6:], 
-            "hm_cen": x_decode[:, :6], 
+            'head_conv': head_conv, 
+            "hm_cen": x_decode["hm"], 
             "cur_feats": x_fuser.detach().clone()
         }
         

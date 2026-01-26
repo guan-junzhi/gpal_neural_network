@@ -7,11 +7,14 @@ from gpal_lightning.neural_network.tasks.base.config_parsers.config_parser impor
 )
 from tools_scripts.data_format_cvt import ShowDataStruct
 import torchvision.models as models
+import torch.nn.functional as F
+
 
 class FastDecoderHead(nn.Module):
     def __init__(self, layers_config):
         super().__init__()
         self.layers_config = layers_config
+        self.heads = {}
         self._setup()
 
     def _setup(self):
@@ -25,28 +28,32 @@ class FastDecoderHead(nn.Module):
         self.layer1 = trunk.layer1
         self.layer2 = trunk.layer2
         self.layer3 = trunk.layer3
+        
+        in_channels_list = self.layers_config["in_channels_list"]
+        feat_out_channels = self.layers_config["feat_out_channels"]
+        self.lateral_convs = nn.ModuleList()
+        self.output_convs = nn.ModuleList()
 
-        upsample_ratio = self.layers_config.get("upsample", 1)
-        upsample_layers = []
-        while upsample_ratio > 1:
-            upsample_layers.append(
-                nn.ConvTranspose2d(
-                    # self.layers_config["in_channels"],
-                    256,
-                    # 128 if upsample_ratio == 2 else self.layers_config["in_channels"],
-                    256,
-                    4,
-                    2,
-                    1,
-                    bias=False,
+        for in_channels in in_channels_list:
+            self.lateral_convs.append(
+                nn.Sequential(
+                    nn.Conv2d(in_channels, feat_out_channels, kernel_size=1),
+                    nn.BatchNorm2d(feat_out_channels, momentum=0.1, eps=1e-5),
+                    # nn.ReLU(inplace=True)
                 )
             )
-            # upsample_layers.append(nn.BatchNorm2d(128 if upsample_ratio == 2 else self.layers_config["in_channels"]))
-            upsample_layers.append(nn.BatchNorm2d(256))
-            upsample_layers.append(nn.ReLU(True))
-            upsample_ratio /= 2
+            
+        self.heads = nn.ModuleDict()
+        self.head_config = self.layers_config["HEAD"]
+        for head_name, head_out_channels in self.head_config.items():
 
-        self.upsample = nn.Sequential(*upsample_layers)
+            self.heads[head_name] = nn.Sequential(
+                nn.Conv2d(feat_out_channels, feat_out_channels, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(feat_out_channels, momentum=0.1, eps=1e-5),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(feat_out_channels, int(head_out_channels), kernel_size=1, padding=0),
+            )
+            
 
         self.out = nn.Sequential(
             nn.Conv2d(256, 128, kernel_size=3, padding=1, bias=False),
@@ -94,12 +101,22 @@ class FastDecoderHead(nn.Module):
         x2 = self.layer2(x1)
         x3 = self.layer3(x2)
 
+        # Apply lateral convolutions
+        x3 = self.lateral_convs[2](x3)
+        x2 = self.lateral_convs[1](x2)
+        x1 = self.lateral_convs[0](x1)
+        # Apply output convolutions
+        x2 = F.interpolate(x3,scale_factor=2,mode='bilinear')+x2
+        x1 = F.interpolate(x2,scale_factor=2,mode='bilinear')+x1
+        x = F.interpolate(x1,scale_factor=2,mode='bilinear')
 
-        # Apply upsampling
-        x = self.upsample(x3)
+        # Apply heads
+        head_outputs = {}
+        for head_name, head in self.heads.items():
+            head_outputs[head_name] = head(x)
         # Apply out
-        x = self.out(x)
-        return x
+        # x = self.out(x)
+        return head_outputs
 
 
 if __name__ == "__main__":
