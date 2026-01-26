@@ -1,4 +1,4 @@
-image_per_gpu: 16
+image_per_gpu: 24
 workers_per_gpu: 12
 skip_sanity_check: true
 max_iterations: 50000
@@ -31,7 +31,7 @@ Backbones:
     # freeze: all
     out_channels: 64
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
-  
+
 Groups:
   group0: {load: all, freeze: all, type: DummyBackbone, input_source: backbone0}
 Necks:
@@ -52,8 +52,8 @@ Transformer:
   # freeze: all
   transformer_config:
     task_name: DRIVING_BEV_DYN
-    bev_map_range: [-50, -38.4, -4.0, 142, 38.4, 5.0]
-    bev_map_voxel_size: [0.8, 0.8, 1.5]
+    bev_map_range: [-50, -30.72, -4.0, 154.8, 30.72, 5.0] 
+    bev_map_voxel_size: [1.28, 1.28, 1.5]
     image_down_div: 8
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
     in_channels: 128
@@ -69,7 +69,7 @@ Tasks:
     DEPLOY_CFG: 
      mode: "gpal30_in_model_with_small_image"
      cfg:
-        feature_size: [96, 120]
+        feature_size: [96, 320]
     load: all
     # freeze: all
     amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
@@ -113,10 +113,10 @@ Tasks:
   
     build_gt:
       "max_objects": 256
-      "od_heatmap_voxel_size": [0.8, 0.8]
+      "od_heatmap_voxel_size": [0.64, 0.64]
 
     od_range:
-      [-50, -38.4, -4.0, 142, 38.4, 5.0]
+      [-50, -30.72, -4.0, 154.8, 30.72, 5.0] 
 
     Head:
       head1:
@@ -136,11 +136,11 @@ Tasks:
           upsample: 8
       
     Loss:
-      od_range: [-50, -38.4, -4.0, 142, 38.4, 5.0]
-      out_feat_voxel_size: [0.8, 0.8, 0.5]
+      od_range: [-50, -30.72, -4.0, 154.8, 30.72, 5.0] 
+      out_feat_voxel_size: [0.64, 0.64, 0.5]
     
     POST_PROCESSING:
-      od_range: [-50, -38.4, -4.0, 142, 38.4, 5.0]
+      od_range: [-50, -30.72, -4.0, 154.8, 30.72, 5.0] 
       RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
       SCORE_THRESH: 0.28
       OUTPUT_RAW_SCORE: False
@@ -152,10 +152,10 @@ Tasks:
         NMS_PRE_MAXSIZE: 4096
         NMS_POST_MAXSIZE: 500
       DET_RANGE_LIST: [
-        [-50, -38.4, -4.0, 142, 38.4, 5.0],
+        [-50, -30.72, -4.0, 154.8, 30.72, 5.0] ,
       ]
       IOU_THRESH_LIST: [0.5, 0.5, 0.25, 0.25]
-      out_feat_voxel_size: [0.8, 0.8, 0.5]
+      out_feat_voxel_size: [0.64, 0.64, 0.5]
 
 
 

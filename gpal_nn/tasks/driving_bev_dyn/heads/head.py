@@ -44,8 +44,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
         transformer_config = copy.deepcopy(global_config.Transformer["transformer_config"])
         self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
-        self.voxel_size[0] = self.voxel_size[0]*2
-        self.voxel_size[1] = self.voxel_size[1]*2
+        self.voxel_size[0] = self.voxel_size[0]
+        self.voxel_size[1] = self.voxel_size[1]
         self.grid_size = [
             int(round((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0],2)),
             int(round((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1],2))
@@ -119,7 +119,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
                 dt[i] = (ts_c - ts_p)
         return seq_flag, dt
 
-    def gen_shift_feature_grid(self, grid, cur2prev, prev_feat, bev_h_resolution, bev_w_resolution):
+    def gen_shift_feature_grid(self, grid, cur2prev, prev_feat, bev_w_resolution, bev_h_resolution):
         bs, _, h, w = prev_feat.shape
         grid = grid.view(bs, h, w, 3, 1)
         

@@ -282,7 +282,7 @@ class ODViewTransformer(BaseModule):
         
         self.conv_out = nn.Sequential(
             nn.Conv2d(transformer_config["in_channels"] * z_layer_num,
-                      transformer_config["out_channels"], kernel_size=3, stride=2, padding=1, bias=False),
+                      transformer_config["out_channels"], kernel_size=1, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(transformer_config["out_channels"]),
             nn.ReLU(True)
         )
