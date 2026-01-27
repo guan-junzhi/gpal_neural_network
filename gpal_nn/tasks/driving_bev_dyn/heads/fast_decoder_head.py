@@ -39,7 +39,7 @@ class FastDecoderHead(nn.Module):
                 nn.Sequential(
                     nn.Conv2d(in_channels, feat_out_channels, kernel_size=1),
                     nn.BatchNorm2d(feat_out_channels, momentum=0.1, eps=1e-5),
-                    # nn.ReLU(inplace=True)
+                    nn.ReLU(inplace=True)
                 )
             )
             
@@ -50,19 +50,12 @@ class FastDecoderHead(nn.Module):
             self.heads[head_name] = nn.Sequential(
                 nn.Conv2d(feat_out_channels, feat_out_channels, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(feat_out_channels, momentum=0.1, eps=1e-5),
+                nn.ReLU(inplace=True),
                 nn.Conv2d(feat_out_channels, int(head_out_channels), kernel_size=1, padding=0),
             )
             
 
-        self.out = nn.Sequential(
-            nn.Conv2d(256, 128, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, self.layers_config["out_channels"], kernel_size=1, padding=0),
-        )
+        
 
     def load_state_dict(self, state_dict, strict=True):
         prefix = "head.head1."
