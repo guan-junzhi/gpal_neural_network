@@ -50,7 +50,6 @@ class FastDecoderHead(nn.Module):
             self.heads[head_name] = nn.Sequential(
                 nn.Conv2d(feat_out_channels, feat_out_channels, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(feat_out_channels, momentum=0.1, eps=1e-5),
-                nn.ReLU(inplace=True),
                 nn.Conv2d(feat_out_channels, int(head_out_channels), kernel_size=1, padding=0),
             )
             

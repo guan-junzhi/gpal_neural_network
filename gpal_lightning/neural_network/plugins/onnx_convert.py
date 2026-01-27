@@ -346,10 +346,10 @@ class PytorchToOnnx:
                             merged_input_dict["calib"]["images_grid"] = torch.rand(7, 320, 768, 2).cuda()  # 不使用,任意
                     else:
                         merged_input_dict["calib"]["images_grid"] = torch.rand(7, 320, 768, 2).cuda()
-                    merged_input_dict["calib"]["vt_grid"] = torch.rand(7, 192, 120, 2).cuda()
+                    merged_input_dict["calib"]["vt_grid"] = torch.rand(7, 288, 160, 2).cuda()
                     merged_input_dict["metadata"] = {}
-                    merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 120).cuda()
-                    merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 120, 2).cuda()
+                    merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 160).cuda()
+                    merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 160, 2).cuda()
 
             elif task.name == "DRIVING_BEV_STA":
                 merged_input_dict = {"task": tasks[0].name, "image": input_dict}
@@ -371,17 +371,17 @@ class PytorchToOnnx:
     @staticmethod
     def init_net(global_config, tasks):
         net = WrappedGpNet(global_config, tasks)
-        if global_config.load_from:
-            # checkpoint_path = get_checkpoint_path(global_config.load_from)
-            checkpoint_path = global_config.load_from
-            logging.info("Loading from {}".format(checkpoint_path))
-            checkpoint = torch.load(checkpoint_path)
-            try:
-                net.load_state_dict(checkpoint["state_dict"], strict=False)
-            except Exception as e:
-                print(e)
-            # PytorchToOnnx.reset_weight(net)
-            logging.info("Model was loaded successfully")
+        # if global_config.load_from:
+        #     # checkpoint_path = get_checkpoint_path(global_config.load_from)
+        #     checkpoint_path = global_config.load_from
+        #     logging.info("Loading from {}".format(checkpoint_path))
+        #     checkpoint = torch.load(checkpoint_path)
+        #     try:
+        #         net.load_state_dict(checkpoint["state_dict"], strict=False)
+        #     except Exception as e:
+        #         print(e)
+        #     # PytorchToOnnx.reset_weight(net)
+        #     logging.info("Model was loaded successfully")
         return net
 
     @staticmethod
