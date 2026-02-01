@@ -289,7 +289,7 @@ class BaseDataset(Dataset, ABC):
             w = int().from_bytes(x[4:8], byteorder='little', signed=False)
             return cv2.imdecode(np.frombuffer(x[8:], dtype=np.uint8), cv2.IMREAD_COLOR), [h, w]
         except Exception as e:
-            # print(f"_slice_image_buffer_access failed {e}")
+            print(f"_slice_image_buffer_access failed {e}")
             return None, None
 
 if __name__ == "__main__":
