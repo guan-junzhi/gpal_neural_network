@@ -19,7 +19,7 @@ from gpal_lightning.utils.datatype_convert import _data2tensor
 from gpal_lightning.utils.data_buffer import FastLoaderBuffer
 import cv2
 import numpy as np
-
+import threading
 
 class BaseDataset(Dataset, ABC):
     """BaseDataset is a iterable-style dataset. (https://pytorch.org/docs/stable/data.html)
@@ -109,6 +109,7 @@ class BaseDataset(Dataset, ABC):
             self.buffer = None
         self.buffer_slice_write_cache = {}
         self.buffer_slice_read_cache = {}
+        self._thread_local = threading.local()
 
     @property
     def worker(self):
@@ -258,22 +259,32 @@ class BaseDataset(Dataset, ABC):
             return None, None
 
     def _slice_image_cache(self, slice_key, view_key, img, pre_resize, quality):
-        if (self.buffer is None):
+        if self.buffer is None:
             return False
 
-        if slice_key not in self.buffer_slice_write_cache:
-            for k, v in self.buffer_slice_write_cache.items():
+        # 每个线程有自己的缓存字典
+        if not hasattr(self._thread_local, 'buffer_slice_write_cache'):
+            self._thread_local.buffer_slice_write_cache = {}
+        
+        # 获取当前线程的缓存
+        buffer_slice_write_cache = self._thread_local.buffer_slice_write_cache
+        
+        if slice_key not in buffer_slice_write_cache:
+            # 将当前线程的缓存写入buffer
+            for k, v in buffer_slice_write_cache.items():
                 ret = self.buffer.Cache(k, pickle.dumps(v))
                 if not ret:
                     print(f"self.buffer.Cache {k} faild")
-
-            self.buffer_slice_write_cache = {slice_key: {}}
+            # 清空当前线程的缓存并初始化新分片
+            buffer_slice_write_cache.clear()
+            buffer_slice_write_cache[slice_key] = {}
+        
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
         h = int(img.shape[0]).to_bytes(4, byteorder='little', signed=False)
         w = int(img.shape[1]).to_bytes(4, byteorder='little', signed=False)
         img = cv2.resize(img, pre_resize)
         result, encimg = cv2.imencode('.jpg', img, encode_param)
-        self.buffer_slice_write_cache[slice_key][view_key] = h + w + encimg.tobytes()
+        buffer_slice_write_cache[slice_key][view_key] = h + w + encimg.tobytes()
         return True
 
     def _slice_image_buffer_access(self, slice_key, view_key):
