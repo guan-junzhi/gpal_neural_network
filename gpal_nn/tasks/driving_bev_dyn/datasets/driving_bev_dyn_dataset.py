@@ -994,7 +994,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # if self.phase == const.PHASE_VALIDATION:
             intrinsic = self.intrinsic
             cam_dist = self.cam_dist
-            temp = np.stack([np.eye(4) for i in range(7)], axis=0)
+            temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
             temp[:, :3:, :3] = self.r_mat_np
             temp[:, :3:, [3]] = self.t_vec_np
             extrinsic = temp
