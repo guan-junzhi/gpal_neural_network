@@ -995,11 +995,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # if self.dataset_cfg.USE_CAMERA_YAML:
             # if self.phase == const.PHASE_VALIDATION:
             if 'SKYWELL' in sequence_name:
-                intrinsic = self.intrinsic
-                cam_dist = self.cam_dist
+                intrinsic = copy.deepcopy(self.intrinsic)
+                cam_dist = copy.deepcopy(self.cam_dist)
                 temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
-                temp[:, :3:, :3] = self.r_mat_np
-                temp[:, :3:, [3]] = self.t_vec_np
+                temp[:, :3:, :3] = copy.deepcopy(self.r_mat_np)
+                temp[:, :3:, [3]] = copy.deepcopy(self.t_vec_np)
                 extrinsic = temp
 
             # TODO
