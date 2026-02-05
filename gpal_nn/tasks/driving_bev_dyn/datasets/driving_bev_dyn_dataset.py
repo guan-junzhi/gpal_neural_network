@@ -191,6 +191,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         # if self.dataset_cfg.USE_CAMERA_YAML:
         cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
         if True:
+            
             intrinsic = []
             distort_coeff = []
             r_mat = []
@@ -199,6 +200,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             for curr_view in self.image_view:
                 # curr_view_yaml_file = f"{root_dir}/l4_db_bag_jira/calibration_json/camera/fisheye/{curr_view.replace('img_', '')}.yaml"
                 curr_view_yaml_file = f"{WORKDIRS_ROOT}/od_occ_group/huiquyang/data/l4_db_bag_jira/calibration_cloud/camera/skywell_fisheye_calib_0205/{curr_view.replace('img_', '')}.yaml"
+                print(f'use camera yaml file: {curr_view_yaml_file}')
                 yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
                 intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
                 # distort_coeff.append(yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
@@ -978,7 +980,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             meta_info, cameras, bounding_boxes, special_labels = ret_curr_infos
 
             gt_boxes, gt_names = self.get_box(bounding_boxes=bounding_boxes)
-            _, _, _, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
+            intrinsic, cam_dist, extrinsic, camera_sizes = self.get_camera_parameters(cam_infos=cameras)
 
             input_dict['gt_names'] = gt_names
             input_dict['gt_boxes'] = gt_boxes
@@ -992,12 +994,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             # if self.dataset_cfg.USE_CAMERA_YAML:
             # if self.phase == const.PHASE_VALIDATION:
-            intrinsic = self.intrinsic
-            cam_dist = self.cam_dist
-            temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
-            temp[:, :3:, :3] = self.r_mat_np
-            temp[:, :3:, [3]] = self.t_vec_np
-            extrinsic = temp
+            if 'SKYWELL' in sequence_name:
+                intrinsic = self.intrinsic
+                cam_dist = self.cam_dist
+                temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
+                temp[:, :3:, :3] = self.r_mat_np
+                temp[:, :3:, [3]] = self.t_vec_np
+                extrinsic = temp
 
             # TODO
             if 'SKYWELL' in sequence_name:
