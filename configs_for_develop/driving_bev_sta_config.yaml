@@ -438,6 +438,29 @@ Tasks:
           lmdb_path: '1103_train_lmdb',
           ratio: 30,
         }
+      - { dataset_name: 'gpal_interaction_lane', 
+          # root_dir:  "../lane_data",
+          root_dir:  "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
+          # pkl_infos: ["gpal_songbiao_no_stop_20250716", "20250821_gpal_bev_train_filter_tail",
+          #      "20250818_gpal_bodeng_train_filter_tail", "20250822_gpal_bodeng_train_filter_tail_split_merge"],
+          pkl_infos: ["1202_cross_guide_train_keys", "1202_intersection_lane_train_keys",  "1202_intersection_lane_train_keys",  "1202_intersection_lane_train_keys"],
+          pkl_root: "multiview_lane_det/lane_pkl/", # relative to ENV_GPAL_NEURAL_NETWORK_DATASETS_ROOT
+          in_shape: [540, 960],
+          # camera_name: ['img_front_30', 'img_front_120', 'img_left_front', 'img_right_front'],
+          camera_name: ['img_front_30', 'img_front_120'],
+          gt_range: [120, 16, 0, 0.0, -16.0, 0],
+          is_random_scale_and_translate: False,
+          fast_buffer_path: "./", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "", # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          rpy_aug: True, 
+          bev_aug: True,
+          rpy_aug_deg: [3,3,3], 
+          bev_aug_deg: 5,
+          cut_start_h: 28,
+          navi_info_ratio: 0.75,
+          lmdb_path: '1103_train_lmdb',
+          ratio: 30,
+        }
       validation:
       - { dataset_name: 'gpal', 
           # root_dir:  "../lane_data",

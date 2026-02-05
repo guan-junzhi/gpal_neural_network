@@ -269,15 +269,15 @@ class BaseDataset(Dataset, ABC):
         # 获取当前线程的缓存
         buffer_slice_write_cache = self._thread_local.buffer_slice_write_cache
         
-        if slice_key not in buffer_slice_write_cache:
-            # 将当前线程的缓存写入buffer
-            for k, v in buffer_slice_write_cache.items():
-                ret = self.buffer.Cache(k, pickle.dumps(v))
-                if not ret:
-                    print(f"self.buffer.Cache {k} faild")
-            # 清空当前线程的缓存并初始化新分片
-            buffer_slice_write_cache.clear()
-            buffer_slice_write_cache[slice_key] = {}
+        # if slice_key not in buffer_slice_write_cache:
+        #     # 将当前线程的缓存写入buffer
+        #     for k, v in buffer_slice_write_cache.items():
+        #         ret = self.buffer.Cache(k, pickle.dumps(v))
+        #         if not ret:
+        #             print(f"self.buffer.Cache {k} faild")
+        #     # 清空当前线程的缓存并初始化新分片
+        #     buffer_slice_write_cache.clear()
+        #     buffer_slice_write_cache[slice_key] = {}
         
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
         h = int(img.shape[0]).to_bytes(4, byteorder='little', signed=False)

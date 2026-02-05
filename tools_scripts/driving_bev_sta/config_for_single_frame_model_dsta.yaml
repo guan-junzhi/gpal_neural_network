@@ -5,12 +5,12 @@ model_parameters:
   # onnx_model: '/data/ai_group/workdirs/gpal_neural_network_group/jintao/data/onnx/epoch=0-step=35000_checkpoint_sim.onnx'
   #  onnx_model: '/data/ai_group/workdirs/gpal_neural_network_group/jintao/data/onnx/epoch=0-step=35000_checkpoint_sim.onnx'
   # onnx_model: '/open_explorer/onnx/epoch=0-step=35000_checkpoint_sim.onnx'
-  onnx_model: '/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week50_60k_udist/checkpoint/epoch=0-step=60000_checkpoint_sim.onnx'
+  onnx_model: '/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week51_ego_waiting_60k/checkpoint/epoch=0-step=60000_checkpoint_sim.onnx'
   # BPU architecture, with range: nash-e/nash-m
   march: "nash-m"
   # Specify the directory to store the model conversion output
   #  working_dir: '/data/ai_group/workdirs/gpal_neural_network_group/jintao/data/ptq_tools/output_int16'
-  working_dir: '/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week50_60k_udist/'
+  working_dir: '/data/ai_group/workdirs/multitask_lanenet_group/tongwang/week51_ego_waiting_60k/'
   # Specify the name prefix for output model
   output_model_file_prefix: 'model_int16'
   enable_vpu: True
