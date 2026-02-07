@@ -930,13 +930,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
             
-            if hasattr(self._thread_local, 'buffer_slice_write_cache'):
-                buffer_slice_write_cache = self._thread_local.buffer_slice_write_cache
-                for k, v in buffer_slice_write_cache.items():
-                    ret = self.buffer.Cache(k, pickle.dumps(v))
-                    if not ret:
-                        print(f"self.buffer.Cache {k} faild")
-                del self._thread_local.buffer_slice_write_cache
+            
 
         except Exception as e:
 
