@@ -9,7 +9,7 @@ dump_calibset: false
 
 Train:
   EPOCH_LEN: 150000
-  CLIP_LENGTH: [5, 25]
+  CLIP_LENGTH: [10, 50]
   log_every: 10
   visualize_every: 800
   max_visu_img_num: 6
