@@ -10,16 +10,14 @@ import torch.nn.functional as F
 from gpal_lightning import const
 from gpal_lightning.neural_network.network_modules.gpnet import GpNet
 from gpal_lightning.neural_network.global_config import GlobalConfig
-from gpal_lightning.utils.get_checkpoint_path import get_checkpoint_path
 
 from onnx import helper
 import onnx
 import onnx_graphsurgeon as gs
 import numpy as np
 from tools_scripts.data_format_cvt import ShowDataStruct
-from gpal_nn.tasks.driving_bev_dyn.postprocess.bev_points import Bev_To_Points
 from gpal_nn.tasks.parking_ipm_sta.datasets.parking_ipm_sta_dataset import preprocess_img
-
+from horizon_plugin_pytorch.utils.onnx_helper import export_to_onnx
 
 class WrappedGpNet(GpNet):
     """
@@ -51,6 +49,10 @@ class WrappedGpNet(GpNet):
         task = input["task"]
         images_grid = calib["images_grid"]
         metadata = input["metadata"]
+        point_features = input["points"]
+
+        point_features["features"] = point_features["features"].permute(0, 3, 2, 1)
+        point_features["coors"] = point_features["coors"][0,0,...]
         
         deploy_cfg = self.tasks_to_run[task].deploy_cfg
         if deploy_cfg is not None:
@@ -73,17 +75,22 @@ class WrappedGpNet(GpNet):
 
             imgs = torch.cat([udist_img8ms, udist_img2ms], dim = 0) / 255.0
         mono3d, mono_od, gate_lever, side_od, neck2_in = [], [], [], [], []
-
         for backbone_name, camera_list in self.backbone_camera_mapping.items():
-            bb_output = self.model[backbone_name](imgs)
-            g0_output = self.model['group0'](bb_output)
-            neck0_output = self.model['neck0'](g0_output)
+            if backbone_name == "backbone0":
+                bb_output = self.model[backbone_name](imgs)
+                g0_output = self.model['group0'](bb_output)
+                neck0_output = self.model['neck0'](g0_output)
+                neck1_output = None
+            elif backbone_name == "backbone1":
+                bb_output = self.model[backbone_name](point_features)
+                g1_output = self.model['group1'](bb_output)
+                neck1_output = self.model['neck1'](g1_output)
 
         bev_feature = self.model[self._transformers[task]](neck0_output, calib)
       
         for task_name in self.tasks_to_run.keys():
             if task_name == "DRIVING_BEV_DYN":
-                output = self.model[task_name](bev_feature,metadata = metadata )
+                output = self.model[task_name](bev_feature,metadata = metadata,point_feature=neck1_output)
                 output = output[0]
                 output['hm_cen'] = self.simple_nms(output['hm_cen'])
                 
@@ -337,6 +344,7 @@ class PytorchToOnnx:
                     merged_input_dict["metadata"] = {}
                     merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 60).cuda()
                     merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 60, 2).cuda()
+                    
                     pass
                 else:
                     merged_input_dict = {"task": task.name, "image": input_dict}
@@ -350,6 +358,9 @@ class PytorchToOnnx:
                     merged_input_dict["metadata"] = {}
                     merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 160).cuda()
                     merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 160, 2).cuda()
+                    merged_input_dict["points"] = {}
+                    merged_input_dict["points"]["features"] = torch.zeros(1,40000,20,6).cuda()
+                    merged_input_dict["points"]["coors"] = torch.zeros((1,1,40000,4),dtype=torch.int32).cuda()
 
             elif task.name == "DRIVING_BEV_STA":
                 merged_input_dict = {"task": tasks[0].name, "image": input_dict}
@@ -411,7 +422,7 @@ class PytorchToOnnx:
                     output_names = ["fish_head_conv", "fish_hm_center","fish_prev_feats_output"]
                 else:
                     input_names = ["img_front_120", "img_front_30", "img_back", "img_front_left",
-                        "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid",  "prev_feats","prev_feats_grid"]  # occ_od
+                        "img_front_right", "img_rear_left", "img_rear_right", "images_grid", "vt_grid",  "prev_feats","prev_feats_grid","features","coors"]  # occ_od
 
                     output_names = ["head_conv", "hm_center","prev_feats_output"]
             if task.name == "PARKING_IPM_STA":
@@ -425,7 +436,7 @@ class PytorchToOnnx:
                 do_constant_folding = False
 
             with torch.no_grad():
-                torch.onnx.export(
+                export_to_onnx(
                     net,
                     (input_dummy, {}),
                     onnx_path,

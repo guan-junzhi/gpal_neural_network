@@ -4,9 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from horizon_plugin_pytorch.nn.quantized.functional_impl import (
-    _voxelization as horizon_voxelization,
-)#c++代码注册机制
+from horizon_plugin_pytorch.nn.quantized.functional_impl import (_voxelization as horizon_voxelization)#c++代码注册机制
 
 
 

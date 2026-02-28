@@ -1,8 +1,8 @@
 image_per_gpu: 12
 workers_per_gpu: 12
 skip_sanity_check: true
-max_iterations: 25000
-save_every_n_iterations: 500
+max_iterations: 40000
+save_every_n_iterations: 1000
 iteration_based_lr_schedulers: true
 check_val_every_n_epoch: 1000000
 dump_calibset: false
@@ -19,41 +19,41 @@ Train:
   max_visu_img_num: 6
   optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
   lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
-    after_scheduler: CosineAnnealingLR, T_max: 30000}
+    after_scheduler: CosineAnnealingLR, T_max: 40000}
 
 Test:
   visulization: True
 
 Backbones:
-  backbone0:
-    type: HENet
-    ampfp16: true
-    load: all  #屏蔽此参数是为了加载其他模块预训练权重的时候，加载地平线预训练权重，需要打开pretrained参数
-    # freeze: all
-    in_channels: 3
-    input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
-    block_nums: [4, 3, 8, 6]
-    block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
-    embed_dims: [64, 128, 192, 384]
-    attention_block_num: [0, 0, 0, 0]
-    mlp_ratios: [2, 2, 2, 3]
-    mlp_ratio_attn: 2
-    act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
-    use_layer_scale: [True, True, True, True]
-    extra_act: [False, False, False, False]
-    down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
-    patch_embed: "origin"
-    stage_out_norm: True
-    need_neck: True 
-    pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/henet/float-checkpoint-best.pth.tar'
-    strict_load: False
   # backbone0:
-  #   type: EncoderRes34
+  #   type: HENet
   #   ampfp16: true
-  #   load: all
+  #   load: all  #屏蔽此参数是为了加载其他模块预训练权重的时候，加载地平线预训练权重，需要打开pretrained参数
   #   # freeze: all
-  #   out_channels: 64
+  #   in_channels: 3
   #   input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
+  #   block_nums: [4, 3, 8, 6]
+  #   block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
+  #   embed_dims: [64, 128, 192, 384]
+  #   attention_block_num: [0, 0, 0, 0]
+  #   mlp_ratios: [2, 2, 2, 3]
+  #   mlp_ratio_attn: 2
+  #   act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
+  #   use_layer_scale: [True, True, True, True]
+  #   extra_act: [False, False, False, False]
+  #   down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
+  #   patch_embed: "origin"
+  #   stage_out_norm: True
+  #   need_neck: True 
+  #   pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/henet/float-checkpoint-best.pth.tar'
+  #   strict_load: False
+  backbone0:
+    type: EncoderRes34
+    ampfp16: true
+    load: all
+    # freeze: all
+    out_channels: 64
+    input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
   
 
   backbone1:
@@ -62,19 +62,19 @@ Backbones:
     load: all
     # freeze: all
     point_process_config:
-      pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-      voxel_size: [0.32, 0.32, 6]
+      pc_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
+      voxel_size: [0.32, 0.32, 9]
       max_voxels_num: [30000, 40000]
       max_points_in_voxel: 20
-      norm_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+      norm_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
       norm_dims: [0, 1, 2]
     reader_config:
       num_input_features: 6
       num_filters: [64,]
       with_distance: False
       pool_size: [20,1]
-      voxel_size: [0.32, 0.32, 6]
-      pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+      voxel_size: [0.32, 0.32, 9]
+      pc_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
       quantize: True
       use_4dim: True
       use_conv: True
@@ -82,7 +82,7 @@ Backbones:
       normalize_xyz: False
     scatter_config:
       num_input_features: 64
-      use_horizon_pillar_scatter: True
+      use_horizon_pillar_scatter: False #生成hbm和训练打开此开关
 
 
   
@@ -98,7 +98,7 @@ Necks:
     load: all
     # freeze: all
     layers_config:
-      conv_channels: [128, 192, 384]
+      conv_channels: [128, 256, 512]
       out_channel: 128
       use_relu: true
       drop_smooth_conv: true
@@ -140,7 +140,7 @@ Transformer:
   # freeze: all
   transformer_config:
     task_name: DRIVING_BEV_DYN
-    bev_map_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+    bev_map_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
     bev_map_voxel_size: [1.28, 1.28, 1.5]
     image_down_div: 8
     input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
@@ -153,6 +153,10 @@ Tasks:
     # num_worker_limit: 2
     use_concat_dataset: true
     SWITCH_SUBTASK: DRIVING_BEV_DYN
+    DEPLOY_CFG: 
+     mode: "gpal30_in_model_with_small_image"
+     cfg:
+        feature_size: [96, 240]
     load: all
     # freeze: all
     amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
@@ -222,11 +226,11 @@ Tasks:
           out_channels: 128
       
     Loss:
-      od_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+      od_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
       out_feat_voxel_size: [0.64, 0.64, 0.5]
     
     POST_PROCESSING:
-      od_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+      od_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
       RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
       SCORE_THRESH: 0.28
       OUTPUT_RAW_SCORE: False
@@ -238,7 +242,7 @@ Tasks:
         NMS_PRE_MAXSIZE: 4096
         NMS_POST_MAXSIZE: 500
       DET_RANGE_LIST: [
-        [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0],
+        [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0],
       ]
       IOU_THRESH_LIST: [0.5, 0.5, 0.25, 0.25]
       out_feat_voxel_size: [0.64, 0.64, 0.5]
@@ -266,7 +270,7 @@ Tasks:
           data_list: [
             {
               description: "ID4 training data", 
-              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251204-061237/remove_data_train_frame_pairs_sampled.pkl",
+              pkl_path: "od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/all_data_no_bad.pkl",
               use_ratio: -1,
               tags: ["Only-ID4", "filtered-area", "gpal3.0"]
             },

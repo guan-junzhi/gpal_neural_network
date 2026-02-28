@@ -22,6 +22,7 @@ from horizon_tc_ui import HBRuntime
 
 from tools_scripts.driving_bev_sta.create_images_grid import PreproModule
 from gpal_nn.models.transformers.bevformer.view_transformer import SingleBevFormerViewTransformer
+from gpal_nn.models.base_modules.pointpreprocess import CenterPointPreProcess
 
 
 class GpNetDeploy(GpNet):
@@ -50,6 +51,20 @@ class GpNetDeploy(GpNet):
                 self.image_crop_config = global_config.Tasks['DRIVING_BEV_DYN']['image_crop_config']
                 self.subtask_name = self.global_config.Tasks['DRIVING_BEV_DYN'].get("SWITCH_SUBTASK", "DRIVING_BEV_DYN")
                 self.deploy_cfg = self.global_config.Tasks['DRIVING_BEV_DYN'].get('DEPLOY_CFG', None)
+                if self.global_config.Backbones.get("backbone1") is None :
+                    continue
+                if self.global_config.Backbones["backbone1"]["point_process_config"] is None:
+                    continue
+                preprocess_cfg = self.global_config.Backbones["backbone1"]["point_process_config"]
+                max_voxels_num = tuple(preprocess_cfg['max_voxels_num'])
+                self.centerpoint_preprocess = CenterPointPreProcess(
+                    pc_range=preprocess_cfg["pc_range"],
+                    voxel_size=preprocess_cfg["voxel_size"],
+                    max_voxels_num=max_voxels_num,
+                    max_points_in_voxel=preprocess_cfg["max_points_in_voxel"],
+                    norm_range=preprocess_cfg["norm_range"],
+                    norm_dims=preprocess_cfg["norm_dims"],
+                )
 
     def gen_xyz_camA(self):
         transformer_config = self.global_config.Transformer["transformer_config"]
@@ -374,6 +389,15 @@ class GpNetDeploy(GpNet):
         return [batch_ret]
         
     def forward_one_DRIVING_BEV_DYN(self, x, calib, metadata):
+        if 'points' in x.keys():
+            points = x['points']
+            points = [points[j].cuda() for j in range(len(points))]
+            features,coors = self.centerpoint_preprocess(points,True)
+            x.pop('points')
+        else:
+            features = None
+            coors = None
+            points = None
         
         if self.subtask_name in ['DRIVING_BEV_DYN_FISHEYE']:
             data_dict = self.forward_one_DRIVING_BEV_DYN_fisheye(x, calib, metadata)
@@ -510,7 +534,11 @@ class GpNetDeploy(GpNet):
                 "prev_feats_grid": prev_feats_grid,  # 部署外挂计算
                 }
             )
-
+            if features is not  None:
+                inputs_dict.update({
+                    "features":features.detach().cpu().numpy(),
+                    "coors": coors.view(1, 1,coors.shape[0], coors.shape[1]).detach().cpu().numpy().astype(np.int32),
+                    })
             if self.global_config.calib_data_save_path != "None":
                 if self.calib_data_cnt % 100 == 0:
                     for k in inputs_dict:
@@ -529,7 +557,7 @@ class GpNetDeploy(GpNet):
             x_draw[k] = torch.concat(x_draw[k], dim=0)
         for key_name in x:
             x[key_name] = x_draw[key_name]
-
+        x['points'] = points
         for k in batch_ret:
             batch_ret[k] = torch.from_numpy(np.concatenate(batch_ret[k], axis = 0)).cuda()
         # breakpoint()

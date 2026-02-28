@@ -59,7 +59,7 @@ def read_img(files_img, image_resize=[360, 640, 3]):
 def read_radar_point_cloud_from_pcd(radar_path):
     """支持ASCII格式的PCD文件读取函数"""
     if not os.path.exists(radar_path):
-        raise FileNotFoundError(f"文件不存在: {radar_path}")
+        return np.zeros((10, 11)).astype(np.float32)
     try:
         with open(radar_path, 'r') as f:
             # 读取并解析头部
@@ -589,7 +589,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             for info in fusion_infos:
                 self.sequence_name_dict.setdefault(info['sequence_name'], True)
         # fusion_infos = [fusion_infos[100]] * 6 
-        # fusion_infos = fusion_infos[:1000]
+        fusion_infos = fusion_infos[:2000]
         # if phase == const.PHASE_TRAINING:
         #     fusion_infos_ext = []
         #     for ele in fusion_infos:
