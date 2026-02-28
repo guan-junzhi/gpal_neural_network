@@ -589,7 +589,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             for info in fusion_infos:
                 self.sequence_name_dict.setdefault(info['sequence_name'], True)
         # fusion_infos = [fusion_infos[100]] * 6 
-        fusion_infos = fusion_infos[:2000]
+        # fusion_infos = fusion_infos[:2000]
         # if phase == const.PHASE_TRAINING:
         #     fusion_infos_ext = []
         #     for ele in fusion_infos:
