@@ -13,7 +13,7 @@ has_label: True
 
 Train:
   EPOCH_LEN: 150000
-  CLIP_LENGTH: [5, 25]
+  CLIP_LENGTH: [5, 50]
   log_every: 10
   visualize_every: 200
   max_visu_img_num: 6
@@ -221,9 +221,15 @@ Tasks:
           num_stages: 6
           out_channels: 21
           upsample: 8
-        feature_fuser_config:
-          in_channels: 512
-          out_channels: 128
+          HEAD:
+            hm: 6
+            reg: 2
+            height: 1
+            dim: 3
+            rot: 6
+            vel: 2
+          in_channels_list: [64, 128, 256]
+          feat_out_channels: 128
       
     Loss:
       od_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
@@ -262,7 +268,7 @@ Tasks:
           have_prev_label: true,
           image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_1224", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data/", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLine_train/",
@@ -286,7 +292,7 @@ Tasks:
           is_manual_label: true,
           have_prev_label: false,
           # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DAnnotations_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data/", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLineData_Test/",
