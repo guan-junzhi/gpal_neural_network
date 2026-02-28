@@ -259,7 +259,7 @@ class DRIVING_BEV_DYNPostProcessing(BasePostProcess):
                                 pred_z,
                                 pred_dim,
                                 pred_yaw,
-                                pred_vel*80,
+                                pred_vel,
                                 ], dim=-1
                                 )
 

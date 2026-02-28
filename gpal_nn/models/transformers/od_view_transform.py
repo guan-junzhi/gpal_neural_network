@@ -264,9 +264,9 @@ class ODViewTransformer(BaseModule):
         self.image_down_div = transformer_config["image_down_div"]
         # self.voxel_size[2] = (self.point_cloud_range[5] - self.point_cloud_range[2]) / z_layer_num
 
-        self.grid_size = [int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
-                          int((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1]),
-                          int((self.point_cloud_range[5]-self.point_cloud_range[2])/self.voxel_size[2])]
+        self.grid_size = [int(round((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0],2)),
+                          int(round((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1],2)),
+                          int(round((self.point_cloud_range[5]-self.point_cloud_range[2])/self.voxel_size[2],2))]
 
         z_layer_num = self.grid_size[2]
         

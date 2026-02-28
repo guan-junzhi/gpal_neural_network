@@ -20,7 +20,6 @@ from gpal_lightning.utils.data_buffer import FastLoaderBuffer
 import cv2
 import numpy as np
 
-
 class BaseDataset(Dataset, ABC):
     """BaseDataset is a iterable-style dataset. (https://pytorch.org/docs/stable/data.html)
 

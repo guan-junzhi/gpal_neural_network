@@ -61,7 +61,7 @@ class DataProcessor(object):
             return partial(self.build_targets_track, config=config)
         
         n_objs = config['max_objects']
-        max_v  = 80
+        max_v  = 1
         if True:
             minX, minY, minZ, maxX, maxY, maxZ = self.point_cloud_range
             bound_size_x, bound_size_y = maxX - minX, maxY - minY
@@ -83,8 +83,8 @@ class DataProcessor(object):
 
             for k in range(num_objects):
                 x, y, z, l, w, h, yaw, track_id, vx, vy, cls_id = gt_boxes[k]  # len = 11
-                vx = np.min([vx, max_v])/max_v
-                vy = np.min([vy, max_v])/max_v
+                # vx = np.min([vx, max_v])/max_v
+                # vy = np.min([vy, max_v])/max_v
                 cls_id = int(cls_id)
                 if not ((minX < x < maxX) and (minY < y < maxY)):
                     continue

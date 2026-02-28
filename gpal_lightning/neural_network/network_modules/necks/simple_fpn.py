@@ -32,44 +32,41 @@ class Simple_FPN(BaseModule):
             if self.use_relu:
                 input_proj_list.append(nn.Sequential(
                     nn.Conv2d(in_channels, hidden_dim, kernel_size=1),
-                    nn.BatchNorm2d(hidden_dim, momentum=0.01, eps=1e-3),
+                    nn.BatchNorm2d(hidden_dim, momentum=0.1, eps=1e-5),
                     nn.ReLU(inplace=True)
                 ))
             else:
                 input_proj_list.append(nn.Sequential(
                     nn.Conv2d(in_channels, hidden_dim, kernel_size=1),
-                    nn.BatchNorm2d(hidden_dim, momentum=0.01, eps=1e-3)
+                    nn.BatchNorm2d(hidden_dim, momentum=0.1, eps=1e-5)
                 ))
-        input_proj_list.append(nn.Sequential(
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(hidden_dim, momentum=0.01, eps=1e-3)
-        ))
+        # input_proj_list.append(nn.Sequential(
+        #     nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=2, padding=1),
+        # ))
         self.input_proj = nn.ModuleList(input_proj_list)
         
         self.p5_to_p4 = nn.Sequential(
-            nn.ConvTranspose2d(hidden_dim, hidden_dim, (2, 2), stride=(2, 2), padding=(0, 0)),
-            nn.BatchNorm2d(hidden_dim, momentum=0.01, eps=1e-3)
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
         )
         self.p4_to_p3 = nn.Sequential(
-            nn.ConvTranspose2d(hidden_dim, hidden_dim, (2, 2), stride=(2, 2), padding=(0, 0)),
-            nn.BatchNorm2d(hidden_dim, momentum=0.01, eps=1e-3)
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
         )
 
         self.smoothp3 = nn.Sequential(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
-                                      nn.BatchNorm2d(hidden_dim, momentum=0.01, eps=1e-3))
-        self.smoothp3_down = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
-        self.smoothp4 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-                                      nn.BatchNorm2d(256, momentum=0.01, eps=1e-3))
-        self.smoothp4_0 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-                                        nn.BatchNorm2d(256, momentum=0.01, eps=1e-3))
-        self.smoothp4_down = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
-        self.smoothp5 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-                                      nn.BatchNorm2d(256, momentum=0.01, eps=1e-3))
-        self.smoothp5_0 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-                                        nn.BatchNorm2d(256, momentum=0.01, eps=1e-3))
-        self.smoothp5_down = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
-        self.smoothp6 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-                                      nn.BatchNorm2d(256, momentum=0.01, eps=1e-3))
+                                      nn.BatchNorm2d(hidden_dim, momentum=0.1, eps=1e-5))
+        # self.smoothp3_down = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
+        # self.smoothp4 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+        #                               nn.BatchNorm2d(256, momentum=0.1, eps=1e-5))
+        # self.smoothp4_0 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+        #                                 nn.BatchNorm2d(256, momentum=0.1, eps=1e-5))
+        # self.smoothp4_down = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
+        # self.smoothp5 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+        #                               nn.BatchNorm2d(256, momentum=0.1, eps=1e-5))
+        # self.smoothp5_0 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+        #                                 nn.BatchNorm2d(256, momentum=0.1, eps=1e-5))
+        # self.smoothp5_down = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
+        # self.smoothp6 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+        #                               nn.BatchNorm2d(256, momentum=0.1, eps=1e-5))
 
         if self.use_relu:
             self.relu1 = nn.ReLU(inplace=True)

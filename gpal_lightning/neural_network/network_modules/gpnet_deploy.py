@@ -57,8 +57,8 @@ class GpNetDeploy(GpNet):
         self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
         
-        self.grid_size = [int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
-                          int((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1])]
+        self.grid_size = [int(round((self.point_cloud_range[3]-self.point_cloud_range[0])/(self.voxel_size[0]),2)),
+                          int(round((self.point_cloud_range[4]-self.point_cloud_range[1])/(self.voxel_size[1]),2))]
         
         xyz_camA = gridcloud3d(
             1, 1, self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
@@ -299,7 +299,7 @@ class GpNetDeploy(GpNet):
             extrinsic_matrix = calib['extrinsic'][i]
             distortion_coeffs= calib['cam_dist'][i]
             intrinsic_matrix = calib['intrinsic'][i]
-            H, W, div, Z, Y, X = 64, 120, 8, 4, 48, 60
+            H, W, div, Z, Y, X = 64, 120, 8, 6, 48, 60
             xyz_camAX = self.model[self._transformers["DRIVING_BEV_DYN"]].xyz_camA.clone()
             
             vt_grid, vt_grid_valid = GetProjectGridByEgo2ImgsFisheye(
@@ -389,7 +389,7 @@ class GpNetDeploy(GpNet):
         batch_size = B = len(metadata)
 
         if (self.dyn_od_stream_feature_bank == None):
-            self.dyn_od_stream_feature_bank = torch.zeros(B, 128, 48, 120).cuda()
+            self.dyn_od_stream_feature_bank = torch.zeros(B, 128, 48, 160).cuda()
 
         # 矩阵 and torch, 再分发到batch
         seq_flags, dts = self.SeqCheck(self.dyn_od_stream_metas_bank, metadata)
@@ -430,9 +430,9 @@ class GpNetDeploy(GpNet):
                         H=64, 
                         W=120, 
                         div=8, 
-                        Z=4, 
+                        Z=6, 
                         Y=48, 
-                        X=120, 
+                        X=160, 
                         sample_pts_3d=xyz_camAX.to(ego2imgs.device).clone())
             else:
                 images_grid = np.stack([DistGridMap(img_slice[k].shape[2],
@@ -512,7 +512,7 @@ class GpNetDeploy(GpNet):
             )
 
             if self.global_config.calib_data_save_path != "None":
-                if self.calib_data_cnt % 10 == 0:
+                if self.calib_data_cnt % 100 == 0:
                     for k in inputs_dict:
                         single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
                         os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)

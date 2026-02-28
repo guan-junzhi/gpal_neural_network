@@ -28,7 +28,7 @@ class ClipSampler(Sampler):
     def RandomByClip(self, datalist, length_range=[5, 15], batch_size=8):
         epoch_len = self.default_resample_len
         
-        datalist_by_clip = DatalistByclip(datalist, "sequence_name", True)  # 按clip分组
+        datalist_by_clip = DatalistByclip(datalist, "scene", True)  # 按clip分组
         clip_key_list = list(datalist_by_clip.keys())
         
         flatten_idxs = np.zeros([epoch_len, 2], dtype = np.int32) -1

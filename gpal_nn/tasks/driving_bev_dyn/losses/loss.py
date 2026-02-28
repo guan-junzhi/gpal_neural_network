@@ -14,6 +14,7 @@ class DRIVING_BEV_DYNLoss(BaseLoss):
         super(DRIVING_BEV_DYNLoss, self).__init__(global_config, task_config)
         # self.criterion_1 = Crit1_WideRange_L2_Loss(
         #     w1=1.0, w2=1.0, reduction='sum')
+        self.compute_loss = Compute_Loss(self.task_config.Loss)
 
     def GtToTorch(self, trues, device):
         gt_torch_batch = {}
@@ -140,7 +141,7 @@ class DRIVING_BEV_DYNLoss(BaseLoss):
         processed_gt = self.ProcessGt(trues, preds[0])
 
         loss = {}
-        loss_hm, tb_dict = Compute_Loss(self.task_config.Loss)(preds[0], processed_gt)
+        loss_hm, tb_dict = self.compute_loss(preds[0], processed_gt)
         loss['track_loss_hm'] = loss_hm
         loss.update(tb_dict)
         # tb_dict = Points_Loss()(preds[0], processed_gt)

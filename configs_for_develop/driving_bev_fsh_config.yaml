@@ -8,7 +8,7 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  EPOCH_LEN: 60000
+  EPOCH_LEN: 30000
   CLIP_LENGTH: [15, 25]
   log_every: 10
   visualize_every: 200
@@ -172,15 +172,18 @@ Tasks:
           data_list:[
             {
               description: "ID4 training data", 
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl",
+              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter1216_exclude_ID4FrontError.pkl",
               use_ratio: 50,
               tags: ["ID4", "filtered-area"]
             },
             {
               description: "L4 training data",
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251128-160418/_0_train_frame_pairs_sampled.pkl",
+              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251128-160418/_0_train_frame_pairs_sampled.pkl",
+              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251210-053104/_0_train_frame_pairs_sampled.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251220-142834/_0_train_frame_pairs_sampled.pkl",
               use_ratio: -1,
-              tags: ["L4", "filtered-area"]
+              tags: ["L4", "filtered-area", "326850"]
             }
           ],
           camera_name: ['img_front_fisheye', 'img_right_fisheye', 'img_rear_fisheye', 'img_left_fisheye'],

@@ -99,13 +99,14 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.prev_metas = None
         self.cnt = 0
         
-        transformer_config = global_config.Transformer["transformer_config"]
+        transformer_config = copy.deepcopy(global_config.Transformer["transformer_config"])
         self.point_cloud_range = transformer_config["bev_map_range"]
         self.voxel_size = transformer_config["bev_map_voxel_size"]
-        
+        self.voxel_size[0] = self.voxel_size[0]
+        self.voxel_size[1] = self.voxel_size[1]
         self.grid_size = [
-            int((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0]),
-            int((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1])
+            int(round((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0],2)),
+            int(round((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1],2))
         ]  # [H, W] 48, 120 / 96 120 (fisheye)
         
         xyz_camA = gridcloud3d(1, 1, self.grid_size[1], self.grid_size[0], norm=False, device='cpu')
@@ -181,7 +182,7 @@ class DRIVING_BEV_DYNHead(BaseHead):
                 dt[i] = (ts_c - ts_p)
         return seq_flag, dt
 
-    def gen_shift_feature_grid(self, grid, cur2prev, prev_feat, bev_h_resolution, bev_w_resolution):
+    def gen_shift_feature_grid(self, grid, cur2prev, prev_feat, bev_w_resolution, bev_h_resolution):
         bs, _, h, w = prev_feat.shape
         grid = grid.view(bs, h, w, 3, 1)
         
@@ -242,10 +243,11 @@ class DRIVING_BEV_DYNHead(BaseHead):
         x_fuser = self.head["seq_fuser"](prev_feats, fuser_feature, cur2prev)
         self.feature_bank = x_fuser.detach().clone()
         x_decode = self.head["center_head"](x_fuser)
-        
+        _set = ["reg", "height","dim", "rot", "vel"]
+        head_conv = torch.cat([x_decode[k] for k in _set], dim=1)
         batch_dict = {
-            'head_conv': x_decode[:, 6:], 
-            "hm_cen": x_decode[:, :6], 
+            'head_conv': head_conv, 
+            "hm_cen": x_decode["hm"], 
             "cur_feats": x_fuser.detach().clone()
         }
         
