@@ -184,36 +184,43 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             point_cloud_range=np.array(self.task_config.od_range), 
             # placeholder
             training= phase == const.PHASE_TRAINING, 
-            num_point_features=None
+            num_point_features=None,
+            global_config=self.global_config
         )
 
         # if self.dataset_cfg.USE_CAMERA_YAML:
         cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
-        # if True:
-        #     intrinsic = []
-        #     distort_coeff = []
-        #     r_mat = []
-        #     t_vec = []
-        #     # breakpoint()
-        #     for curr_view in self.image_view:
-        #         curr_view_yaml_file = f"{WORKDIRS_ROOT}/gpal_neural_network_group/sikong/temp_dir_for_od/{cam_calib_dir}/{curr_view.replace('img_', '')}.yaml"
-        #         # curr_view_yaml_file = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_od_pcdet/tools_own/read_update_cam_yaml_and_save_grid_valid/calibration-dev@1ac5e4038a8/JX_C5_1/vehicle_config/calibration/camera/{curr_view.replace('img_', '')}.yaml"
-        #         yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
-        #         intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
-        #         distort_coeff.append(
-        #             yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
-        #         r_mat.append(yaml_dict['r_mat'].reshape(-1, 3, 3))
-        #         t_vec.append(yaml_dict['t_vec'].reshape(-1, 3, 1))
+        if True:
+            
+            intrinsic = []
+            distort_coeff = []
+            r_mat = []
+            t_vec = []
+            # breakpoint()
+            for curr_view in self.image_view:
+                # curr_view_yaml_file = f"{root_dir}/l4_db_bag_jira/calibration_json/camera/fisheye/{curr_view.replace('img_', '')}.yaml"
+                curr_view_yaml_file = f"{WORKDIRS_ROOT}/od_occ_group/huiquyang/data/l4_db_bag_jira/calibration_cloud/camera/skywell_fisheye_calib_0205/{curr_view.replace('img_', '')}.yaml"
+                print(f'use camera yaml file: {curr_view_yaml_file}')
+                yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
+                intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
+                # distort_coeff.append(yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
+                if len(yaml_dict['distortion_coefficients'].reshape(-1)) == 4:
+                    dist = np.concatenate([yaml_dict['distortion_coefficients'].reshape(-1), np.zeros((1,))], axis=0)
+                    distort_coeff.append(dist.reshape(-1, 1, 5))
+                else:
+                    distort_coeff.append(yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
+                r_mat.append(yaml_dict['r_mat'].reshape(-1, 3, 3))
+                t_vec.append(yaml_dict['t_vec'].reshape(-1, 3, 1))
 
-        #     intrinsic_np = np.concatenate(intrinsic, axis=0)
-        #     distort_coeff_np = np.concatenate(distort_coeff, axis=0)
-        #     r_mat_np = np.concatenate(r_mat, axis=0)
-        #     t_vec_np = np.concatenate(t_vec, axis=0)
+            intrinsic_np = np.concatenate(intrinsic, axis=0)
+            distort_coeff_np = np.concatenate(distort_coeff, axis=0)
+            r_mat_np = np.concatenate(r_mat, axis=0)
+            t_vec_np = np.concatenate(t_vec, axis=0)
 
-            # self.intrinsic = intrinsic_np
-            # self.cam_dist = distort_coeff_np
-            # self.r_mat_np = r_mat_np
-            # self.t_vec_np = t_vec_np
+            self.intrinsic = intrinsic_np
+            self.cam_dist = distort_coeff_np
+            self.r_mat_np = r_mat_np
+            self.t_vec_np = t_vec_np
 
         self.jitter = T.ColorJitter([0.2, 1.2], 0.3, 0.3, 0.2)
 
@@ -234,12 +241,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 continue
             with open(info_path['pkl_path'], 'rb') as f:
                 infos = pickle.load(f)
-                print(f'description: {info_path["description"]},', 
-                      f' use_ratio: {info_path["use_ratio"]},', 
-                      f' has {len(infos)} samples')
+                print(f'info_path["pkl_path"]: {info_path["pkl_path"]}, ', 
+                      f'has {len(infos)} samples, ',
+                      f'use_ratio: {info_path["use_ratio"]},') 
+
                 fusion_infos.extend(infos)
 
-        print('Total samples for Mixed dataset [原始数据]: %d' %(len(fusion_infos)))
+        print('Total samples for Mixed dataset [Step.0] [加载原始数据]: %d' %(len(fusion_infos)))
+        if phase == const.PHASE_TRAINING:
+            print('Total samples for Mixed dataset [Step.0] [加载原始数据]: %d clips' %(len(DatalistByclip(fusion_infos, "scene"))))
 
         skip_subday_list = [
             '2025-07-10_13-44-15-069',
@@ -317,7 +327,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         #         ele["time_stamp"] = ele["time_stamp"].split('/')[1] + '/' + ele["time_stamp"].split('/')[0]
         #         fusion_infos_ext.append(copy.deepcopy(ele))
         #     fusion_infos = fusion_infos_ext
-        print('Total samples for Mixed dataset [指定日期过滤]: %d' %(len(fusion_infos)))
+        print('Total samples for Mixed dataset [Step.1] [过滤指定日期]: %d' %(len(fusion_infos)))
         return fusion_infos
 
     def _build_world_data_list(self):
@@ -333,8 +343,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
     def DistributeByClip(self, datalist, world_size, length_lim=15, rank_curr=0):
         epoch_len = len(datalist) // world_size
-        datalist_by_clip = DatalistByclip(datalist, "sequence_name")
+        datalist_by_clip = DatalistByclip(datalist, "scene")
         clip_key_list = [k for k in datalist_by_clip if len(datalist_by_clip[k]) > length_lim]
+        print(f'[Step.2] [补全rank] [长度剔除 {length_lim}] 后 clip len: {len(clip_key_list)}')
+        
         res_clip_n_1 = []
         while len(res_clip_n_1) < (world_size - 1):
             res_clip_n_1 += clip_key_list[:world_size - 1 - len(res_clip_n_1)]
@@ -347,8 +359,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         clip_keys_rank = pkl.loads(pkl.dumps(
             clip_key_list[rank_curr::world_size][:clip_keys_per_rank]))
         from tqdm import tqdm
-        dataset = [ele for ele in tqdm(datalist, desc=f'初筛数据[补全rank] {world_size}-{rank_curr}') 
-                   if ele["sequence_name"] in clip_keys_rank]
+        dataset = [ele for ele in tqdm(datalist, desc=f'[Step.2] [补全rank] {world_size}-{rank_curr}') 
+                   if ele["scene"] in clip_keys_rank]
+        
+        print(f'[Step.2] [补全rank] {world_size}-{rank_curr} len: {len(dataset)}')
         return dataset
 
     def _preconstruct_test_stream_indices(self, datalist, batch_size, key="sequence_name"):
@@ -467,7 +481,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             world_size = 1
         
         if self.phase == const.PHASE_TRAINING:
-            cut_data_list = self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=15, rank_curr=rank_curr)
+            cut_data_list = self.DistributeByClip(self.world_data_list, world_size=world_size, length_lim=self.global_config.Train.get("CLIP_LENGTH", [5, 25])[0], rank_curr=rank_curr)
         elif self.phase == const.PHASE_VALIDATION:
             """
             模拟训练时ClipSampler的行为, 但不考虑rank行为, 单卡测试
@@ -612,6 +626,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
                 image = cv2.resize(image, self.image_resize[::-1])
                 image = image[crop_start:crop_start + self.img_h_len]
+            
             self._slice_image_cache(
                 database_slice_key, view_key, image, pre_resize=(image.shape[1], image.shape[0]), quality=100)
         else:
@@ -760,7 +775,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             if 'SKYWELL' in sequence_name:
                 WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
-                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
+                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_L4_260129/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
                 vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
             
             # seq,time_meas,time_pub,motion_info.vehicle_speed,motion_info.yaw_rate,motion_info.longitudinal_acceleration,motion_info.lateral_acceleration,motion_info.drive_mode,actuator_info.is_left_direction_light_on,actuator_info.is_right_direction_light_on,actuator_info.is_main_beam_on,actuator_info.is_dipped_beam_on,actuator_info.is_wiper_on,actuator_info.is_horn_on,actuator_info.is_left_direction_light_switch_on,actuator_info.is_right_direction_light_switch_on,actuator_info.front_left_door_status,actuator_info.front_right_door_status,actuator_info.rear_left_door_status,actuator_info.rear_right_door_status,actuator_info.rear_hatch_status,actuator_info.driver_safety_belt_status,actuator_info.is_brake_light_on,actuator_info.is_dangerous_warning_light_on,actuator_info.is_front_frog_light_on,actuator_info.is_rear_frog_light_on,actuator_info.is_reverse_direction_light_on,actuator_info.is_width_lamp_on,actuator_info.wiper_speed,actuator_info.is_washer_on,actuator_info.is_autodrive_active,axle_info[0].axis_id,axle_info[0].left_wheel_tire_pressure,axle_info[0].right_wheel_tire_pressure,axle_info[0].left_wheel_speed,axle_info[0].right_wheel_speed,axle_info[0].left_wheel_angle,axle_info[0].right_wheel_angle,axle_info[0].left_wheel_pulse,axle_info[0].right_wheel_pulse,axle_info[0].left_wheel_pulse_direction,axle_info[0].right_wheel_pulse_direction,axle_info[1].left_wheel_tire_pressure,axle_info[1].right_wheel_tire_pressure,axle_info[1].left_wheel_speed,axle_info[1].right_wheel_speed,axle_info[1].left_wheel_angle,axle_info[1].right_wheel_angle,axle_info[1].left_wheel_pulse,axle_info[1].right_wheel_pulse,axle_info[1].left_wheel_pulse_direction,axle_info[1].right_wheel_pulse_direction,powertrain_info.motor_speed,powertrain_info.motor_reference_torque,powertrain_info.motor_torque_change_rate,powertrain_info.battery_charge,powertrain_info.transmission_current_gear_level,powertrain_info.transmission_current_gear_position,powertrain_info.motor_torque_response,powertrain_info.throttle_percentage,powertrain_info.is_accelerator_pedal_override,powertrain_info.controlled_state_of_longitudinal_dynamic_system,powertrain_info.torque_request,powertrain_info.torque_feedback,powertrain_info.mcu_longitudinal_control_state_feedback,powertrain_info.mcu_driving_mode_feedback,steering_system_info.steering_wheel_angle,steering_system_info.steering_wheel_angle_speed,steering_system_info.steering_motor_torque,steering_system_info.steer_hands_on_status,steering_system_info.steer_angle_calibration_status,steering_system_info.received_steering_angle_request,steering_system_info.received_steering_torque_request,steering_system_info.eps_control_status,steering_system_info.eps_failure_reason,steering_system_info.steering_wheel_angle_control_failure_reason,steering_system_info.torque_control_failure_reason,steering_system_info.steering_wheel_angle_control_state,steering_system_info.torque_control_state,steering_system_info.mcu_lateral_control_state_feedback,steering_system_info.mcu_gear_control_state_feedback,brake_system_info.is_break_pedal_pressed,steering_system_info.is_abs_active,steering_system_info.is_epb_on,steering_system_info.brake_system_acceleration_response,steering_system_info.break_pedal_position,steering_system_info.is_brake_pedal_override,steering_system_info.is_vehicle_stand_still,steering_system_info.is_vehicle_park_stand_still,steering_system_info.braking_system_control_state,steering_system_info.mcu_brake_system_control_state_feedback,steering_system_info.epb_state
@@ -780,8 +795,6 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['gt_boxes'] = gt_boxes
 
             time_dp.Duration("cur_json", "begin")
-
-            # time_dp.Duration("prev_json", "cur_json")
 
             # === 共同信息
             input_dict['frame_id'] = info['time_stamp']
@@ -810,8 +823,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 calib_intrin = copy.deepcopy(input_dict['intrinsic'][view_idx])
                 calib_extrin = copy.deepcopy(input_dict["extrinsic"][view_idx])
                 calib_dist = copy.deepcopy(input_dict["cam_dist"][view_idx])
+                
                 if 'SKYWELL' in sequence_name:
                     img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx] = img_crop_dict['CROP_HeSai_ID4']['CROP_START_SKYWELL'][view_idx]
+                
                 crop_start = img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx]
                 # current_img = self.get_image(image_file, view_idx)  # cv2: BGR
                 
@@ -824,30 +839,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                     current_img2 = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
                     current_img2 = cv2.resize(current_img2, self.image_resize[::-1])
                     current_img = current_img2[crop_start:crop_start + self.img_h_len]
-                    # img_grid = DistGridMap(
-                    #     current_img.shape[1],
-                    #     current_img.shape[0],
-                    #     calib_dist,
-                    #     calib_intrin,
-                    #     int(img_crop_dict["IMAGE_RESIZE"][1]),
-                    #     int(img_crop_dict["IMAGE_RESIZE"][0]),
-                    #     int(img_crop_dict["IMAGE_CROP_H_LEN"]),
-                    #     int(img_crop_dict["CROP_HeSai_ID4"]["CROP_START"][view_idx]),
-                    #     norm=False
-                    # ).astype(np.float32)
-                    
-                    # current_img = cv2.remap(
-                    #     current_img,
-                    #     img_grid[...,0], 
-                    #     img_grid[...,1],
-                    #     interpolation=cv2.INTER_NEAREST
-                    # )
-                    calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
-                    calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
-                else:
-                    calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
-                    calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
-                    # current_img = cv2.undistort(current_img, calib_intrin, calib_dist, calib_intrin)
+
+                calib_intrin[:2, :] /= float(img_crop_dict['CROP_HeSai_ID4']['SCALE'][view_idx])
+                calib_intrin[1, 2] -= float(img_crop_dict['CROP_HeSai_ID4']['CROP_START'][view_idx])
 
                 # image augmentation
                 if self.phase == const.PHASE_TRAINING:
@@ -917,8 +911,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
             # data_dict_ret['meta']['img_path'] = img_path
-            frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
-            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
+            # frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
+            # data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
+            frame_path = [info['scene'].split('^')[0]] + info['sequence_name'].split('/')
+            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path)
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['ego_speed'] = float(vcu[3])
             data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
@@ -972,7 +968,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             if 'SKYWELL' in sequence_name:
                 WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
-                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
+                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_L4_260129/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
                 vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
             
             with open(vcu_file, 'r') as vcu_reader:
@@ -998,12 +994,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             # if self.dataset_cfg.USE_CAMERA_YAML:
             # if self.phase == const.PHASE_VALIDATION:
-            #     intrinsic = self.intrinsic
-            #     cam_dist = self.cam_dist
-            #     temp = np.stack([np.eye(4) for i in range(7)], axis=0)
-            #     temp[:, :3:, :3] = self.r_mat_np
-            #     temp[:, :3:, [3]] = self.t_vec_np
-            #     extrinsic = temp
+            if 'SKYWELL' in sequence_name:
+                intrinsic = copy.deepcopy(self.intrinsic)
+                cam_dist = copy.deepcopy(self.cam_dist)
+                temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
+                temp[:, :3:, :3] = copy.deepcopy(self.r_mat_np)
+                temp[:, :3:, [3]] = copy.deepcopy(self.t_vec_np)
+                extrinsic = temp
 
             # TODO
             if 'SKYWELL' in sequence_name:
@@ -1060,6 +1057,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 input_dict[f'images_input{view_idx}'] = current_img.astype(np.float32) / 255.0
                 
             time_dp.Duration("image", "cur_json")
+            input_dict['scene'] = info['scene']
             data_dict = self.prepare_data(data_dict=input_dict)
             time_dp.Duration("prepare_data", "image")
 
@@ -1093,8 +1091,10 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             data_dict_ret['meta']['camera_name'] = self.camera_names
             data_dict_ret['meta']['task_name'] = self.task
             # data_dict_ret['meta']['img_path'] = img_path
-            frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
-            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
+            # frame_path = info['sequence_name'] + "/" + str(info['curr_index'])
+            # data_dict_ret['meta']['clip_id'] = '^'.join(frame_path.split('/')[:2])
+            frame_path = [info['scene'].split('^')[0]] + info['sequence_name'].split('/')
+            data_dict_ret['meta']['clip_id'] = '^'.join(frame_path)
             data_dict_ret['meta']['timestamp'] = curr_time_stamp
             data_dict_ret['meta']['ego_speed'] = float(vcu[3])
             data_dict_ret['meta']['ego_yaw_rate'] = float(vcu[4])
