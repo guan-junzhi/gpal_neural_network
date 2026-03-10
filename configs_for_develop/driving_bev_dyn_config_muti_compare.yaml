@@ -230,6 +230,9 @@ Tasks:
             vel: 2
           in_channels_list: [64, 128, 256]
           feat_out_channels: 128
+        feature_fuser_config:
+          in_channels: 512
+          out_channels: 128
       
     Loss:
       od_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
