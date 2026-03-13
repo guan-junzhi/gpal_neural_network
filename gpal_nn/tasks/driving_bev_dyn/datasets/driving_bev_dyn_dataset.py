@@ -55,7 +55,94 @@ def read_img(files_img, image_resize=[360, 640, 3]):
             return bin_data, False
         else:
             return bin_data, True
+def read_lidar_point_cloud_from_hesai_pcd(lidar_path):
+    """优化版PCD文件读取函数，使用向量化操作加速"""
+    if not os.path.exists(lidar_path):
+        raise FileNotFoundError(f"文件不存在: {lidar_path}")
 
+    try:
+        with open(lidar_path, 'rb') as f:
+            # 读取并解析头部
+            header = {}
+            while True:
+                line = f.readline().decode('utf-8', errors='ignore').strip()
+                
+                if line.startswith('DATA'):
+                    header['data_type'] = line.split()[1]
+                    # 记录二进制数据开始位置
+                    data_start = f.tell()
+                    break
+                
+                if line and not line.startswith('#'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        key = parts[0]
+                        value = parts[1:] if len(parts) > 2 else parts[1]
+                        header[key] = value
+            
+            # 解析字段信息
+            fields = header['FIELDS'].split() if isinstance(header['FIELDS'], str) else header['FIELDS']
+            sizes = [int(s) for s in header['SIZE'].split()] if isinstance(header['SIZE'], str) else [int(s) for s in header['SIZE']]
+            types = header['TYPE'].split() if isinstance(header['TYPE'], str) else header['TYPE']
+            points_count = int(header['POINTS'][0] if isinstance(header['POINTS'], list) else header['POINTS'])
+            
+            # 计算每个点的字节数
+            point_step = sum(sizes)
+            
+            # 读取所有二进制数据
+            f.seek(data_start)
+            binary_data = f.read()
+            
+            # 检查数据长度
+            expected_size = points_count * point_step
+            if len(binary_data) < expected_size:
+                print(f"警告: 数据长度不足，期望 {expected_size} 字节，实际 {len(binary_data)} 字节")
+                points_count = min(points_count, len(binary_data) // point_step)
+            
+            # 优化：使用结构化数组直接映射二进制数据
+            # 构建数据类型描述
+            dtype_list = []
+            type_mapping = {
+                'F': {4: '<f4', 8: '<f8'},  # Float
+                'U': {1: '<u1', 2: '<u2', 4: '<u4'},  # Unsigned
+                'I': {1: '<i1', 2: '<i2', 4: '<i4'},  # Signed
+            }
+            
+            for i, field in enumerate(fields):
+                size = sizes[i]
+                type_char = types[i]
+                if type_char in type_mapping and size in type_mapping[type_char]:
+                    dtype_list.append((field, type_mapping[type_char][size]))
+                else:
+                    # 默认使用对应大小的无符号整数
+                    dtype_list.append((field, f'<u{size}'))
+            
+            # 创建结构化数据类型
+            dtype = np.dtype(dtype_list)
+            
+            # 批量读取所有点数据
+            points_structured = np.frombuffer(binary_data[:points_count * point_step], dtype=dtype, count=points_count)
+            
+            # 转换为常规numpy数组（只保留需要的字段）
+            required_fields = ['x', 'y', 'z', 'intensity', 'timestamp_offset']
+            available_fields = [field for field in required_fields if field in fields]
+            
+            # 创建结果数组
+            points_array = np.zeros((len(points_structured), len(available_fields)), dtype=np.float32)
+            
+            for i, field in enumerate(available_fields):
+                points_array[:, i] = points_structured[field].astype(np.float32)
+            
+            # 过滤包含NaN的点
+            valid_mask = ~np.isnan(points_array).any(axis=1)
+            points_array = points_array[valid_mask]
+            return points_array
+            
+    except Exception as e:
+        print(f"读取点云文件 {lidar_path} 时出错: {e}")
+        import traceback
+        traceback.print_exc()
+        return np.array([])
 def read_radar_point_cloud_from_pcd(radar_path):
     """支持ASCII格式的PCD文件读取函数"""
     if not os.path.exists(radar_path):
@@ -1102,15 +1189,8 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             curr_json_file = f'{self.json_dir}/{json_dir}/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json'
             vcu_file =  f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
             
-            if 'SKYWELL' in sequence_name:
-                WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
-                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_L4/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
-                vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
-            
-            # seq,time_meas,time_pub,motion_info.vehicle_speed,motion_info.yaw_rate,motion_info.longitudinal_acceleration,motion_info.lateral_acceleration,motion_info.drive_mode,actuator_info.is_left_direction_light_on,actuator_info.is_right_direction_light_on,actuator_info.is_main_beam_on,actuator_info.is_dipped_beam_on,actuator_info.is_wiper_on,actuator_info.is_horn_on,actuator_info.is_left_direction_light_switch_on,actuator_info.is_right_direction_light_switch_on,actuator_info.front_left_door_status,actuator_info.front_right_door_status,actuator_info.rear_left_door_status,actuator_info.rear_right_door_status,actuator_info.rear_hatch_status,actuator_info.driver_safety_belt_status,actuator_info.is_brake_light_on,actuator_info.is_dangerous_warning_light_on,actuator_info.is_front_frog_light_on,actuator_info.is_rear_frog_light_on,actuator_info.is_reverse_direction_light_on,actuator_info.is_width_lamp_on,actuator_info.wiper_speed,actuator_info.is_washer_on,actuator_info.is_autodrive_active,axle_info[0].axis_id,axle_info[0].left_wheel_tire_pressure,axle_info[0].right_wheel_tire_pressure,axle_info[0].left_wheel_speed,axle_info[0].right_wheel_speed,axle_info[0].left_wheel_angle,axle_info[0].right_wheel_angle,axle_info[0].left_wheel_pulse,axle_info[0].right_wheel_pulse,axle_info[0].left_wheel_pulse_direction,axle_info[0].right_wheel_pulse_direction,axle_info[1].left_wheel_tire_pressure,axle_info[1].right_wheel_tire_pressure,axle_info[1].left_wheel_speed,axle_info[1].right_wheel_speed,axle_info[1].left_wheel_angle,axle_info[1].right_wheel_angle,axle_info[1].left_wheel_pulse,axle_info[1].right_wheel_pulse,axle_info[1].left_wheel_pulse_direction,axle_info[1].right_wheel_pulse_direction,powertrain_info.motor_speed,powertrain_info.motor_reference_torque,powertrain_info.motor_torque_change_rate,powertrain_info.battery_charge,powertrain_info.transmission_current_gear_level,powertrain_info.transmission_current_gear_position,powertrain_info.motor_torque_response,powertrain_info.throttle_percentage,powertrain_info.is_accelerator_pedal_override,powertrain_info.controlled_state_of_longitudinal_dynamic_system,powertrain_info.torque_request,powertrain_info.torque_feedback,powertrain_info.mcu_longitudinal_control_state_feedback,powertrain_info.mcu_driving_mode_feedback,steering_system_info.steering_wheel_angle,steering_system_info.steering_wheel_angle_speed,steering_system_info.steering_motor_torque,steering_system_info.steer_hands_on_status,steering_system_info.steer_angle_calibration_status,steering_system_info.received_steering_angle_request,steering_system_info.received_steering_torque_request,steering_system_info.eps_control_status,steering_system_info.eps_failure_reason,steering_system_info.steering_wheel_angle_control_failure_reason,steering_system_info.torque_control_failure_reason,steering_system_info.steering_wheel_angle_control_state,steering_system_info.torque_control_state,steering_system_info.mcu_lateral_control_state_feedback,steering_system_info.mcu_gear_control_state_feedback,brake_system_info.is_break_pedal_pressed,steering_system_info.is_abs_active,steering_system_info.is_epb_on,steering_system_info.brake_system_acceleration_response,steering_system_info.break_pedal_position,steering_system_info.is_brake_pedal_override,steering_system_info.is_vehicle_stand_still,steering_system_info.is_vehicle_park_stand_still,steering_system_info.braking_system_control_state,steering_system_info.mcu_brake_system_control_state_feedback,steering_system_info.epb_state
             
             
-            # curr_json_file = "/data/ai_group/workdirs/od_occ_group/huiquyang/data/Obstacle_3DModelResult_/EKART_ID4001_2025-08-15-18-20-39/2025-08-15_18-34-44-232/3d_detection_json/1755254118.200182.json"
             if self.has_label:
                 with open(vcu_file, 'r') as vcu_reader:
                     vcu = vcu_reader.readline().split('\t')
@@ -1139,15 +1219,23 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             input_dict['gt_names'] = gt_names
             input_dict['gt_boxes'] = gt_boxes
 
-            radar_point_path = f'{self.image_dir}/{sequence_name}/pcd/{curr_time_stamp}.pcd'
-            log_path = f'{self.image_dir}/{sequence_name}/logs/synced_files_log.txt'
-            # sensor_timestamps = parse_sensor_timestamps(log_path)
-            # img_real_timestamp = sensor_timestamps['img_front_120'][curr_time_stamp]
-            radar_point = read_radar_point_cloud_from_pcd(radar_point_path)
-            radar_point = radar_point[:,[0,1,2,4,5,10]]
+            # radar_point_path = f'{self.image_dir}/{sequence_name}/pcd/{curr_time_stamp}.pcd'
+            # log_path = f'{self.image_dir}/{sequence_name}/logs/synced_files_log.txt'
+
+            # radar_point = read_radar_point_cloud_from_pcd(radar_point_path)
+            # radar_point = radar_point[:,[0,1,2,4,5,10]]
             # radar_point[:,5] = radar_point[:,5]-float(img_real_timestamp)
-            radar_point[:,5] = radar_point[:,5]-radar_point[:,5]
+            # radar_point[:,5] = radar_point[:,5]-radar_point[:,5]
             #TODO 点云数据数据增强  随机屏蔽传感器数据  点云buffer  图像随机丢弃图像（目前有）
+            try:
+                    
+                lidar_folder = info['lidar_floder']
+                lidar_point_path = f'{self.image_dir}/{sequence_name}/{lidar_folder}/{curr_time_stamp}.pcd'
+                lidar_point = read_lidar_point_cloud_from_hesai_pcd(lidar_point_path)
+                lidar_point = lidar_point[:,[0,1,2,3]]
+            except:
+                print(f' lidar_point read fail: {lidar_point_path}')
+                lidar_point = np.zeros((1, 4))
 
             time_dp.Duration("cur_json", "begin")
 
@@ -1289,15 +1377,16 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
-            if self.phase == const.PHASE_TRAINING:
-                if not self._shared_sequence_name_dict.get(sequence_name, True):
-                    data_dict_ret.update({"points": np.zeros_like(radar_point)})
-                elif np.random.rand() < 0.2:
-                    data_dict_ret.update({"points": np.zeros_like(radar_point)})
-                else:
-                    data_dict_ret.update({"points": radar_point.astype(np.float32)})
-            else:
-                data_dict_ret.update({"points": radar_point.astype(np.float32)})          
+            # if self.phase == const.PHASE_TRAINING:
+            #     if not self._shared_sequence_name_dict.get(sequence_name, True):
+            #         data_dict_ret.update({"points": np.zeros_like(radar_point)})
+            #     elif np.random.rand() < 0.2:
+            #         data_dict_ret.update({"points": np.zeros_like(radar_point)})
+            #     else:
+            #         data_dict_ret.update({"points": radar_point.astype(np.float32)})
+            # else:
+            #     data_dict_ret.update({"points": radar_point.astype(np.float32)})          
+            data_dict_ret.update({"points": lidar_point.astype(np.float32)})          
             # data_dict_ret.update({"points": radar_point.astype(np.float32)})       
 
         except Exception as e:
