@@ -388,7 +388,13 @@ if __name__ == "__main__":
     # # === 自定义评估
     # relative_path = "gpal_neural_network_one_node_traning_job_on_airflow_for_sikong_20251112_13_08_23/20251113_06_37_10^epoch=643-step=42500_checkpoint/20251113063711/DRIVING_BEV_DYN/0"
     # relative_path = "gpal_neural_network_one_node_traning_job_on_airflow_for_sikong_20251112_13_08_23/20251113_07_32_14^epoch=643-step=42500_checkpoint/20251113073214/DRIVING_BEV_DYN/0"
-    # root_dir = f"/data/ai_group/workdirs/od_occ_group/mendeswan/codes/gpal_neural_network/.vscode/workspace_ws_batch/{relative_path}"
+    # root_dir = f"/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/workspace_eval/20260123_08_43_41/20260123084422/{relative_path}"
+    
+    # # pth
+    # # root_dir = f"/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/workspace_eval/20260123_08_43_41/20260123084422/DRIVING_BEV_DYN/0"
+    
+    # # onnx
+    # root_dir = f"/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/workspace_eval/20260125_05_16_03/20260125051810/DRIVING_BEV_DYN/0"
     
     # # 对保存的结果再次单独评测使用
     # meta_file_list = sorted([os.path.join(root_dir, "metadata", ele) for ele in os.listdir(os.path.join(root_dir, "metadata"))])
@@ -403,15 +409,44 @@ if __name__ == "__main__":
     # # pred_file_list = [os.path.join(root_dir, "preds", ele) for ele in os.listdir(os.path.join(root_dir, "preds"))]
     # print(len(meta_file_list), len(gt_file_list), len(pred_file_list))
     
+    # 单线程
     # metas = []
     # gts = []
     # preds = []
 
-    # for p, g, m in tqdm(zip(pred_file_list, gt_file_list, meta_file_list)):
+    # for i, (p, g, m) in enumerate(tqdm(zip(pred_file_list, gt_file_list, meta_file_list), desc="Loading data")):
     #     metas += json.load(open(m, 'r'))
     #     gts += json.load(open(g, 'r'))
     #     preds += json.load(open(p, 'r'))
 
+    # 多线程 [默认]
+    # def load_json_files_parallel_tqdm(pred_file_list, gt_file_list, meta_file_list, max_workers=8):
+    #     from concurrent.futures import ThreadPoolExecutor
+        
+    #     from tqdm import tqdm
+        
+    #     n = len(pred_file_list)
+    #     preds, gts, metas = [None] * n, [None] * n, [None] * n
+        
+    #     def load_single(idx_p_g_m):
+    #         idx, p, g, m = idx_p_g_m
+    #         with open(p) as fp, open(g) as fg, open(m) as fm:
+    #             return idx, json.load(fp), json.load(fg), json.load(fm)
+        
+    #     with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    #         results = list(tqdm(
+    #             executor.map(load_single, zip(range(n), pred_file_list, gt_file_list, meta_file_list)),
+    #             total=n, desc="Loading data"
+    #         ))
+        
+    #     for idx, p, g, m in results:
+    #         preds[idx], gts[idx], metas[idx] = p[0], g[0], m[0]
+        
+    #     return preds, gts, metas
+    # preds, gts, metas = load_json_files_parallel_tqdm(
+    #     pred_file_list, gt_file_list, meta_file_list, 
+    #     max_workers=16
+    # )
 
     # # print(ShowDataStruct("gts", gts, 2, 4))
 
@@ -423,4 +458,5 @@ if __name__ == "__main__":
     #     "vehicle_tricycle",
     #     "human_pedestrian",
     # ]
+    
     # evaluation(preds, gts, metas, class_names)
