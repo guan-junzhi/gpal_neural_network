@@ -30,10 +30,11 @@ def encode_multibin(alpha):
 
 
 class DataProcessor(object):
-    def __init__(self, processor_configs, point_cloud_range, training, num_point_features):
+    def __init__(self, processor_configs, point_cloud_range, training, num_point_features, global_config):
         self.point_cloud_range = point_cloud_range
         self.training = training
         self.num_point_features = num_point_features
+        self.global_config = global_config
         self.mode = 'train' if training else 'test'
         self.grid_size = self.voxel_size = None
         self.data_processor_queue = []
@@ -78,6 +79,12 @@ class DataProcessor(object):
             obj_mask       = np.zeros((n_objs), dtype=np.uint8)
             # indices_track  = np.zeros((n_objs), dtype=np.int64) - 1
             multibin_direction = np.zeros((n_objs, 6), dtype=np.float32)
+            
+            # Flag = False
+            scene_str = '^'.join(data_dict['scene'].split('/'))
+            ig_htp_mask = np.ones((config['num_classes'], hm_w, hm_l), dtype=np.float32)
+            ig_obj_mask = np.ones((n_objs), dtype=np.float32)
+            # indices_center 不用管了，后面会根据 obj_mask 过滤掉无效的
 
             for k in range(num_objects):
                 x, y, z, l, w, h, yaw, track_id, vx, vy, cls_id = gt_boxes[k]  # len = 11
@@ -112,6 +119,28 @@ class DataProcessor(object):
                 vel[k, 1] = vy
                 obj_mask[k] = 1
                 # indices_track[k] = track_id
+                
+                # --- ignore mask for heatmap, obj_mask
+                if self.global_config.Tasks['DRIVING_BEV_DYN'].get('USE_IGNORE_WEIGHT_MASK_CONFIG', None):
+                    cfg_list = self.global_config.Tasks['DRIVING_BEV_DYN'].get('USE_IGNORE_WEIGHT_MASK_CONFIG', [])
+                    
+                    for cfg in cfg_list:
+                        if cfg['vehicle_str'] not in scene_str:
+                            continue
+                        
+                        class_dict = cfg['class_dict']
+                        ig_minX, ig_minY, ig_minZ, ig_maxX, ig_maxY, ig_maxZ = cfg['ignore_range']
+                        
+                        if (ig_minX <= x < ig_maxX and ig_minY <= y < ig_maxY and cls_id in class_dict.keys()):
+                            c = int(cls_id) - 1
+                            ig_htp_mask[c, center_int[1], center_int[0]] = 0.0
+                            ig_obj_mask[k] = 0.0
+                            Flag = True
+            
+            # import copy
+            # hm_before = copy.deepcopy(hm_main_center)  # 备份：乘之前
+            obj_mask = (obj_mask * ig_obj_mask).astype(np.uint8)
+            hm_main_center = hm_main_center * ig_htp_mask
 
             data_dict['gt_curr_vel'] = vel
             data_dict['gt_curr_hm_cen'] = hm_main_center

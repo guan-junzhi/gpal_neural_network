@@ -8,8 +8,8 @@ check_val_every_n_epoch: 1000000
 dump_calibset: false
 
 Train:
-  EPOCH_LEN: 30000
-  CLIP_LENGTH: [15, 25]
+  EPOCH_LEN: 200000
+  CLIP_LENGTH: [5, 25]
   log_every: 10
   visualize_every: 200
   max_visu_img_num: 6
@@ -63,6 +63,7 @@ Tasks:
     # num_worker_limit: 2
     use_concat_dataset: true
     SWITCH_SUBTASK: DRIVING_BEV_DYN_FISHEYE
+    USE_IGNORE_WEIGHT_MASK_CONFIG: [{vehicle_str: 'SKYWELL', class_dict: {6: [human_pedestrian]}, ignore_range: [-1.5, -2.2, -1.0, 3.5, 2.2, 5.0]}]
     load: all
     # freeze: all
     amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
@@ -122,6 +123,15 @@ Tasks:
           num_stages: 6
           out_channels: 21
           upsample: 8
+          HEAD:
+            hm: 6
+            reg: 2
+            height: 1
+            dim: 3
+            rot: 6
+            vel: 2
+          in_channels_list: [64, 128, 256]
+          feat_out_channels: 128
       
     Loss:
       od_range: [-19.2, -15.36, -1.0, 19.2, 15.36, 5.0]
@@ -161,7 +171,7 @@ Tasks:
           image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
           # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
-          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_1107", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_260120", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
           middle_json_str: "3d_detection_json",
 
           root_dir: "bev_park/PointLine_train/",
@@ -172,19 +182,97 @@ Tasks:
           data_list:[
             {
               description: "ID4 training data", 
-              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter.pkl",
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining/data_find_VRU_from_id4/pkl/251128-1534/_0_train_frame_pairs_sampled_filter1216_exclude_ID4FrontError.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_cut_in.pkl",
               use_ratio: 50,
-              tags: ["ID4", "filtered-area"]
+              
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_roadside.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_turn.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_vru_only_middle.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_vru_only_nearest.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_vru_only_nearest1.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_vru_only_nearest2.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_vru_only_nearest3.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_vru_only_nearest4.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "ID4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_id4^260127_2351/_0_train_frame_pairs_sampled_vru_only_nearest5.pkl",
+              use_ratio: -1,
+            },
+
+            # L4
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260129_1907/_0_train_frame_pairs_sampled_car_only_nearest.pkl",
+              use_ratio: -1,
             },
             {
               description: "L4 training data",
-              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251128-160418/_0_train_frame_pairs_sampled.pkl",
-              # pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251210-053104/_0_train_frame_pairs_sampled.pkl",
-              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251220-142834/_0_train_frame_pairs_sampled.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260129_1907/_0_train_frame_pairs_sampled_car_only_nearest1.pkl",
               use_ratio: -1,
-              tags: ["L4", "filtered-area", "326850"]
-            }
+            },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260129_1907/_0_train_frame_pairs_sampled_cut_in.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260129_1907/_0_train_frame_pairs_sampled_roadside.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260129_1907/_0_train_frame_pairs_sampled_turn.pkl",
+              use_ratio: -1,
+            },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260129_1907/_0_train_frame_pairs_sampled_vru_near.pkl",
+              use_ratio: -1,
+            },
+            # {
+            #   description: "L4 training data",
+            #   pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260129_1907/_0_train_frame_pairs_sampled_vru_only_near.pkl",
+            #   use_ratio: -1,
+            # },
+            {
+              description: "L4 training data",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/data_mining_v3/data/l4^4v_l4^260129_1907/_0_train_frame_pairs_sampled_vru_only_nearest.pkl",
+              use_ratio: -1,
+            },
           ],
           camera_name: ['img_front_fisheye', 'img_right_fisheye', 'img_rear_fisheye', 'img_left_fisheye'],
           shuffle: False,
