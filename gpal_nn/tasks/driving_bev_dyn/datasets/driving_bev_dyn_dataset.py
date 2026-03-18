@@ -1233,7 +1233,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 lidar_point = lidar_point[:,[0,1,2,3]]
             except:
                 print(f' lidar_point read fail: {lidar_point_path}')
-                lidar_point = np.zeros((1, 4))
+                lidar_point = np.zeros((1, 4), dtype=np.float32)
 
             time_dp.Duration("cur_json", "begin")
 
