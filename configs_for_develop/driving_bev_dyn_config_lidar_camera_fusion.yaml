@@ -279,7 +279,7 @@ Tasks:
           data_list: [
             {
               description: "ID4 training data", 
-              pkl_path: "od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/fusion_all_pkl.pkl",
+              pkl_path: "od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/fusion_ID4_SKYWELL_MIFA_AEB.pkl",
               use_ratio: -1,
               tags: ["Only-ID4", "filtered-area", "gpal3.0"]
             },

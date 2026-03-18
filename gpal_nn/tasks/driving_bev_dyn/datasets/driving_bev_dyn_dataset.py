@@ -1356,16 +1356,16 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             data_dict_ret['meta']['crop'] = np.array(img_crop_dict['CROP_HeSai_ID4']['CROP_START'])
             data_dict_ret['meta']['scale'] = np.array(img_crop_dict['CROP_HeSai_ID4']['SCALE'])
-            # if self.phase == const.PHASE_TRAINING:
-            #     if not self._shared_sequence_name_dict.get(sequence_name, True):
-            #         data_dict_ret.update({"points": np.zeros_like(radar_point)})
-            #     elif np.random.rand() < 0.2:
-            #         data_dict_ret.update({"points": np.zeros_like(radar_point)})
-            #     else:
-            #         data_dict_ret.update({"points": radar_point.astype(np.float32)})
-            # else:
-            #     data_dict_ret.update({"points": radar_point.astype(np.float32)})          
-            data_dict_ret.update({"points": lidar_point.astype(np.float32)})          
+            if self.phase == const.PHASE_TRAINING:
+                if not self._shared_sequence_name_dict.get(sequence_name, True):
+                    data_dict_ret.update({"points": np.zeros_like(lidar_point)})
+                elif np.random.rand() < 0.1:
+                    data_dict_ret.update({"points": np.zeros_like(lidar_point)})
+                else:
+                    data_dict_ret.update({"points": lidar_point.astype(np.float32)})
+            else:
+                data_dict_ret.update({"points": lidar_point.astype(np.float32)})          
+            # data_dict_ret.update({"points": lidar_point.astype(np.float32)})          
             # data_dict_ret.update({"points": radar_point.astype(np.float32)})       
 
         except Exception as e:
