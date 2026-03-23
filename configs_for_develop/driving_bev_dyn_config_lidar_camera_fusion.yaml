@@ -64,7 +64,7 @@ Backbones:
     point_process_config:
       pc_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
       voxel_size: [0.32, 0.32, 9]
-      max_voxels_num: [30000, 40000]
+      max_voxels_num: [20000, 25000]
       max_points_in_voxel: 20
       norm_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
       norm_dims: [0, 1, 2]
@@ -182,13 +182,13 @@ Tasks:
         6: [human_pedestrian]
 
     image_crop_config:
-      "IMAGE_RESIZE": [540, 960]
-      "IMAGE_CROP_H_LEN": 512
-      "IMAGE_CROP_SIZE": [512, 960]
+      "IMAGE_RESIZE": [432, 768]
+      "IMAGE_CROP_H_LEN": 432
+      "IMAGE_CROP_SIZE": [432, 768]
       "CROP_HeSai_ID4":
-        "SCALE": [4, 4, 2, 2, 2, 2, 2]
-        "CROP_START": [0, 0, 24, 24, 24, 24, 24]
-        "CROP_START_SKYWELL": [0, 0, 24, 24, 24, 24, 24]
+        "SCALE": [5, 5, 2.5, 2.5, 2.5, 2.5, 2.5]
+        "CROP_START": [0, 0, 0, 0, 0, 0, 0]
+        "CROP_START_SKYWELL": [0, 0, 0, 0, 0, 0, 0]
       "CAMERA_RAW_SIZE":
         [[3840, 2160], 
          [3840, 2160], 
@@ -203,7 +203,7 @@ Tasks:
       "od_heatmap_voxel_size": [0.64, 0.64]
 
     od_range:
-      [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
+      [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
 
     Head:
       head1:
@@ -286,7 +286,7 @@ Tasks:
           ],
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
-          fast_buffer_path: "./dyn_960_540_undis" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./dyn_768_432_undis" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
       
@@ -303,7 +303,7 @@ Tasks:
           data_list: [
             {
               description: "ID4 testing data", 
-              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196_add_scen.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196_add_scen_add_lidar.pkl",
               use_ratio: -1,
               tags: ["ID4", "filtered-area"]
             },
