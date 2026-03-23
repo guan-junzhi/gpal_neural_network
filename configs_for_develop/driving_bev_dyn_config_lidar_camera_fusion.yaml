@@ -183,8 +183,8 @@ Tasks:
 
     image_crop_config:
       "IMAGE_RESIZE": [432, 768]
-      "IMAGE_CROP_H_LEN": 432
-      "IMAGE_CROP_SIZE": [432, 768]
+      "IMAGE_CROP_H_LEN": 416
+      "IMAGE_CROP_SIZE": [416, 768]
       "CROP_HeSai_ID4":
         "SCALE": [5, 5, 2.5, 2.5, 2.5, 2.5, 2.5]
         "CROP_START": [0, 0, 0, 0, 0, 0, 0]
