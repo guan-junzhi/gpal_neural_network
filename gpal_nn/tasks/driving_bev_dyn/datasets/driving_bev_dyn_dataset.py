@@ -1231,6 +1231,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 lidar_point_path = f'{self.image_dir}/{sequence_name}/{lidar_folder}/{curr_time_stamp}.pcd'
                 lidar_point = read_lidar_point_cloud_from_hesai_pcd(lidar_point_path)
                 lidar_point = lidar_point[:,[0,1,2,3]]
+                lidar_point[:,3] /= 255.0 
             except:
                 print(f' lidar_point read fail: {lidar_point_path}')
                 lidar_point = np.zeros((1, 4), dtype=np.float32)
@@ -1438,13 +1439,15 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
             # if self.dataset_cfg.USE_CAMERA_YAML:
             # if self.phase == const.PHASE_VALIDATION:
-            if 'SKYWELL' in sequence_name:
-                intrinsic = copy.deepcopy(self.intrinsic)
-                cam_dist = copy.deepcopy(self.cam_dist)
-                temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
-                temp[:, :3:, :3] = copy.deepcopy(self.r_mat_np)
-                temp[:, :3:, [3]] = copy.deepcopy(self.t_vec_np)
-                extrinsic = temp
+
+            # 这里是因为物流小车标定有问题，读取本地修复的标定文件
+            # if 'SKYWELL' in sequence_name:
+            #     intrinsic = copy.deepcopy(self.intrinsic)
+            #     cam_dist = copy.deepcopy(self.cam_dist)
+            #     temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
+            #     temp[:, :3:, :3] = copy.deepcopy(self.r_mat_np)
+            #     temp[:, :3:, [3]] = copy.deepcopy(self.t_vec_np)
+            #     extrinsic = temp
 
             # TODO
             if 'SKYWELL' in sequence_name:
@@ -1465,9 +1468,9 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 if 'SKYWELL' in sequence_name:
                     WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
                     image_file = os.path.join(WORKDIRS_ROOT, f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli_fisheye_eq_image_data/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg')
-                    if self.deploy_eval:
-                        image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
-                        camera_view = camera_view + "_deploy_raw"
+                    # if self.deploy_eval:
+                    #     image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
+                    #     camera_view = camera_view + "_deploy_raw"
                     assert os.path.exists(image_file), f"image_file {image_file} not exists"
                 else:
                     image_file = f'{self.image_dir}/{sequence_name}/{camera_view}/{curr_time_stamp}.jpg'
@@ -1516,7 +1519,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 if not self.deploy_eval:
                     data_dict_ret['image'][data_dict["camera_names"][i]] = data_dict[f"images_input{i}"].transpose(2, 0, 1)
                 else:
-                    data_dict_ret['image'][data_dict["camera_names"][i]] = data_dict[f"origin_images_input{i}"]
+                    data_dict_ret['image'][data_dict["camera_names"][i]] = data_dict[f"images_input{i}"]*255
 
             for key in data_dict:
                 if "gt_curr_" in key:

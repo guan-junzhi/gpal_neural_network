@@ -1,5 +1,5 @@
-image_per_gpu: 16
-workers_per_gpu: 12
+image_per_gpu: 1
+workers_per_gpu: 4
 skip_sanity_check: true
 max_iterations: 40000
 save_every_n_iterations: 1000
@@ -82,7 +82,7 @@ Backbones:
       normalize_xyz: False
     scatter_config:
       num_input_features: 64
-      use_horizon_pillar_scatter: False #生成hbm和训练打开此开关
+      use_horizon_pillar_scatter: True #生成hbm和训练打开此开关
 
 
   
@@ -117,23 +117,7 @@ Necks:
     use_relu6: False
 
 
-# Transformer:
-#   type: SingleBevFormerViewTransformer
-#   load: all
-#   # freeze: all
-#   transformer_config:
-#     task_name: DRIVING_BEV_DYN
-#     pc_range: [-51.2, -30.72, -1.0, 102.4, 30.72, 5.0]
-#     num_points_in_pillar: 4
-#     bev_y: 48
-#     bev_x: 120
-#     embed_dims: 128
-#     queue_length: 1
-#     max_camoverlap_num: 5
-#     numcam: 7
-#     single_bev: true
-#     use_lidar2img: false
-#     bev_map_voxel_size: [1.28, 1.28, 1.5]
+
 Transformer:
   type: ODViewTransformer
   load: all
@@ -241,7 +225,7 @@ Tasks:
     POST_PROCESSING:
       od_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
       RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
-      SCORE_THRESH: 0.28
+      SCORE_THRESH: 0.3
       OUTPUT_RAW_SCORE: False
       EVAL_METRIC: "kitti"
       NMS_CONFIG: 
@@ -286,7 +270,7 @@ Tasks:
           ],
           camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
           shuffle: False,
-          fast_buffer_path: "./dyn_768_432_undis" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          fast_buffer_path: "./dyn_960_540_undis" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
           # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
         }
       
@@ -303,7 +287,7 @@ Tasks:
           data_list: [
             {
               description: "ID4 testing data", 
-              pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_clips108_frames21168_key4320_noeavg196_add_scen_add_lidar.pkl",
+              pkl_path: "od_occ_group/mendeswan/codes/DataFeedFlow/gen_l4_fisheye_eq_image/20251127-110911/_0_val_l4_frame_pairs_sampled_clips6_frames3000.pkl",
               use_ratio: -1,
               tags: ["ID4", "filtered-area"]
             },

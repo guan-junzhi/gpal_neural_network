@@ -65,6 +65,17 @@ class GpNetDeploy(GpNet):
                     norm_range=preprocess_cfg["norm_range"],
                     norm_dims=preprocess_cfg["norm_dims"],
                 )
+                self.feature_map_shape = self.get_feature_map_size(
+                    preprocess_cfg['pc_range'],
+                    preprocess_cfg['voxel_size'],
+                )
+
+    def get_feature_map_size(self, point_cloud_range, voxel_size):
+        point_cloud_range = np.array(point_cloud_range, dtype=np.float32)
+        voxel_size = np.array(voxel_size, dtype=np.float32)
+        grid_size = (point_cloud_range[3:] - point_cloud_range[:3]) / voxel_size
+        grid_size = np.round(grid_size).astype(np.int64)
+        return grid_size
 
     def gen_xyz_camA(self):
         transformer_config = self.global_config.Transformer["transformer_config"]
@@ -156,86 +167,7 @@ class GpNetDeploy(GpNet):
 
     
     def forward_one_DRIVING_BEV_DYN_fisheye(self, x, calib, metadata):
-        def create_composite_grid_map(src_w, src_h, norm=True):
-            """
-            创建复合网格映射，将两个变换序列合并为一个
-            变换序列：1920x1536 → resize(2214x1772) → crop(1080x1920) → resize(960x540) → crop(512x960)
-            正确实现：通过像素坐标计算，然后转换为归一化坐标
-            """
-            # 目标图像尺寸
-            tgt_h, tgt_w = 512, 960
             
-            if norm:
-                # 生成目标图像(512x960)的归一化坐标网格
-                ws = np.linspace(-1.0, 1.0, tgt_w, endpoint=True)[np.newaxis, :, np.newaxis].repeat(tgt_h, 0)
-                hs = np.linspace(-1.0, 1.0, tgt_h, endpoint=True)[:, np.newaxis, np.newaxis].repeat(tgt_w, 1)
-            else:
-                ws = np.linspace(0.0, tgt_w-1.0, tgt_w, endpoint=True)[np.newaxis, :, np.newaxis].repeat(tgt_h, 0)
-                hs = np.linspace(0.0, tgt_h-1.0, tgt_h, endpoint=True)[:, np.newaxis, np.newaxis].repeat(tgt_w, 1)
-            
-            # 目标图像坐标网格
-            target_map = np.concatenate([ws, hs], axis=-1)
-            
-            # 转换为像素坐标进行计算
-            if norm:
-                # 将归一化坐标转换为像素坐标
-                pixel_map = (target_map + 1.0) * 0.5
-                pixel_map[..., 0] *= tgt_w  # x坐标
-                pixel_map[..., 1] *= tgt_h  # y坐标
-            else:
-                pixel_map = target_map.copy()
-            
-            # 第一步逆变换：逆裁剪(512x960 → 540x960)
-            # 裁剪从0开始，裁剪长度为512，所以需要将坐标映射回540x960
-            pixel_map[..., 1] = pixel_map[..., 1] + 0  # 裁剪起始位置为0，不需要偏移
-            
-            # 第二步逆变换：逆resize(540x960 → 1080x1920)
-            pixel_map[..., 0] = pixel_map[..., 0] * (1920 / 960)  # x方向缩放
-            pixel_map[..., 1] = pixel_map[..., 1] * (1080 / 540)  # y方向缩放
-            
-            # 第三步逆变换：逆裁剪(1080x1920 → 1772x2214)
-            # 裁剪起始位置：y=314, x=127
-            pixel_map[..., 1] = pixel_map[..., 1] + 314  # y方向偏移
-            pixel_map[..., 0] = pixel_map[..., 0] + 127  # x方向偏移
-            
-            # 第四步逆变换：逆resize(1772x2214 → 1536x1920)
-            pixel_map[..., 0] = pixel_map[..., 0] * (1920 / 2214)  # x方向缩放
-            pixel_map[..., 1] = pixel_map[..., 1] * (1536 / 1772)  # y方向缩放
-            
-            # 将像素坐标转换回归一化坐标
-            if norm:
-                # 转换为归一化坐标
-                target_map[..., 0] = (pixel_map[..., 0] / src_w) * 2 - 1  # x坐标归一化
-                target_map[..., 1] = (pixel_map[..., 1] / src_h) * 2 - 1  # y坐标归一化
-            else:
-                target_map = pixel_map
-            
-            return target_map
-        
-        
-        def DistGridMapFisheyeID4(src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True):
-            if norm:
-                ws = np.linspace(-1.0, 1.0, src_w,
-                                endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
-                hs = np.linspace(-1.0, 1.0, src_h,
-                                endpoint=True)[:, np.newaxis, np.newaxis].repeat(src_w, 1)
-            else:
-                ws = np.linspace(0.0, src_w-1.0, src_w,
-                                endpoint=True)[np.newaxis, :, np.newaxis].repeat(src_h, 0)
-                hs = np.linspace(0.0, src_h-1.0, src_h,
-                                endpoint=True)[:, np.newaxis, np.newaxis].repeat(src_w, 1)
-            # cv2.imwrite("ws.jpg", (ws * 127+128).astype(np.uint8))
-            # cv2.imwrite("hs.jpg", (hs * 127+128).astype(np.uint8))
-            src_map = np.concatenate([ws, hs], axis=-1)
-            # target_map = cv2.undistort(
-            #     src=src_map, cameraMatrix=intrins, distCoeffs=dist, newCameraMatrix=intrins)
-            target_map = src_map
-            target_map = cv2.resize(target_map, [tgt_w, tgt_h])
-            target_map = target_map[top_crop_bgn:top_crop_len+top_crop_bgn, :]
-            return target_map
-            
-            
-        
         batch_ret = {
             'fish_head_conv': [],
             'fish_hm_center': [],
@@ -270,54 +202,18 @@ class GpNetDeploy(GpNet):
             
             # 输入到onnx的 255 1HW3
             img_slice = {k: x[k][i].unsqueeze(0).float().detach().cpu().numpy() for k in x}
-
-            # L4为原图
-            if 'SKYWELL' in metadata[i]['clip_id']:
-                # curr_view_img = cv2.resize(curr_view_img, (2214, 1772))
-                # curr_view_img = curr_view_img[314:314 + 1080]
-                # curr_view_img = curr_view_img[:, 127:127 + 1920].transpose(2, 0, 1)
-                # x[img_name] = curr_view_img.to(img_tensor) / 255.0
-                images_grid = np.stack([
-                    create_composite_grid_map(
-                    img_slice[k].shape[2],
-                    img_slice[k].shape[1],
-                    
-                ) for img_i, k in enumerate(img_slice)], axis=0)
-                
-            # ID4鱼眼尺寸是 1080*1920, 需要pad到 1536*1920, 和线上对齐
-            # elif 'HeSai' in metadata[i]['clip_id']:
-            else:
-                H_gap = ONLINE_HW[0] - OFFLINE_HW[0]
-                img_slice = {k: np.concatenate([img_slice[k], np.zeros_like(img_slice[k])[:, :H_gap, ...]], axis=1) for k in img_slice}
-                images_grid = np.stack([
-                    DistGridMapFisheyeID4(
-                    # src_w, src_h, dist, intrins, tgt_w, tgt_h, top_crop_len, top_crop_bgn, norm=True
-                    img_slice[k].shape[2],
-                    img_slice[k].shape[1],
-                    None,
-                    None,
-                    int(ONLINE_HW[1]/2),
-                    int(ONLINE_HW[0]/2),
-                    int(image_crop_config["IMAGE_CROP_H_LEN"]),
-                    int(image_crop_config['CROP_HeSai_ID4']['CROP_START'][img_i]),
-                ) for img_i, k in enumerate(img_slice)], axis=0)
+            # x_draw = copy.deepcopy({k: x[k][i].unsqueeze(0) for k in x})  # need torch
+            for _, img_name in enumerate(x_draw.keys()):
+                x_draw[img_name].append(x[img_name][i].unsqueeze(0).permute(0, 3, 1, 2) / 255.0)
             
-            # 为可视化
-            curr_bs_i_tensor_cat = torch.concat([torch.from_numpy(img_slice[k]).to(self.dyn_od_stream_feature_bank) 
-                                                 for k in img_slice], dim=0).permute(0, 3, 1, 2) # BC HW
-            curr_bs_i_tensor = F.grid_sample(curr_bs_i_tensor_cat, 
-                                             torch.from_numpy(images_grid).float().to(curr_bs_i_tensor_cat.device), 
-                                             align_corners=True, padding_mode='border', mode="nearest") / 255.0
-            for draw_img_i, img_name in enumerate(x_draw.keys()):
-                x_draw[img_name].append(curr_bs_i_tensor[[draw_img_i]])
             
             extrinsic_matrix = calib['extrinsic'][i]
             distortion_coeffs= calib['cam_dist'][i]
             intrinsic_matrix = calib['intrinsic'][i]
-            H, W, div, Z, Y, X = 64, 120, 8, 6, 48, 60
+            H, W, div, Z, Y, X = 64, 120, 8, 4, 48, 60
             xyz_camAX = self.model[self._transformers["DRIVING_BEV_DYN"]].xyz_camA.clone()
             
-            vt_grid, vt_grid_valid = GetProjectGridByEgo2ImgsFisheye(
+            vt_grid, _ = GetProjectGridByEgo2ImgsFisheye(
                 extrinsic_matrix,
                 distortion_coeffs,
                 intrinsic_matrix,
@@ -346,7 +242,6 @@ class GpNetDeploy(GpNet):
             prev_feats = bank_feats * seq_flags[i].cpu().numpy()
             
             inputs_dict.update({
-                "fish_images_grid": images_grid.astype(np.float32),
                 "fish_vt_grid": vt_grid.float().detach().cpu().numpy(),
                 "fish_prev_feats": prev_feats,
                 "fish_prev_feats_grid": prev_feats_grid,  # 部署外挂计算
@@ -393,6 +288,32 @@ class GpNetDeploy(GpNet):
             points = x['points']
             points = [points[j].cuda() for j in range(len(points))]
             features,coors = self.centerpoint_preprocess(points,True)
+            # features = features.permute(0, 3, 2, 1)
+            batch_size = 1
+            nx = self.feature_map_shape[0]
+            ny = self.feature_map_shape[1]
+            nchannels = features.shape[1]
+            max_points_in_voxel = features.shape[2]
+            dense_features = features.new_zeros(
+                (
+                    batch_size, 
+                    nchannels, 
+                    max_points_in_voxel, 
+                    nx * ny
+                )
+            ) 
+
+            for batch_id in range(batch_size):
+                batch_mask = coors[:, 0] == batch_id
+                this_coords = coors[batch_mask, :]
+                indices = this_coords[:, 2] * nx + this_coords[:, 3]
+                indices = indices.type(torch.long)
+                cur_features = features[: , : , : , batch_mask]
+                dense_features[batch_id, :, :, indices] = cur_features
+
+            features = dense_features
+            features = features.permute(0, 3, 2, 1)
+
             x.pop('points')
         else:
             features = None
@@ -404,6 +325,9 @@ class GpNetDeploy(GpNet):
             return data_dict
         
         batch_ret = {
+            # 'fish_head_conv': [],
+            # 'fish_hm_center': [],
+            # 'fish_prev_feats_output': [],
             'head_conv': [],
             'hm_cen': [],
             'prev_feats_output': [],
@@ -413,7 +337,7 @@ class GpNetDeploy(GpNet):
         batch_size = B = len(metadata)
 
         if (self.dyn_od_stream_feature_bank == None):
-            self.dyn_od_stream_feature_bank = torch.zeros(B, 128, 48, 160).cuda()
+            self.dyn_od_stream_feature_bank = torch.zeros(B, 128, 48, 120).cuda()
 
         # 矩阵 and torch, 再分发到batch
         seq_flags, dts = self.SeqCheck(self.dyn_od_stream_metas_bank, metadata)
@@ -451,12 +375,12 @@ class GpNetDeploy(GpNet):
                         x_draw[img_name].append(x[img_name][i].unsqueeze(0).permute(0, 3, 1, 2) / 255.0)
                     vt_grid, _ = GetProjectGridByEgo2Imgs(
                         ego2imgs, 
-                        H=64, 
-                        W=120, 
+                        H=52, 
+                        W=96, 
                         div=8, 
                         Z=6, 
                         Y=48, 
-                        X=160, 
+                        X=120, 
                         sample_pts_3d=xyz_camAX.to(ego2imgs.device).clone())
             else:
                 images_grid = np.stack([DistGridMap(img_slice[k].shape[2],
@@ -532,15 +456,34 @@ class GpNetDeploy(GpNet):
                 "vt_grid": vt_grid.float().detach().cpu().numpy(),
                 "prev_feats": prev_feats,
                 "prev_feats_grid": prev_feats_grid,  # 部署外挂计算
+                # "img_front_fisheye": np.zeros((1, 512, 960, 3), dtype=np.float32),  
+                # "img_right_fisheye": np.zeros((1, 512, 960, 3), dtype=np.float32),  
+                # "img_rear_fisheye": np.zeros((1, 512, 960, 3), dtype=np.float32),  
+                # "img_left_fisheye": np.zeros((1, 512, 960, 3), dtype=np.float32),  
+                # "fish_vt_grid": np.zeros((4, 192, 60, 2), dtype=np.float32),  
+                # "fish_prev_feats": np.zeros((1, 128, 48, 60), dtype=np.float32),  
+                # "fish_prev_feats_grid": np.zeros((1, 48, 60, 2), dtype=np.float32),  
+                # "img_front_fisheye_y": np.zeros((1, 512, 960, 1), dtype=np.uint8),  
+                # "img_front_fisheye_uv": np.zeros((1, 256, 480, 2), dtype=np.uint8),  
+                # "img_right_fisheye_y": np.zeros((1, 512, 960, 1), dtype=np.uint8),  
+                # "img_right_fisheye_uv": np.zeros((1, 256, 480, 2), dtype=np.uint8),  
+                # "img_rear_fisheye_y": np.zeros((1, 512, 960, 1), dtype=np.uint8),  
+                # "img_rear_fisheye_uv": np.zeros((1, 256, 480, 2), dtype=np.uint8),  
+                # "img_left_fisheye_y": np.zeros((1, 512, 960, 1), dtype=np.uint8),  
+                # "img_left_fisheye_uv": np.zeros((1, 256, 480, 2), dtype=np.uint8),  
+                # "fish_vt_grid": np.zeros((4, 192, 60, 2), dtype=np.float32),  
+                # "fish_prev_feats": np.zeros((1, 128, 48, 60), dtype=np.float32),  
+                # "fish_prev_feats_grid": np.zeros((1, 48, 60, 2), dtype=np.float32),  
+
                 }
             )
             if features is not  None:
                 inputs_dict.update({
                     "features":features.detach().cpu().numpy(),
-                    "coors": coors.view(1, 1,coors.shape[0], coors.shape[1]).detach().cpu().numpy().astype(np.int32),
+                    # "coors": coors.view(1, 1,coors.shape[0], coors.shape[1]).detach().cpu().numpy().astype(np.int32),
                     })
             if self.global_config.calib_data_save_path != "None":
-                if self.calib_data_cnt % 100 == 0:
+                if self.calib_data_cnt % 10 == 0:
                     for k in inputs_dict:
                         single_calib_data_save_path = f'{self.global_config.calib_data_save_path}/{k}/{self.calib_data_cnt}.npy'
                         os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
@@ -560,7 +503,6 @@ class GpNetDeploy(GpNet):
         x['points'] = points
         for k in batch_ret:
             batch_ret[k] = torch.from_numpy(np.concatenate(batch_ret[k], axis = 0)).cuda()
-        # breakpoint()
         self.dyn_od_stream_feature_bank = batch_ret['prev_feats_output'].clone()
         self.dyn_od_stream_metas_bank = copy.deepcopy(metadata)
 

@@ -132,10 +132,10 @@ class WrappedGpNet(GpNet):
                     "img_rear_fisheye",
                     "img_left_fisheye"]
 
-        img8ms = torch.cat([x[k] for k in fish_cam2_set], dim=0).permute(0, 3, 1, 2)
+        imgs = torch.cat([x[k] for k in fish_cam2_set], dim=0).permute(0, 3, 1, 2) / 255.0
 
-        imgs = F.grid_sample(
-            img8ms, images_grid.float(), align_corners=True, padding_mode='border', mode="nearest") / 255.0
+        # imgs = F.grid_sample(
+        #     img8ms, images_grid.float(), align_corners=True, padding_mode='border', mode="nearest") / 255.0
         
         for backbone_name, camera_list in self.backbone_camera_mapping.items():
             bb_output = self.model[backbone_name](imgs)
@@ -268,41 +268,22 @@ class PytorchToOnnx:
         if task_name in ["DRIVING_BEV_DYN"]:
             if task.subtask_name=="DRIVING_BEV_DYN_FISHEYE":
                 used_image_shapes: dict = {
-                    "img_front_fisheye": [1920, 1536, 3],
-                    "img_right_fisheye": [1920, 1536, 3],
-                    "img_rear_fisheye": [1920, 1536, 3],
-                    "img_left_fisheye": [1920, 1536, 3],
+                    "img_front_fisheye": [960, 512, 3],
+                    "img_right_fisheye": [960, 512, 3],
+                    "img_rear_fisheye": [960, 512, 3],
+                    "img_left_fisheye": [960, 512, 3],
                 }
             elif task.subtask_name=="DRIVING_BEV_DYN":
-                # used_image_shapes: dict = {
-                #     "img_front_120": [768, 320, 3],
-                #     "img_front_30": [768, 320, 3],
-                #     "img_back": [768, 320, 3],
-                #     "img_front_left": [768, 320, 3],
-                #     "img_front_right": [768, 320, 3],
-                #     "img_rear_left": [768, 320, 3],
-                #     "img_rear_right": [768, 320, 3],
-                # }
-                used_image_shapes: dict = {
-                    "img_front_120": [3840, 2160, 3],
-                    "img_front_30": [3840, 2160, 3],
-                    "img_back": [1920, 1080, 3],
-                    "img_front_left": [1920, 1080, 3],
-                    "img_front_right": [1920, 1080, 3],
-                    "img_rear_left": [1920, 1080, 3],
-                    "img_rear_right": [1920, 1080, 3],
-                }
-                if task.deploy_cfg is not None:
-                    if task.deploy_cfg['mode'] == "gpal30_in_model_with_small_image":
-                        used_image_shapes: dict = {
-                            "img_front_120": [960, 512, 3],
-                            "img_front_30": [960, 512, 3],
-                            "img_back": [960, 512, 3],
-                            "img_front_left": [960, 512, 3],
-                            "img_front_right": [960, 512, 3],
-                            "img_rear_left": [960, 512, 3],
-                            "img_rear_right": [960, 512, 3],
-                        }
+               
+                    used_image_shapes: dict = {
+                        "img_front_120": [768, 416, 3],
+                        "img_front_30": [768, 416, 3],
+                        "img_back": [768, 416, 3],
+                        "img_front_left": [768, 416, 3],
+                        "img_front_right": [768, 416, 3],
+                        "img_rear_left": [768, 416, 3],
+                        "img_rear_right": [768, 416, 3],
+                    }
             else:
                 raise ValueError(f"Unknown subtask_name: {task.subtask_name}")
             return used_image_shapes
@@ -354,13 +335,13 @@ class PytorchToOnnx:
                             merged_input_dict["calib"]["images_grid"] = torch.rand(7, 320, 768, 2).cuda()  # 不使用,任意
                     else:
                         merged_input_dict["calib"]["images_grid"] = torch.rand(7, 320, 768, 2).cuda()
-                    merged_input_dict["calib"]["vt_grid"] = torch.rand(7, 288, 160, 2).cuda()
+                    merged_input_dict["calib"]["vt_grid"] = torch.rand(7, 288, 120, 2).cuda()
                     merged_input_dict["metadata"] = {}
-                    merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 160).cuda()
-                    merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 160, 2).cuda()
+                    merged_input_dict["metadata"]["prev_feats"] = torch.rand(1, 128, 48, 120).cuda()
+                    merged_input_dict["metadata"]["prev_feats_grid"] = torch.rand(1, 48, 120, 2).cuda()
                     merged_input_dict["points"] = {}
-                    merged_input_dict["points"]["features"] = torch.zeros(1,40000,20,6).cuda()
-                    merged_input_dict["points"]["coors"] = torch.zeros((1,1,40000,4),dtype=torch.int32).cuda()
+                    merged_input_dict["points"]["features"] = torch.zeros(1,92160,20,4).cuda()
+                    merged_input_dict["points"]["coors"] = torch.zeros((1,1,92160,4),dtype=torch.int32).cuda()
 
             elif task.name == "DRIVING_BEV_STA":
                 merged_input_dict = {"task": tasks[0].name, "image": input_dict}
@@ -382,17 +363,17 @@ class PytorchToOnnx:
     @staticmethod
     def init_net(global_config, tasks):
         net = WrappedGpNet(global_config, tasks)
-        # if global_config.load_from:
-        #     # checkpoint_path = get_checkpoint_path(global_config.load_from)
-        #     checkpoint_path = global_config.load_from
-        #     logging.info("Loading from {}".format(checkpoint_path))
-        #     checkpoint = torch.load(checkpoint_path)
-        #     try:
-        #         net.load_state_dict(checkpoint["state_dict"], strict=False)
-        #     except Exception as e:
-        #         print(e)
-        #     # PytorchToOnnx.reset_weight(net)
-        #     logging.info("Model was loaded successfully")
+        if global_config.load_from:
+            # checkpoint_path = get_checkpoint_path(global_config.load_from)
+            checkpoint_path = global_config.load_from
+            logging.info("Loading from {}".format(checkpoint_path))
+            checkpoint = torch.load(checkpoint_path)
+            try:
+                net.load_state_dict(checkpoint["state_dict"], strict=False)
+            except Exception as e:
+                print(e)
+            # PytorchToOnnx.reset_weight(net)
+            logging.info("Model was loaded successfully")
         return net
 
     @staticmethod

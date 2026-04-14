@@ -417,7 +417,7 @@ class PointPillarScatter(nn.Module):
             # canvas = canvas.view(1, self.nchannels, self.ny, self.nx)
             # return canvas
 
-        return batch_canvas
+        return batch_canvas 
     
 
 @BACKBONES.register_module()
@@ -479,31 +479,53 @@ class Point_Feature_Net(BaseModule):
                 batch_size=1,
                 input_shape=self.feature_map_shape,
             )
+            batch_size = 1
         else:
             features, coords = self.pre_process(
                 input, not self.training
             )
+            batch_size = len(input)
+            nx = self.feature_map_shape[0]
+            ny = self.feature_map_shape[1]
+            nchannels = features.shape[1]
+            max_points_in_voxel = features.shape[2]
+            dense_features = features.new_zeros(
+                (
+                    batch_size, 
+                    nchannels, 
+                    max_points_in_voxel, 
+                    nx * ny
+                )
+            ) 
+
+            for batch_id in range(batch_size):
+                batch_mask = coords[:, 0] == batch_id
+                this_coords = coords[batch_mask, :]
+                indices = this_coords[:, 2] * nx + this_coords[:, 3]
+                indices = indices.type(torch.long)
+                cur_features = features[: , : , : , batch_mask]
+                dense_features[batch_id, :, :, indices] = cur_features
+
             data = dict(  # noqa C408
-                features=features,
+                features=dense_features,
                 coors=coords,
                 num_points_in_voxel=None,
                 batch_size=len(input),
                 input_shape=self.feature_map_shape,
             )
 
-        # only support horizon_preprocess=True in reader for centerpoint
-        input_features = self.reader(
-            data["features"],
-            horizon_preprocess=True,
+        output_features = []
+        for batch_id in range(batch_size):
+            cur_dense_features = data["features"][batch_id:batch_id+1, :, :, :]
+            output_feature = self.reader(
+               cur_dense_features,
+                horizon_preprocess=True,
+            )
+            output_features.append(output_feature)
+        output_features = torch.cat(output_features, dim=0).permute(0, 3, 1, 2).reshape(
+            data["batch_size"], -1, self.feature_map_shape[1], self.feature_map_shape[0]
         )
-        
-        x = self.scatter(
-            input_features,
-            data["coors"],
-            data["batch_size"],
-            torch.tensor(self.feature_map_shape),
-        )
-        return x
+        return output_features
     
 if __name__ == "__main__":
     global_config = dict(
