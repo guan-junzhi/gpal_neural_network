@@ -99,11 +99,8 @@ class DRIVING_BEV_DYNHead(BaseHead):
         self.prev_metas = None
         self.cnt = 0
         
-        transformer_config = copy.deepcopy(global_config.Transformer["transformer_config"])
-        self.point_cloud_range = transformer_config["bev_map_range"]
-        self.voxel_size = transformer_config["bev_map_voxel_size"]
-        self.voxel_size[0] = self.voxel_size[0]
-        self.voxel_size[1] = self.voxel_size[1]
+        self.point_cloud_range = self.dyn_od_head_cfg["bev_map_range"]
+        self.voxel_size = self.dyn_od_head_cfg["bev_map_voxel_size"]
         self.grid_size = [
             int(round((self.point_cloud_range[3]-self.point_cloud_range[0])/self.voxel_size[0],2)),
             int(round((self.point_cloud_range[4]-self.point_cloud_range[1])/self.voxel_size[1],2))

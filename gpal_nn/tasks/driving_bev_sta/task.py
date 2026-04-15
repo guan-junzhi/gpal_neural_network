@@ -347,7 +347,7 @@ class DRIVING_BEV_STATask(BaseTask):
         # 确保输入是numpy数组以便计算（保留原始类型用于输出）
         is_tensor = isinstance(points, torch.Tensor)
         if is_tensor:
-            points_np = points.cpu().numpy()
+            points_np = points.cpu().detach().numpy()
         else:
             points_np = np.asarray(points)
         
