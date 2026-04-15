@@ -240,44 +240,22 @@ class GpNet(LightningModule):
         return self._build_val_or_infer_dataloaders(const.PHASE_INFERENCE)
 
     def _make_transformer(self):
-        if not self.global_config.Transformer.get("muti_transformer"):
-            transformer_type = self.global_config.Transformer.pop("type")
-            transformer_config = self.global_config.Transformer.copy()
-            if "freeze" in transformer_config:
-                self._freeze_module_dict["transformer"] = transformer_config.pop(
-                    "freeze")
-            if "load" in transformer_config:
-                self._load_module_dict["transformer"] = transformer_config.pop(
-                    "load")
-            self._fp_module_dict["transformer"] = transformer_config.pop(
-                "ampfp16", False)
-            transformer_object = transformer_builder.build(
-                self.global_config, transformer_type, transformer_config)
-            self.model["transformer"] = transformer_object
-            for task in self.tasks.values():
-                if getattr(task.task_config, 'transformer', False):
-                    self._transformers[task.name] = task.task_config.transformer
-        else:
-            transformers = self.global_config.Transformer["transformers"]
-            for transformer_name, transformer_config in transformers.items():
-                transformer_type = transformer_config.pop("type")
-                transformer_config = transformer_config.copy()
-                if "freeze" in transformer_config:
-                    self._freeze_module_dict[transformer_name] = transformer_config.pop(
-                        "freeze")
-                if "load" in transformer_config:
-                    self._load_module_dict[transformer_name] = transformer_config.pop(
-                        "load")
-                self._fp_module_dict[transformer_name] = transformer_config.pop(
-                    "ampfp16", False)
-                transformer_object = transformer_builder.build(
-                    self.global_config, transformer_type, transformer_config)
-                self.model[transformer_name] = transformer_object
-                for task in self.tasks.values():
-
-                    if task.task_config.transformer==transformer_name:
-                        self._transformers[task.name] = task.task_config.transformer
-
+        transformer_type = self.global_config.Transformer.pop("type")
+        transformer_config = self.global_config.Transformer.copy()
+        if "freeze" in transformer_config:
+            self._freeze_module_dict["transformer"] = transformer_config.pop(
+                "freeze")
+        if "load" in transformer_config:
+            self._load_module_dict["transformer"] = transformer_config.pop(
+                "load")
+        self._fp_module_dict["transformer"] = transformer_config.pop(
+            "ampfp16", False)
+        transformer_object = transformer_builder.build(
+            self.global_config, transformer_type, transformer_config)
+        self.model["transformer"] = transformer_object
+        for task in self.tasks.values():
+            if getattr(task.task_config, 'transformer', False):
+                self._transformers[task.name] = task.task_config.transformer
 
     def _make_heads(self):
         for task in self.tasks.values():
