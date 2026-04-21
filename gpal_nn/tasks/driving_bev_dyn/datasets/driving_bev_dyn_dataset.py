@@ -450,37 +450,37 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         # if self.dataset_cfg.USE_CAMERA_YAML:
         cam_calib_dir = "camera_0811" if phase == const.PHASE_TRAINING else "camera"
-        # if True:
+        if True:
             
-        #     intrinsic = []
-        #     distort_coeff = []
-        #     r_mat = []
-        #     t_vec = []
-        #     # breakpoint()
-        #     for curr_view in self.image_view:
-        #         # curr_view_yaml_file = f"{root_dir}/l4_db_bag_jira/calibration_json/camera/fisheye/{curr_view.replace('img_', '')}.yaml"
-        #         curr_view_yaml_file = f"{WORKDIRS_ROOT}/od_occ_group/huiquyang/data/l4_db_bag_jira/calibration_cloud/camera/skywell_fisheye_calib_0205/{curr_view.replace('img_', '')}.yaml"
-        #         print(f'use camera yaml file: {curr_view_yaml_file}')
-        #         yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
-        #         intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
-        #         # distort_coeff.append(yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
-        #         if len(yaml_dict['distortion_coefficients'].reshape(-1)) == 4:
-        #             dist = np.concatenate([yaml_dict['distortion_coefficients'].reshape(-1), np.zeros((1,))], axis=0)
-        #             distort_coeff.append(dist.reshape(-1, 1, 5))
-        #         else:
-        #             distort_coeff.append(yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
-        #         r_mat.append(yaml_dict['r_mat'].reshape(-1, 3, 3))
-        #         t_vec.append(yaml_dict['t_vec'].reshape(-1, 3, 1))
+            intrinsic = []
+            distort_coeff = []
+            r_mat = []
+            t_vec = []
+            # breakpoint()
+            for curr_view in self.image_view:
+                # curr_view_yaml_file = f"{root_dir}/l4_db_bag_jira/calibration_json/camera/fisheye/{curr_view.replace('img_', '')}.yaml"
+                curr_view_yaml_file = f"{WORKDIRS_ROOT}/od_occ_group/huiquyang/data/l4_db_bag_jira/calibration_cloud/camera/skywell_fisheye_calib_0205/{curr_view.replace('img_', '')}.yaml"
+                print(f'use camera yaml file: {curr_view_yaml_file}')
+                yaml_dict = read_camera_yaml_to_dict(curr_view_yaml_file)
+                intrinsic.append(yaml_dict['camera_matrix'].reshape(-1, 3, 3))
+                # distort_coeff.append(yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
+                if len(yaml_dict['distortion_coefficients'].reshape(-1)) == 4:
+                    dist = np.concatenate([yaml_dict['distortion_coefficients'].reshape(-1), np.zeros((1,))], axis=0)
+                    distort_coeff.append(dist.reshape(-1, 1, 5))
+                else:
+                    distort_coeff.append(yaml_dict['distortion_coefficients'].reshape(-1, 1, 5))
+                r_mat.append(yaml_dict['r_mat'].reshape(-1, 3, 3))
+                t_vec.append(yaml_dict['t_vec'].reshape(-1, 3, 1))
 
-        #     intrinsic_np = np.concatenate(intrinsic, axis=0)
-        #     distort_coeff_np = np.concatenate(distort_coeff, axis=0)
-        #     r_mat_np = np.concatenate(r_mat, axis=0)
-        #     t_vec_np = np.concatenate(t_vec, axis=0)
+            intrinsic_np = np.concatenate(intrinsic, axis=0)
+            distort_coeff_np = np.concatenate(distort_coeff, axis=0)
+            r_mat_np = np.concatenate(r_mat, axis=0)
+            t_vec_np = np.concatenate(t_vec, axis=0)
 
-        #     self.intrinsic = intrinsic_np
-        #     self.cam_dist = distort_coeff_np
-        #     self.r_mat_np = r_mat_np
-        #     self.t_vec_np = t_vec_np
+            self.intrinsic = intrinsic_np
+            self.cam_dist = distort_coeff_np
+            self.r_mat_np = r_mat_np
+            self.t_vec_np = t_vec_np
 
         self.jitter = T.ColorJitter([0.2, 1.2], 0.3, 0.3, 0.2)
 
@@ -1441,13 +1441,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             # if self.phase == const.PHASE_VALIDATION:
 
             # 这里是因为物流小车标定有问题，读取本地修复的标定文件
-            # if 'SKYWELL' in sequence_name:
-            #     intrinsic = copy.deepcopy(self.intrinsic)
-            #     cam_dist = copy.deepcopy(self.cam_dist)
-            #     temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
-            #     temp[:, :3:, :3] = copy.deepcopy(self.r_mat_np)
-            #     temp[:, :3:, [3]] = copy.deepcopy(self.t_vec_np)
-            #     extrinsic = temp
+            if 'SKYWELL' in sequence_name:
+                intrinsic = copy.deepcopy(self.intrinsic)
+                cam_dist = copy.deepcopy(self.cam_dist)
+                temp = np.stack([np.eye(4) for i in range(len(self.image_view))], axis=0)
+                temp[:, :3:, :3] = copy.deepcopy(self.r_mat_np)
+                temp[:, :3:, [3]] = copy.deepcopy(self.t_vec_np)
+                extrinsic = temp
 
             # TODO
             if 'SKYWELL' in sequence_name:
