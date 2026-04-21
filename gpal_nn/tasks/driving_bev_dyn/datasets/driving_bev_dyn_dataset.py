@@ -633,6 +633,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             '2025-07-10_11-33-52-674',
             '2025-07-10_11-12-52-674',
             '2025-07-10_10-49-52-675',
+            '2025-09-02_13-55-06-965',#录制过程中开启车门了，需要跳过
         ]
 
         fusion_infos = [i for i in fusion_infos if i['sequence_name'].split('/')[-1] not in skip_subday_list]
