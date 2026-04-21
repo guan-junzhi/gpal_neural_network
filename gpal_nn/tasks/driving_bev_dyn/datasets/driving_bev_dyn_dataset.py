@@ -1413,7 +1413,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             if 'SKYWELL' in sequence_name:
                 WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
-                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_L4_260129/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
+                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_L4_new/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
                 vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
             
             with open(vcu_file, 'r') as vcu_reader:
