@@ -1,6 +1,5 @@
 import os
 import logging
-from concurrent.futures import ProcessPoolExecutor
 from glob import glob
 from pathlib import Path
 
@@ -27,8 +26,11 @@ def collect_dumped_files(task_name: str,
     # print(files)
     logging.warning("Load dumped files ...")
     logging.warning("Start with {}".format(files[0]))
-    with ProcessPoolExecutor(max_workers=8) as executor:
-        loaded_data = list(executor.map(_collect_dumped_files, files))
+    # Serial loading to avoid fork/thread issues with HBRuntime/ONNX Runtime loaded
+    loaded_data = []
+    for file in files:
+        uuid, data = _collect_dumped_files(file)
+        loaded_data.append((uuid, data))
     logging.warning(
         "Dumped file loading done, {} files loaded.".format(len(loaded_data)))
     return dict(loaded_data)

@@ -183,9 +183,10 @@ class DRIVING_BEV_DYNHead(BaseHead):
         return seq_flag, dt
 
     def gen_shift_feature_grid(self, grid, cur2prev, prev_feat, bev_w_resolution, bev_h_resolution):
-        bs, _, h, w = prev_feat.shape
+        _, _, h, w = prev_feat.shape
+        bs = grid.shape[0]  # use actual batch size, not prev_feat batch (may differ at last incomplete batch)
         grid = grid.view(bs, h, w, 3, 1)
-        
+
         for idx in range(bs):
             grid[idx] = cur2prev[idx].matmul(grid[idx])
         
@@ -227,7 +228,9 @@ class DRIVING_BEV_DYNHead(BaseHead):
             rts = self.GetCur2Prev(metadata, dts)
             feats_shifted_grid = self.gen_shift_feature_grid(self.xyz_camA.repeat(B, 1, 1, 1).to(fuser_feature.device).clone(), rts.to(fuser_feature.device), self.feature_bank.clone(), self.voxel_size[0], self.voxel_size[1])
             seq_flag = seq_flag.to(fuser_feature.device).float().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)#.unsqueeze(-1)
-            feats_shifted = F.grid_sample(self.feature_bank.clone(),
+            # slice feature_bank to match actual batch size (last incomplete batch may have fewer frames)
+            prev_feat_sliced = self.feature_bank[:B].clone()
+            feats_shifted = F.grid_sample(prev_feat_sliced,
                                           feats_shifted_grid.to(self.feature_bank.dtype),
                                           align_corners=False)
             prev_feats = feats_shifted.clone() * seq_flag

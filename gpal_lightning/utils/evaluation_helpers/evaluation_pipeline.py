@@ -33,7 +33,9 @@ class EvaluationPipeline:
         # print(collected_preds, collected_trues, collected_metadata)
 
         for uuid, pred in collected_preds.items():
-            if pred is None or collected_trues[uuid] is None or collected_metadata[uuid] is None:
+            if pred is None or uuid not in collected_trues or uuid not in collected_metadata:
+                continue
+            if collected_trues[uuid] is None or collected_metadata[uuid] is None:
                 continue
             true = collected_trues[uuid]
             metadata = collected_metadata[uuid]

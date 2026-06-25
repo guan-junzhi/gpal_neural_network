@@ -143,7 +143,8 @@ class GpNetDeploy(GpNet):
 
 
     def gen_shift_feature_grid(self, grid, cur2prev, prev_feat, bev_h_resolution, bev_w_resolution):
-        bs, _, h, w = prev_feat.shape
+        _, _, h, w = prev_feat.shape
+        bs = grid.shape[0]
         grid = grid.view(bs, h, w, 3, 1)
         if torch.onnx.is_in_onnx_export():
             grid = cur2prev.matmul(grid)
@@ -257,10 +258,9 @@ class GpNetDeploy(GpNet):
                         np.save(single_calib_data_save_path, inputs_dict[k])
                 self.calib_data_cnt+=1
 
-            self.session = HBRuntime(self.global_config.onnx_path)
             outputs = self.session.run(self.output_names, inputs_dict)
             for k, o in zip(batch_ret, outputs):
-                batch_ret[k].append(o)
+                batch_ret[k].append(o.copy())
 
         # 可视化, 同时验证image grid 是否正确
         for k in x_draw:
@@ -490,11 +490,10 @@ class GpNetDeploy(GpNet):
                         np.save(single_calib_data_save_path, inputs_dict[k])
                 self.calib_data_cnt+=1
 
-            self.session = HBRuntime(self.global_config.onnx_path)
             outputs = self.session.run(self.output_names, inputs_dict)
             for k, o in zip(batch_ret, outputs):
-                batch_ret[k].append(o)
-        
+                batch_ret[k].append(o.copy())
+
         # 可视化, 同时验证image grid 是否正确
         for k in x_draw:
             x_draw[k] = torch.concat(x_draw[k], dim=0)
@@ -532,9 +531,7 @@ class GpNetDeploy(GpNet):
                     np.save(single_calib_data_save_path, inputs_dict[k])
                 self.calib_data_cnt+=1
 
-            self.session = HBRuntime(self.global_config.onnx_path)
             outputs = self.session.run(self.output_names, inputs_dict)
-        
 
     def forward_one_DRIVING_BEV_STA(self, x, calib, metadata):
         """Single-frame STA deploy forward.
@@ -658,13 +655,10 @@ class GpNetDeploy(GpNet):
                     os.makedirs(os.path.dirname(single_calib_data_save_path), exist_ok=True)
                     np.save(single_calib_data_save_path, inputs_dict[k])
                 self.calib_data_cnt += 1
-            # self.session = ort.InferenceSession(self.global_config.onnx_path)
-            # outputs = self.session.run(self.session.output_names, inputs_dict)
-            self.session = HBRuntime(self.global_config.onnx_path)
             outputs = self.session.run(self.output_names, inputs_dict)
 
             for k, o in zip(out_keys, outputs):
-                batch_ret[k].append(o)
+                batch_ret[k].append(o.copy())
 
         # Stack to tensors
         for k in out_keys:

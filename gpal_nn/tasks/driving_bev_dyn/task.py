@@ -428,7 +428,7 @@ class DRIVING_BEV_DYNTask(BaseTask):
             os.makedirs(save_root, exist_ok=True)
         
         bs = len(metadata)
-        for idx in range(bs):
+        for idx in range(min(1, bs)):
             vis_draw1 = self.GetVis(data, preds, trues, metadata, calib, idx)
             # import cv2
             # cv2.imwrite(f"eval_vis_online/{metadata[idx]['frame_id'].split('/')[0]}.jpg", vis)

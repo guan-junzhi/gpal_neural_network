@@ -136,24 +136,48 @@ def oriented_nms(
     you can refer to the details here: https://codereview.stackexchange.com/questions/204017/intersection-over-union-for-rotated-rectangles
     """
     # sort by confidence
-    
     order = np.argsort(box_scores_nms)[::-1]
     boxes_for_nms = boxes_for_nms[order]
     box_scores_nms = box_scores_nms[order]
     input_idxs = np.array(list(range(len(boxes_for_nms)))).astype(np.int32)
     input_idxs = input_idxs[order]
 
-    # get polygons
+    # Filter NaN/Inf and build polygons
     polygons = []
-    for obj in boxes_for_nms:
-        X, Y, Z, L, W, H, yaw, = obj
+    valid_input_idxs = []
+    valid_box_scores = []
+    for i, obj in enumerate(boxes_for_nms):
+        X, Y, Z, L, W, H, yaw = obj
+        # Skip NaN/Inf/zero-dim boxes
+        if not np.isfinite([X, Y, Z, L, W, H, yaw]).all():
+            continue
+        if L <= 1e-6 or W <= 1e-6:
+            continue
+        try:
+            box = BBOX3D(X, Y, H / 2, L, W, H, yaw)
+            pts = box.bottom_corners()[:2].T
+            pts_2d = pts[:, :2]
+            # Check for NaN in corners
+            if not np.isfinite(pts_2d).all():
+                continue
+            poly = Polygon([tuple(pts_2d[0]), tuple(pts_2d[1]),
+                           tuple(pts_2d[2]), tuple(pts_2d[3])])
+            if not poly.is_valid:
+                poly = poly.buffer(0)
+                if not poly.is_valid:
+                    continue
+            polygons.append(poly)
+            valid_input_idxs.append(input_idxs[i])
+            valid_box_scores.append(box_scores_nms[i])
+        except Exception:
+            continue
 
-        box = BBOX3D(X, Y, H / 2, L, W, H, yaw)
-        pts = box.bottom_corners()[:2].T
-        polygons.append(
-            Polygon([tuple(pts[0][:2]), tuple(pts[1][:2]),
-                    tuple(pts[2][:2]), tuple(pts[3][:2])])
-        )
+    if len(polygons) == 0:
+        return np.array([], dtype=np.int32), np.array([]), np.array([])
+
+    input_idxs = np.array(valid_input_idxs)
+    box_scores_nms = np.array(valid_box_scores)
+
     # perform nms
     selected_polygons = []
     selected_idx = []
@@ -166,15 +190,21 @@ def oriented_nms(
         remaining_boxes = []
         remaining_idx = []
         for idx, (rest, rest_obj) in enumerate(zip(polygons, idxs)):
-            # calculate IOU
-            i_o_u = next_polygon.intersection(
-                rest).area / next_polygon.union(rest).area
+            try:
+                # calculate IOU
+                intersection_area = next_polygon.intersection(rest).area
+                union_area = next_polygon.union(rest).area
+                i_o_u = intersection_area / union_area if union_area > 0 else 0.0
+            except Exception:
+                i_o_u = 0.0
             if i_o_u < iou_th:
                 remaining_boxes.append(rest)
                 remaining_idx.append(rest_obj)
         polygons = remaining_boxes
         idxs = remaining_idx
 
+    if len(selected_idx) == 0:
+        return np.array([], dtype=np.int32), np.array([]), np.array([])
     return input_idxs[selected_idx], box_scores_nms[selected_idx], box_scores_nms[selected_idx]
 
 def class_agnostic_nms(box_scores, box_preds, nms_config, score_thresh=None):
@@ -192,21 +222,31 @@ def class_agnostic_nms(box_scores, box_preds, nms_config, score_thresh=None):
 
     selected = []
     if box_scores.shape[0] > 0:
-        box_scores_nms, indices = torch.topk(box_scores, k=min(nms_config['NMS_PRE_MAXSIZE'], box_scores.shape[0]))
-        boxes_for_nms = box_preds[indices]
+        # Filter NaN/Inf boxes before NMS
+        finite_mask = torch.isfinite(box_preds[:, :7]).all(dim=1)
+        if not finite_mask.all():
+            box_scores = box_scores[finite_mask]
+            box_preds = box_preds[finite_mask]
 
-        boxes_for_nms_np = boxes_for_nms.detach().cpu().numpy()
-        box_scores_nms_np = box_scores_nms.detach().cpu().numpy()
+        if box_scores.shape[0] > 0:
+            # Cap NMS candidates to avoid O(N^2) CPU hang with shapely
+            max_nms_candidates = min(nms_config['NMS_PRE_MAXSIZE'], box_scores.shape[0], 500)
+            box_scores_nms, indices = torch.topk(box_scores, k=max_nms_candidates)
+            boxes_for_nms = box_preds[indices]
 
-        selected_idx, selected_box, selected_scores = oriented_nms(boxes_for_nms_np[:, 0:7],
-                                                                   box_scores_nms_np, nms_config['NMS_THRESH'])
-        
-        selected_idx = torch.from_numpy(selected_idx).to(boxes_for_nms.device)
-        selected_box = torch.from_numpy(selected_box).to(boxes_for_nms.device)
-        selected_scores = torch.from_numpy(
-            selected_scores).to(boxes_for_nms.device)
+            boxes_for_nms_np = boxes_for_nms.detach().cpu().numpy()
+            box_scores_nms_np = box_scores_nms.detach().cpu().numpy()
 
-        selected = indices[selected_idx[:nms_config['NMS_POST_MAXSIZE']]]
+            selected_idx, selected_box, selected_scores = oriented_nms(boxes_for_nms_np[:, 0:7],
+                                                                       box_scores_nms_np, nms_config['NMS_THRESH'])
+
+            if len(selected_idx) > 0:
+                selected_idx = torch.from_numpy(selected_idx).to(boxes_for_nms.device)
+                selected_box = torch.from_numpy(selected_box).to(boxes_for_nms.device)
+                selected_scores = torch.from_numpy(
+                    selected_scores).to(boxes_for_nms.device)
+
+                selected = indices[selected_idx[:nms_config['NMS_POST_MAXSIZE']]]
 
     if score_thresh is not None:
         original_idxs = scores_mask.nonzero().view(-1)

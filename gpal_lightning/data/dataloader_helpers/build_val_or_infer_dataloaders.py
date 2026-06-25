@@ -44,7 +44,7 @@ def build_val_or_infer_dataloaders(tasks: dict, phase: str, image_per_gpu: int, 
             if hasattr(task.task_config, "num_workers"):
                 num_workers = task.task_config.num_workers
             else:
-                num_workers = 4
+                num_workers = 0  # DYN: avoid DataLoader worker fork issues with DDP (32+ workers fork-bombs with model on CPU)
 
             dataloader = DataLoader(
                 dataset=dataset,
@@ -52,7 +52,7 @@ def build_val_or_infer_dataloaders(tasks: dict, phase: str, image_per_gpu: int, 
                 shuffle=False,
                 num_workers=num_workers,
                 collate_fn=collate_fn,
-                persistent_workers=True,
+                persistent_workers=(num_workers > 0),
                 pin_memory=True,
             )
 
