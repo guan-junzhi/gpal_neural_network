@@ -1,0 +1,420 @@
+Backbones:
+  backbone0:
+    ampfp16: true
+    input_source:
+    - img_front_120
+    - img_front_30
+    - img_back
+    - img_front_left
+    - img_front_right
+    - img_rear_left
+    - img_rear_right
+    load: all
+    out_channels: 64
+    type: EncoderRes34
+  backbone1:
+    input_source:
+    - points
+    load: all
+    point_process_config:
+      max_points_in_voxel: 20
+      max_voxels_num:
+      - 20000
+      - 25000
+      norm_dims:
+      - 0
+      - 1
+      - 2
+      norm_range:
+      - -51.2
+      - -30.72
+      - -4.0
+      - 102.4
+      - 30.72
+      - 5.0
+      pc_range:
+      - -51.2
+      - -30.72
+      - -4.0
+      - 102.4
+      - 30.72
+      - 5.0
+      voxel_size:
+      - 0.32
+      - 0.32
+      - 9
+    reader_config:
+      hw_reverse: true
+      normalize_xyz: false
+      num_filters:
+      - 64
+      num_input_features: 4
+      pc_range:
+      - -51.2
+      - -30.72
+      - -4.0
+      - 102.4
+      - 30.72
+      - 5.0
+      pool_size:
+      - 20
+      - 1
+      quantize: true
+      use_4dim: true
+      use_conv: true
+      voxel_size:
+      - 0.32
+      - 0.32
+      - 9
+      with_distance: false
+    scatter_config:
+      num_input_features: 64
+      use_horizon_pillar_scatter: true
+    type: Point_Feature_Net
+Groups:
+  group0:
+    freeze: all
+    input_source: backbone0
+    load: all
+    type: DummyBackbone
+  group1:
+    freeze: all
+    input_source: backbone1
+    load: all
+    type: DummyBackbone
+Necks:
+  neck0:
+    input_source: group0
+    layers_config:
+      conv_channels:
+      - 128
+      - 256
+      - 512
+      drop_smooth_conv: true
+      out_channel: 128
+      use_relu: true
+    load: all
+    type: Simple_FPN
+  neck1:
+    down_layer_channels:
+    - 64
+    - 128
+    - 256
+    down_layer_nums:
+    - 3
+    - 5
+    - 5
+    down_layer_strides:
+    - 2
+    - 2
+    - 2
+    in_feature_channel: 64
+    input_source: group1
+    load: all
+    quantize: false
+    type: SECONDNeck
+    up_layer_channels:
+    - 128
+    - 128
+    - 128
+    up_layer_strides:
+    - 0.5
+    - 1
+    - 2
+    use_relu6: false
+Tasks:
+  DRIVING_BEV_DYN:
+    DEPLOY_CFG:
+      cfg:
+        feature_size:
+        - 96
+        - 240
+      mode: gpal30_in_model_with_small_image
+    Evaluator: {}
+    Head:
+      dyn_od_head:
+        feature_fuser_config:
+          in_channels: 512
+          out_channels: 128
+        fuser_config:
+          in_channels: 256
+          out_channels: 128
+        head_config:
+          HEAD:
+            dim: 3
+            height: 1
+            hm: 6
+            reg: 2
+            rot: 6
+            vel: 2
+          feat_out_channels: 128
+          in_channels: 128
+          in_channels_list:
+          - 64
+          - 128
+          - 256
+          num_stages: 6
+          out_channels: 21
+          upsample: 8
+      head1:
+        head_type: SlotHead
+        inplanes: 128
+        interplanes: 64
+        num_classes: 1
+        scale_factor: 8
+    Loss:
+      od_range:
+      - -51.2
+      - -30.72
+      - -4.0
+      - 102.4
+      - 30.72
+      - 5.0
+      out_feat_voxel_size:
+      - 0.64
+      - 0.64
+      - 0.5
+    POST_PROCESSING:
+      DET_RANGE_LIST:
+      - - -51.2
+        - -30.72
+        - -4.0
+        - 102.4
+        - 30.72
+        - 5.0
+      EVAL_METRIC: kitti
+      IOU_THRESH_LIST:
+      - 0.5
+      - 0.5
+      - 0.25
+      - 0.25
+      NMS_CONFIG:
+        MULTI_CLASSES_NMS: false
+        NMS_POST_MAXSIZE: 500
+        NMS_PRE_MAXSIZE: 4096
+        NMS_THRESH: 0.1
+        NMS_TYPE: nms_gpu
+      OUTPUT_RAW_SCORE: false
+      RECALL_THRESH_LIST:
+      - 0.3
+      - 0.5
+      - 0.7
+      SCORE_THRESH: 0.3
+      od_range:
+      - -51.2
+      - -30.72
+      - -4.0
+      - 102.4
+      - 30.72
+      - 5.0
+      out_feat_voxel_size:
+      - 0.64
+      - 0.64
+      - 0.5
+    SWITCH_SUBTASK: DRIVING_BEV_DYN
+    amp_scaler:
+      backoff_factor: 0.99999
+      growth_interval: 999999999
+      init_scale: 128.0
+      type: AMPScaler
+    backbone: backbone0
+    backbone_feat_id:
+    - 2
+    bev_channels: 256
+    build_gt:
+      max_objects: 256
+      od_heatmap_voxel_size:
+      - 0.64
+      - 0.64
+    cam_used:
+    - ipm
+    class_dict:
+      1:
+      - vehicle_car
+      2:
+      - vehicle_truck
+      3:
+      - vehicle_construction_vehicle
+      4:
+      - vehicle_cyclist
+      5:
+      - vehicle_tricycle
+      6:
+      - human_pedestrian
+    datasets:
+      training:
+      - camera_name:
+        - img_front_120
+        - img_front_30
+        - img_back
+        - img_front_left
+        - img_front_right
+        - img_rear_left
+        - img_rear_right
+        data_list:
+        - description: ID4 training data
+          pkl_path: od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/fusion_SKYWELL.pkl
+          tags:
+          - Only-ID4
+          - filtered-area
+          - gpal3.0
+          use_ratio: -1
+        dataset_name: xxx
+        fast_buffer_path: ./dyn_undis_resize_768_416_crop_0
+        have_prev_label: true
+        image_dir: ./
+        is_manual_label: false
+        json_dir: od_occ_group/huiquyang/data/
+        middle_json_str: 3d_detection_json
+        root_dir: bev_park/PointLine_train/
+        shuffle: false
+      validation:
+      - camera_name:
+        - img_front_120
+        - img_front_30
+        - img_back
+        - img_front_left
+        - img_front_right
+        - img_rear_left
+        - img_rear_right
+        data_list:
+        - description: ID4 testing data
+          pkl_path: od_occ_group/huiquyang/codes/456/val_fusion_filtered_200.pkl
+          tags:
+          - ID4
+          - filtered-area
+          use_ratio: -1
+        dataset_name: xxx
+        fast_buffer_path: ./buf_eval_origin_size
+        have_prev_label: false
+        is_manual_label: false
+        json_dir: od_occ_group/huiquyang/data/
+        middle_json_str: 3d_detection_json
+        root_dir: bev_park/PointLineData_Test/
+        shuffle: true
+    frequency: 1.0
+    grad_bounds: 3.0
+    group: group0
+    group_feat_id:
+    - 1
+    - 2
+    - 3
+    image_crop_config:
+      CAMERA_RAW_SIZE:
+      - - 3840
+        - 2160
+      - - 3840
+        - 2160
+      - - 1920
+        - 1080
+      - - 1920
+        - 1080
+      - - 1920
+        - 1080
+      - - 1920
+        - 1080
+      - - 1920
+        - 1080
+      CROP_HeSai_ID4:
+        CROP_START:
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        CROP_START_SKYWELL:
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        - 0
+        SCALE:
+        - 5
+        - 5
+        - 2.5
+        - 2.5
+        - 2.5
+        - 2.5
+        - 2.5
+      IMAGE_CROP_H_LEN: 416
+      IMAGE_CROP_SIZE:
+      - 416
+      - 768
+      IMAGE_RESIZE:
+      - 432
+      - 768
+    load: all
+    neck: neck0
+    neck_feat_id:
+    - 0
+    od_range:
+    - -51.2
+    - -30.72
+    - -4.0
+    - 102.4
+    - 30.72
+    - 5.0
+    transformer: transformer
+    use_concat_dataset: true
+    weight: 1.0
+Test:
+  visulization: true
+Train:
+  CLIP_LENGTH:
+  - 5
+  - 50
+  EPOCH_LEN: 150000
+  log_every: 10
+  lr_scheduler:
+    T_max: 20000
+    after_scheduler: CosineAnnealingLR
+    multiplier: 100
+    type: GradualWarmupScheduler
+    warmup_iterations: 50
+  max_visu_img_num: 6
+  optimizer:
+    lr: 1.0e-06
+    type: AdamW
+    weight_decay: 1.0e-06
+  visualize_every: 200
+Transformer:
+  load: all
+  transformer_config:
+    bev_map_range:
+    - -51.2
+    - -30.72
+    - -4.0
+    - 102.4
+    - 30.72
+    - 5.0
+    bev_map_voxel_size:
+    - 1.28
+    - 1.28
+    - 1.5
+    image_down_div: 8
+    in_channels: 128
+    input_source:
+    - img_front_120
+    - img_front_30
+    - img_back
+    - img_front_left
+    - img_front_right
+    - img_rear_left
+    - img_rear_right
+    out_channels: 128
+    task_name: DRIVING_BEV_DYN
+  type: ODViewTransformer
+check_val_every_n_epoch: 1000000
+dump_calibset: false
+has_label: true
+image_per_gpu: 16
+iteration_based_lr_schedulers: true
+max_iterations: 20000
+onnx_path: workspace/bc/fusion/fusion_int16_calibrated_model.onnx
+save_every_n_iterations: 1000
+skip_sanity_check: true
+workers_per_gpu: 0

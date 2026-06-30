@@ -1,0 +1,310 @@
+image_per_gpu: 16
+workers_per_gpu: 0
+skip_sanity_check: true
+max_iterations: 20000
+save_every_n_iterations: 1000
+iteration_based_lr_schedulers: true
+check_val_every_n_epoch: 1000000
+dump_calibset: false
+
+has_label: True
+
+
+
+Train:
+  EPOCH_LEN: 150000
+  CLIP_LENGTH: [5, 50]
+  log_every: 10
+  visualize_every: 200
+  max_visu_img_num: 6
+  optimizer: {type: AdamW, lr: 1.0e-06, weight_decay: 1.0e-06}
+  lr_scheduler: {type: GradualWarmupScheduler, multiplier: 100, warmup_iterations: 50,
+    after_scheduler: CosineAnnealingLR, T_max: 20000}
+
+Test:
+  visulization: True
+
+Backbones:
+  # backbone0:
+  #   type: HENet
+  #   ampfp16: true
+  #   load: all  #屏蔽此参数是为了加载其他模块预训练权重的时候，加载地平线预训练权重，需要打开pretrained参数
+  #   # freeze: all
+  #   in_channels: 3
+  #   input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
+  #   block_nums: [4, 3, 8, 6]
+  #   block_cls: ["GroupDWCB", "GroupDWCB", "AltDWCB", "DWCB"]
+  #   embed_dims: [64, 128, 192, 384]
+  #   attention_block_num: [0, 0, 0, 0]
+  #   mlp_ratios: [2, 2, 2, 3]
+  #   mlp_ratio_attn: 2
+  #   act_layer: ["nn.GELU", "nn.GELU", "nn.GELU", "nn.GELU"]
+  #   use_layer_scale: [True, True, True, True]
+  #   extra_act: [False, False, False, False]
+  #   down_cls: ["S2DDown", "S2DDown", "S2DDown", "None"]
+  #   patch_embed: "origin"
+  #   stage_out_norm: True
+  #   need_neck: True 
+  #   pretrained: '/data/ai_group/workdirs/od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/henet/float-checkpoint-best.pth.tar'
+  #   strict_load: False
+  backbone0:
+    type: EncoderRes34
+    ampfp16: true
+    load: all
+    # freeze: all
+    out_channels: 64
+    input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
+  
+
+  backbone1:
+    type: Point_Feature_Net
+    input_source: ['points']
+    load: all
+    # freeze: all
+    point_process_config:
+      pc_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
+      voxel_size: [0.32, 0.32, 9]
+      max_voxels_num: [20000, 25000]
+      max_points_in_voxel: 20
+      norm_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
+      norm_dims: [0, 1, 2]
+    reader_config:
+      num_input_features: 4
+      num_filters: [64,]
+      with_distance: False
+      pool_size: [20,1]
+      voxel_size: [0.32, 0.32, 9]
+      pc_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
+      quantize: True
+      use_4dim: True
+      use_conv: True
+      hw_reverse: True
+      normalize_xyz: False
+    scatter_config:
+      num_input_features: 64
+      use_horizon_pillar_scatter: True #生成hbm和训练打开此开关
+
+
+  
+Groups:
+  group0: {load: all, freeze: all, type: DummyBackbone, input_source: backbone0}
+  group1: {load: all, freeze: all, type: DummyBackbone, input_source: backbone1}
+
+
+Necks:
+  neck0: 
+    type: Simple_FPN
+    input_source: group0
+    load: all
+    # freeze: all
+    layers_config:
+      conv_channels: [128, 256, 512]
+      out_channel: 128
+      use_relu: true
+      drop_smooth_conv: true
+  neck1: 
+    type: SECONDNeck
+    input_source: group1
+    load: all
+    # freeze: all
+    in_feature_channel: 64
+    down_layer_nums: [3, 5, 5]
+    down_layer_strides: [2, 2, 2]
+    down_layer_channels: [64, 128, 256]
+    up_layer_strides: [0.5, 1, 2]
+    up_layer_channels: [128, 128, 128]
+    quantize: False
+    use_relu6: False
+
+
+
+Transformer:
+  type: ODViewTransformer
+  load: all
+  # freeze: all
+  transformer_config:
+    task_name: DRIVING_BEV_DYN
+    bev_map_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
+    bev_map_voxel_size: [1.28, 1.28, 1.5]
+    image_down_div: 8
+    input_source: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right']
+    in_channels: 128
+    out_channels: 128
+
+Tasks:
+  DRIVING_BEV_DYN:
+    # batch_size: 12
+    # num_worker_limit: 2
+    use_concat_dataset: true
+    SWITCH_SUBTASK: DRIVING_BEV_DYN
+    DEPLOY_CFG: 
+     mode: "gpal30_in_model_with_small_image"
+     cfg:
+        feature_size: [96, 240]
+    load: all
+    # freeze: all
+    amp_scaler: {type: AMPScaler, init_scale: 128.0, growth_interval: 999999999, backoff_factor: 0.99999}
+    cam_used: ['ipm']
+    transformer: transformer
+    frequency: 1.0
+    grad_bounds: 3.0
+    weight: 1.0
+    backbone_feat_id: [2]
+    group_feat_id: [1, 2, 3]
+    neck_feat_id: [0]
+    backbone: backbone0
+    group: group0
+    neck: neck0
+    bev_channels: 256
+    # PreProcessing:
+    class_dict:
+        1: [vehicle_car]
+        2: [vehicle_truck]
+        3: [vehicle_construction_vehicle]
+        4: [vehicle_cyclist]
+        5: [vehicle_tricycle]
+        6: [human_pedestrian]
+
+    image_crop_config:
+      "IMAGE_RESIZE": [432, 768]
+      "IMAGE_CROP_H_LEN": 416
+      "IMAGE_CROP_SIZE": [416, 768]
+      "CROP_HeSai_ID4":
+        "SCALE": [5, 5, 2.5, 2.5, 2.5, 2.5, 2.5]
+        "CROP_START": [0, 0, 0, 0, 0, 0, 0]
+        "CROP_START_SKYWELL": [0, 0, 0, 0, 0, 0, 0]
+      "CAMERA_RAW_SIZE":
+        [[3840, 2160], 
+         [3840, 2160], 
+         [1920, 1080], 
+         [1920, 1080], 
+         [1920, 1080], 
+         [1920, 1080], 
+         [1920, 1080]]
+  
+    build_gt:
+      "max_objects": 256
+      "od_heatmap_voxel_size": [0.64, 0.64]
+
+    od_range:
+      [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
+
+    Head:
+      head1:
+        head_type: SlotHead
+        num_classes: 1
+        inplanes: 128
+        interplanes: 64
+        scale_factor: 8
+      dyn_od_head:
+        fuser_config: 
+          in_channels: 256
+          out_channels: 128
+        head_config: 
+          in_channels: 128
+          num_stages: 6
+          out_channels: 21
+          upsample: 8
+          HEAD:
+            hm: 6
+            reg: 2
+            height: 1
+            dim: 3
+            rot: 6
+            vel: 2
+          in_channels_list: [64, 128, 256]
+          feat_out_channels: 128
+        feature_fuser_config:
+          in_channels: 512
+          out_channels: 128
+      
+    Loss:
+      od_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
+      out_feat_voxel_size: [0.64, 0.64, 0.5]
+    
+    POST_PROCESSING:
+      od_range: [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0]
+      RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
+      SCORE_THRESH: 0.3
+      OUTPUT_RAW_SCORE: False
+      EVAL_METRIC: "kitti"
+      NMS_CONFIG: 
+        MULTI_CLASSES_NMS: False
+        NMS_TYPE: "nms_gpu"
+        NMS_THRESH: 0.1
+        NMS_PRE_MAXSIZE: 4096
+        NMS_POST_MAXSIZE: 500
+      DET_RANGE_LIST: [
+        [-51.2, -30.72, -4.0, 102.4, 30.72, 5.0],
+      ]
+      IOU_THRESH_LIST: [0.5, 0.5, 0.25, 0.25]
+      out_feat_voxel_size: [0.64, 0.64, 0.5]
+
+
+
+    Evaluator: {}
+    datasets:
+      training:
+      - { dataset_name: 'xxx', 
+          # is_manual_label == true,
+          # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # json_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/label/Obstacle_3Deval", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # middle_json_str: ""
+
+          is_manual_label: false,
+          have_prev_label: true,
+          image_dir: "./", # relative to ENV_GPAL_NEURAL_NETWORK_DATA_COLLECT_ROOT
+          # json_dir: "od_occ_group/huiquyang/data/Obstacle_3DModelResult_", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT 
+          json_dir: "od_occ_group/huiquyang/data/", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          middle_json_str: "3d_detection_json",
+
+          root_dir: "bev_park/PointLine_train/",
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20250930-125033/20250930-125033_train_frame_pairs_sampled.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: [
+            {
+              description: "ID4 training data", 
+              pkl_path: "od_occ_group/huiquyang/codes/gpal_neural_network/.vscode/fusion_SKYWELL.pkl",
+              use_ratio: -1,
+              tags: ["Only-ID4", "filtered-area", "gpal3.0"]
+            },
+          ],
+          camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
+          shuffle: False,
+          fast_buffer_path: "./dyn_undis_resize_768_416_crop_0" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+        }
+      
+      validation:
+      - { dataset_name: 'xxx', 
+          is_manual_label: false,
+          have_prev_label: false,
+          # image_dir: "od_occ_group/huiquyang/codes/DetZero/data/id4/raw_data/obstacle_data", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          json_dir: "od_occ_group/huiquyang/data/", # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          middle_json_str: "3d_detection_json",
+
+          root_dir: "bev_park/PointLineData_Test/",
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/test_frame_pairs_4320.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          data_list: [
+            {
+              description: "ID4 testing data", 
+              pkl_path: "od_occ_group/huiquyang/codes/456/val_mining_62.pkl",
+              use_ratio: -1,
+              tags: ["ID4", "filtered-area"]
+            },
+          ],
+          # data_list: [
+          #   {
+          #     description: "ID4 testing data", 
+          #     pkl_path: "od_occ_group/mendeswan/codes/gpal_od_pcdet/data/generate_track_pkl/scan_json_dir_for_pkl/20251231-065117/20251231-065117_train_frame_pairs_sampled.pkl",
+          #     use_ratio: -1,
+          #     tags: ["ID4", "filtered-area"]
+          #   },
+          # ],
+          
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames2808_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          # data_list: ["od_occ_group/mendeswan/codes/gpal_od_pcdet/data/20251013-074956_6_val_frame_pairs_sampled_clips72_frames14256_key2808_noneavg198.pkl"], # relative to ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT
+          camera_name: ['img_front_120', 'img_front_30', 'img_back', 'img_front_left', 'img_front_right', 'img_rear_left', 'img_rear_right'],
+          shuffle: True,
+          fast_buffer_path: "./buf_eval_origin_size" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+          # fast_buffer_path: "" # relative to ENV_GPAL_NEURAL_NETWORK_LOCAL_DATASETS_ROOT
+        }

@@ -1,3 +1,4 @@
+import traceback
 import copy
 from multiprocessing import Pool
 import pickle as pkl
@@ -884,7 +885,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
         camera_sizes = []
 
         # for cur_view in self.image_view:
-        actual_views = list(self.json_data.cameras.keys())
+        actual_views = list(cam_infos.keys()); # print(f'[DEBUG] available cameras: {sorted(actual_views)}', flush=True)
         
         for cur_ref_view in self.image_view:
             ref_view_short = cur_ref_view.replace('img_', '')
@@ -894,14 +895,14 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             else:
                 cur_view = cur_ref_view
                 
-            # assert cur_view == self.json_data.cameras[cur_view].name
+            # assert cur_view == cam_infos[cur_view].name
             intrinsic.append(
-                self.json_data.cameras[cur_view].intrinsic.to_matrix())
+                cam_infos[cur_view].intrinsic.to_matrix())
             cam_dist.append(
-                self.json_data.cameras[cur_view].intrinsic.get_distortion_coeffs())
+                cam_infos[cur_view].intrinsic.get_distortion_coeffs())
             extrinsic.append(
-                self.json_data.cameras[cur_view].extrinsic.to_matrix())
-            # camera_sizes.append(self.json_data.cameras[cur_view].image_size)
+                cam_infos[cur_view].extrinsic.to_matrix())
+            # camera_sizes.append(cam_infos[cur_view].image_size)
             camera_sizes.append(self.camera_raw_size[self.image_view.index(cur_ref_view)])
 
         # json_data_dict[cur_view] = {
@@ -1373,13 +1374,13 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
 
         except Exception as e:
 
+            traceback.print_exc()
             if self.phase == const.PHASE_TRAINING:
                 new_index = np.random.randint(self.__len__())
                 print(f"PHASE_TRAINING {idx} load faild {e}, resample trig {new_index}")
                 return self.__getitem__(new_index)
             else:
-                print(f"PHASE_TRAINING {idx} load faild {e}, faild exit(1)")
-                exit(1)
+                import traceback; traceback.print_exc(); print(f"PHASE_TRAINING {idx} load faild {e}, faild exit(1)", flush=True); raise e
         
         time_dp.Duration("move_data", "prepare_data")
 
@@ -1414,10 +1415,11 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
             
             if 'SKYWELL' in sequence_name:
                 WORKDIRS_ROOT = os.getenv("ENV_GPAL_NEURAL_NETWORK_WORKDIRS_ROOT")
-                # Try primary path (odom_undis covers all 4 SKYWELL clips), fallback to L4_new
-                curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli_fisheye_eq_image_data/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
+                # Try config-specified path first, then hardcoded fallbacks
                 if not os.path.exists(curr_json_file):
-                    curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_L4_new/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
+                    curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_odom_undis_l4_mutli_fisheye_eq_image_data/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
+                    if not os.path.exists(curr_json_file):
+                        curr_json_file = os.path.join(WORKDIRS_ROOT,f'od_occ_group/huiquyang/data/Obstacle_3DModelResult_L4_new/{sequence_name}/{self.middle_json_str}/{curr_time_stamp}.json')
                 vcu_file       = f'{self.image_dir}/{sequence_name}/vcu/{curr_time_stamp}.txt'
             
             with open(vcu_file, 'r') as vcu_reader:
@@ -1502,6 +1504,14 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                             
                 #     current_img = current_img.squeeze(0).permute(1, 2, 0).cpu().numpy()
                 if self.phase != const.PHASE_TRAINING:
+                    # DEBUG: verify image loading
+                    if idx < 3 and 'fisheye' in camera_view:
+                        print(f'[DEBUG img] frame={idx} cam={camera_view} shape={current_img.shape} mean={current_img.mean():.1f} min={current_img.min()} max={current_img.max()}', flush=True)
+                    # Bottom-crop fisheye from 1536 to 1080 (road in bottom portion)
+                    if 'fisheye' in camera_view:
+                        h, w = current_img.shape[:2]
+                        if h > 1080:
+                            current_img = current_img[h - 1080:h, :]
                     current_img = cv2.resize(current_img, self.image_resize[::-1])
                     current_img = current_img[self.img_crop_start[view_idx]:self.img_crop_start[view_idx] + self.img_h_len]
                 
@@ -1560,8 +1570,7 @@ class DRIVING_BEV_DYNDataset(ImageBaseDataset):
                 print(f"PHASE_TRAINING {idx} load faild {e}, resample trig {new_index}")
                 return self.__getitem__(new_index)
             else:
-                print(f"PHASE_TRAINING {idx} load faild {e}, faild exit(1)")
-                exit(1)
+                import traceback; traceback.print_exc(); print(f"PHASE_TRAINING {idx} load faild {e}, faild exit(1)", flush=True); raise e
 
         time_dp.Duration("move_data", "prepare_data")
 

@@ -1,0 +1,29 @@
+model_parameters:
+  onnx_model: '/code/workspace/merged/11v_lidar_merged.onnx'
+  march: "nash-m"
+  working_dir: '/code/workspace/bc/merged/'
+  output_model_file_prefix: '11v_lidar_int16'
+
+input_parameters:
+  input_name: "img_front_fisheye;img_right_fisheye;img_rear_fisheye;img_left_fisheye;img_front_120;img_front_30;img_back;img_front_left;img_front_right;img_rear_left;img_rear_right;fish_vt_grid;fish_prev_feats;fish_prev_feats_grid;vt_grid;prev_feats;prev_feats_grid;features"
+  input_type_rt: 'nv12;nv12;nv12;nv12;nv12;nv12;nv12;nv12;nv12;nv12;nv12;featuremap;featuremap;featuremap;featuremap;featuremap;featuremap;featuremap;'
+  input_type_train: 'rgb;rgb;rgb;rgb;rgb;rgb;rgb;rgb;rgb;rgb;rgb;featuremap;featuremap;featuremap;featuremap;featuremap;featuremap;featuremap;'
+  input_layout_train: 'NHWC;NHWC;NHWC;NHWC;NHWC;NHWC;NHWC;NHWC;NHWC;NHWC;NHWC;NCHW;NCHW;NCHW;NCHW;NCHW;NCHW;NCHW;'
+  input_shape: '1x512x960x3;1x512x960x3;1x512x960x3;1x512x960x3;1x416x768x3;1x416x768x3;1x416x768x3;1x416x768x3;1x416x768x3;1x416x768x3;1x416x768x3;4x192x60x2;1x128x48x60;1x48x60x2;7x288x120x2;1x128x48x120;1x48x120x2;1x92160x20x4'
+  norm_type: 'no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;no_preprocess;'
+
+calibration_parameters:
+  cal_data_dir: '/code/workspace/calib_data/fisheye_200/img_front_fisheye;/code/workspace/calib_data/fisheye_200/img_right_fisheye;/code/workspace/calib_data/fisheye_200/img_rear_fisheye;/code/workspace/calib_data/fisheye_200/img_left_fisheye;/code/workspace/calib_data/fusion_200/img_front_120;/code/workspace/calib_data/fusion_200/img_front_30;/code/workspace/calib_data/fusion_200/img_back;/code/workspace/calib_data/fusion_200/img_front_left;/code/workspace/calib_data/fusion_200/img_front_right;/code/workspace/calib_data/fusion_200/img_rear_left;/code/workspace/calib_data/fusion_200/img_rear_right;/code/workspace/calib_data/fisheye_200/fish_vt_grid;/code/workspace/calib_data/fisheye_200/fish_prev_feats;/code/workspace/calib_data/fisheye_200/fish_prev_feats_grid;/code/workspace/calib_data/fusion_200/vt_grid;/code/workspace/calib_data/fusion_200/prev_feats;/code/workspace/calib_data/fusion_200/prev_feats_grid;/code/workspace/calib_data/fusion_200/features'
+  calibration_type: 'max'
+  quant_config: {
+    "model_config": {
+      "all_node_type": int16,
+      "model_output_type": int16,
+    },
+  }
+
+compiler_parameters:
+  optimize_level: 'O2'
+  jobs: 64
+  advice: 50
+  extra_params: {"input_no_padding": True, "output_no_padding": True}
